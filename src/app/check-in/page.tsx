@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckInMonitor } from "@/components/check-in-monitor";
+import { CheckInMonitorPolished } from "@/components/check-in-monitor-polished";
 
 export default function CheckInPage() {
   const [ready, setReady] = useState(false);
@@ -32,6 +32,5 @@ export default function CheckInPage() {
     return () => window.cancelAnimationFrame(frame);
   }, [ready]);
 
-  if (!ready) return <div className="checkin-page" aria-busy="true" />;
-  return <CheckInMonitor />;
+  return ready ? <CheckInMonitorPolished /> : <div className="checkin-page" aria-busy="true" />;
 }
