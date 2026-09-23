@@ -20,6 +20,8 @@ New teachers are created as `TPK_ADMIN` and inactive. A Super Admin activates th
 
 After the prior teacher and v1 migrations, apply `database/2026_staff_admin_foundation.sql` once. It adds the shared teacher registration fields, normalised WhatsApp identifiers, verification/session records, profile-photo reference, team status, and audited access/status controls.
 
+Apply `database/2026_meeting_decisions_alignment.sql` after that migration. It safely changes the teacher-facing title from the old `Aunty` spelling to the agreed `Auntie` label while preserving existing profiles.
+
 It also seeds the three approved bootstrap Super Admin WhatsApp identifiers. Those values are only read by the verification backend; they are never sent to the frontend or used as credentials.
 
 For WhatsApp OTP verification, create an approved Meta template named `teacher_verification_code` with language `en_US` and this body:
@@ -38,6 +40,8 @@ Apply `database/2026_service_pickup_codes.sql` after `2026_parent_flow.sql`. Eve
 
 Each successful parent registration or returning-parent check-in creates the family pickup code and sends it to the guardian's primary number and, where present, secondary number.
 
+The staff Pick-Up desk accepts the code or QR first. If neither is available, an authenticated teacher can use the child’s first name, last name, and date of birth for an assisted lookup. This is separately audited as `ASSISTED_BIRTH_DATE`; it does not introduce a new pickup state and the teacher still reviews the checked-in children before completing the release.
+
 For direct WhatsApp delivery through the same Meta account as teacher OTPs, create and approve the `tpk_pickup_code` utility template in `en_US` with this body:
 
 ```text
@@ -46,7 +50,22 @@ TribePetra Kids pickup code: {{1}}. Please show this code at the pickup station 
 
 Set `WHATSAPP_PICKUP_TEMPLATE=tpk_pickup_code` and `WHATSAPP_PICKUP_LANGUAGE=en_US`. The backend uses `WHATSAPP_ACCESS_TOKEN` and `WHATSAPP_PHONE_NUMBER_ID` already configured for teacher verification; it never exposes them to the browser.
 
-For SMS, set `SMS_PICKUP_WEBHOOK` to your chosen SMS provider or small provider relay. The endpoint receives `{ to, message }`. In development, both sends are recorded in `backend/storage/pickup-code-notifications.log` instead. The same ticket link opens a printable QR ticket; parents can select **Save as PDF** in the browser print dialog.
+### SMS delivery with Termii
+
+The pickup flow sends one SMS to every valid primary and secondary guardian number after a successful new-parent registration or returning-parent check-in. Numbers are normalised to Nigerian international format before sending.
+
+In Termii, request a **transactional** SMS Sender ID for `TPK` (or the exact 3–11 character Sender ID that Termii approves). Use the Termii dashboard values in the server-only `.env` file:
+
+```env
+TERMII_BASE_URL="https://your-account-specific-termii-base-url"
+TERMII_API_KEY="your-termii-api-key"
+TERMII_SENDER_ID="TPK"
+TERMII_SMS_CHANNEL="dnd"
+```
+
+Termii requires the `dnd` route to be activated on the account for reliable transactional delivery, including DND numbers. Until the Sender ID and DND route are approved, the application records the delivery failure in `pickup_code_notifications` without interrupting the parent check-in. Never place the Termii key in a `NEXT_PUBLIC_*` variable or commit it to Git.
+
+`SMS_PICKUP_WEBHOOK` remains supported for a different SMS provider; it receives `{ to, message }`. In development, unconfigured sends are written to `backend/storage/pickup-code-notifications.log` instead. The same ticket link opens a printable QR ticket; parents can select **Save as PDF** in the browser print dialog.
 
 ## Import the General Info responses
 
@@ -64,7 +83,7 @@ The workbook also contains historical monthly and teens-attendance sheets. They 
 
 ## Main v1 routes
 
-All protected calls use `X-TPK-User-Id` until the browser token/session layer is introduced. Responses use `{ "success": true, "data": ... }` and failures use `{ "success": false, "error": { "code", "message" } }`.
+All protected calls use `Authorization: Bearer <staff-session-token>`. Responses use `{ "success": true, "data": ... }` and failures use `{ "success": false, "error": { "code", "message" } }`.
 
 - `GET /api/v1/dashboard/overview`
 - `GET /api/v1/children?search=&classId=&gender=&active=&classAssignmentRequired=&sort=&order=&page=&limit=`
@@ -77,6 +96,9 @@ All protected calls use `X-TPK-User-Id` until the browser token/session layer is
 - `GET /api/v1/service-sessions/current`, `GET /api/v1/service-sessions`, `GET|PATCH /api/v1/service-sessions/:id`
 - `GET /api/v1/roster`, `GET /api/v1/me/roster`, `GET /api/v1/me/assignments/{today|upcoming}`
 - `POST /api/v1/roster/assignments/:assignmentId/confirm-presence`
+- `GET /api/v1/pickup-codes?code=TPK-A-001-or-QR-token`
+- `POST /api/v1/pickup-codes/assisted-lookup` with `{ firstName, lastName, dateOfBirth }`
+- `POST /api/v1/pickup-codes/:pickupCodeId/complete` with an audited verification method
 - `PATCH /api/v1/staff/:staffUserId/access-level`
 
 The public lookup returns only a guardian first name and the minimal child check-in state. Care, emergency and prayer data is not included in child-list or public responses.

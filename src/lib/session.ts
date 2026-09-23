@@ -5,7 +5,7 @@ export type TeacherSession = {
   name: string;
   firstName: string;
   lastName: string;
-  title: "Aunty" | "Uncle";
+  title: "Auntie" | "Uncle";
   accessLevel: AccessLevel;
   teamStatus: TeamStatus;
   role: "TPK Super Admin" | "TPK Admin";

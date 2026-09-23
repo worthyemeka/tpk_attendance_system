@@ -26,7 +26,9 @@ function db(): PDO {
     $name = getenv('DB_NAME') ?: 'tpk_attendance_system';
     $user = getenv('DB_USER') ?: 'root';
     $pass = getenv('DB_PASSWORD') ?: '';
-    $pdo = new PDO("mysql:host=$host;dbname=$name;charset=utf8mb4", $user, $pass, [
+    $port = getenv('DB_PORT');
+    $portClause = $port !== false && ctype_digit((string)$port) ? ';port=' . $port : '';
+    $pdo = new PDO("mysql:host=$host{$portClause};dbname=$name;charset=utf8mb4", $user, $pass, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
     ]);
@@ -96,8 +98,54 @@ function tpk_send_meta_whatsapp_template(string $number, string $template, strin
     }
 }
 
+function tpk_whatsapp_is_configured(): bool {
+    return (bool)(getenv('WHATSAPP_ACCESS_TOKEN') && getenv('WHATSAPP_PHONE_NUMBER_ID'));
+}
+
 function tpk_send_whatsapp_verification(string $number, string $name, string $code): void {
     tpk_send_meta_whatsapp_template($number, getenv('WHATSAPP_VERIFICATION_TEMPLATE') ?: 'teacher_verification_code', getenv('WHATSAPP_VERIFICATION_LANGUAGE') ?: 'en_US', [$name, $code]);
+}
+
+/**
+ * Sends one transactional SMS through Termii's Messaging API.  The API key is
+ * intentionally read only on the PHP server; it is never available to Next.js
+ * or the browser.
+ */
+function tpk_send_termii_sms(string $number, string $message): void {
+    $apiKey = getenv('TERMII_API_KEY');
+    $baseUrl = rtrim((string)getenv('TERMII_BASE_URL'), '/');
+    $senderId = trim((string)getenv('TERMII_SENDER_ID'));
+    $channel = strtolower(trim((string)(getenv('TERMII_SMS_CHANNEL') ?: 'dnd')));
+
+    if (!$apiKey || !$baseUrl || !$senderId) {
+        throw new RuntimeException('Termii SMS is not fully configured. Add the API key, base URL, and approved sender ID.');
+    }
+    if (!in_array($channel, ['dnd', 'generic'], true)) {
+        throw new RuntimeException('Termii SMS channel must be dnd or generic.');
+    }
+
+    $payload = json_encode([
+        'api_key' => $apiKey,
+        'to' => ltrim($number, '+'),
+        'from' => $senderId,
+        'sms' => $message,
+        'type' => 'plain',
+        'channel' => $channel,
+    ], JSON_THROW_ON_ERROR);
+    $request = stream_context_create(['http' => [
+        'method' => 'POST',
+        'header' => "Content-Type: application/json\r\n",
+        'content' => $payload,
+        'timeout' => 15,
+        'ignore_errors' => true,
+    ]]);
+    $response = @file_get_contents($baseUrl . '/api/sms/send', false, $request);
+    $status = (int)preg_replace('/.*\s(\d{3})\s.*/s', '$1', $http_response_header[0] ?? '500');
+    $body = json_decode((string)$response, true);
+    if ($response === false || $status < 200 || $status >= 300 || ($body['code'] ?? null) !== 'ok') {
+        $detail = is_array($body) ? ($body['message'] ?? $body['error'] ?? null) : null;
+        throw new RuntimeException(is_string($detail) ? $detail : 'Termii could not send the pickup-code SMS.');
+    }
 }
 
 function tpk_pickup_ticket_url(string $token): string {
@@ -125,7 +173,10 @@ function tpk_send_pickup_code(PDO $db, int $pickupCodeId, array $phones, string 
     foreach ($numbers as $phone) foreach (['SMS', 'WHATSAPP'] as $channel) {
         $status = 'FAILED'; $detail = null;
         try {
-            if ($channel === 'WHATSAPP' && getenv('WHATSAPP_ACCESS_TOKEN') && getenv('WHATSAPP_PHONE_NUMBER_ID') && getenv('WHATSAPP_PICKUP_TEMPLATE')) {
+            if ($channel === 'SMS' && getenv('TERMII_API_KEY')) {
+                tpk_send_termii_sms($phone, $message);
+                $status = 'SENT';
+            } elseif ($channel === 'WHATSAPP' && getenv('WHATSAPP_ACCESS_TOKEN') && getenv('WHATSAPP_PHONE_NUMBER_ID') && getenv('WHATSAPP_PICKUP_TEMPLATE')) {
                 tpk_send_meta_whatsapp_template($phone, (string)getenv('WHATSAPP_PICKUP_TEMPLATE'), getenv('WHATSAPP_PICKUP_LANGUAGE') ?: 'en_US', [$code]);
                 $status = 'SENT';
             } elseif ($webhook = getenv($channel === 'SMS' ? 'SMS_PICKUP_WEBHOOK' : 'WHATSAPP_PICKUP_WEBHOOK')) {

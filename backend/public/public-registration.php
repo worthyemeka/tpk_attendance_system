@@ -7,7 +7,7 @@ require_once dirname(__DIR__) . '/config.php';
 function public_reply(mixed $data, int $status = 200): never {
     http_response_code($status);
     header('Content-Type: application/json; charset=utf-8');
-    header('Access-Control-Allow-Origin: ' . (getenv('FRONTEND_ORIGIN') ?: 'http://localhost:3000'));
+    header('Access-Control-Allow-Origin: ' . tpk_cors_origin()); header('Vary: Origin');
     header('Access-Control-Allow-Headers: Content-Type');
     header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
     echo json_encode(['success' => true, 'data' => $data], JSON_UNESCAPED_SLASHES);
@@ -16,6 +16,7 @@ function public_reply(mixed $data, int $status = 200): never {
 function public_error(string $code, string $message, int $status = 400): never {
     http_response_code($status);
     header('Content-Type: application/json; charset=utf-8');
+    header('Access-Control-Allow-Origin: ' . tpk_cors_origin()); header('Vary: Origin');
     echo json_encode(['success' => false, 'error' => ['code' => $code, 'message' => $message]], JSON_UNESCAPED_SLASHES);
     exit;
 }

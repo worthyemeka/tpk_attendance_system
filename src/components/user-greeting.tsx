@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { readTeacherSession } from "@/lib/session";
 
-type Teacher = { firstName: string; title: "Aunty" | "Uncle" };
-const fallbackTeacher: Teacher = { firstName: "there", title: "Aunty" };
+type Teacher = { firstName: string; title: "Auntie" | "Uncle" };
+const fallbackTeacher: Teacher = { firstName: "there", title: "Auntie" };
 function timeGreeting(hour: number) { return hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"; }
 
 export function UserGreeting() {

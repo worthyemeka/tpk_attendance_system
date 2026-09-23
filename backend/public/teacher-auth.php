@@ -15,7 +15,7 @@ function teacher_request_origin(): string {
     return rtrim(getenv('TPK_FRONTEND_URL') ?: (getenv('FRONTEND_ORIGIN') ?: 'http://localhost:3000'), '/');
 }
 function teacher_response(array $teacher): array {
-    return ['staffUserId' => (int)$teacher['staff_user_id'], 'name' => trim($teacher['first_name'] . ' ' . $teacher['last_name']), 'firstName' => $teacher['first_name'], 'lastName' => $teacher['last_name'], 'title' => $teacher['title'] ?: (($teacher['gender'] ?? '') === 'FEMALE' ? 'Aunty' : 'Uncle'), 'accessLevel' => $teacher['access_level'], 'teamStatus' => $teacher['team_status'], 'profileImageUrl' => $teacher['profile_image_url'] ?? null, 'role' => $teacher['access_level'] === 'TPK_SUPER_ADMIN' ? 'TPK Super Admin' : 'TPK Admin'];
+    return ['staffUserId' => (int)$teacher['staff_user_id'], 'name' => trim($teacher['first_name'] . ' ' . $teacher['last_name']), 'firstName' => $teacher['first_name'], 'lastName' => $teacher['last_name'], 'title' => $teacher['title'] ?: (($teacher['gender'] ?? '') === 'FEMALE' ? 'Auntie' : 'Uncle'), 'accessLevel' => $teacher['access_level'], 'teamStatus' => $teacher['team_status'], 'profileImageUrl' => $teacher['profile_image_url'] ?? null, 'role' => $teacher['access_level'] === 'TPK_SUPER_ADMIN' ? 'TPK Super Admin' : 'TPK Admin'];
 }
 function teacher_issue_session(PDO $db, int $staffId): string {
     $token = bin2hex(random_bytes(32));
@@ -36,13 +36,14 @@ if ($method === 'GET' && $path === '/api/teachers/register') json_response(['end
 if ($method === 'POST' && $path === '/api/teachers/register') {
     $v = teacher_input();
     foreach (['title','firstName','lastName','birthDate','whatsappNumber','email','residentialAddress','password','confirmPassword'] as $key) if (empty(trim((string)($v[$key] ?? '')))) json_response(['error' => 'Please complete all required registration details.'], 422);
-    if (!in_array($v['title'], ['Aunty', 'Uncle'], true)) json_response(['error' => 'Choose Aunty or Uncle.'], 422);
+    if (!in_array($v['title'], ['Auntie', 'Uncle'], true)) json_response(['error' => 'Choose Auntie or Uncle.'], 422);
     if ($v['password'] !== $v['confirmPassword']) json_response(['error' => 'Your passwords do not match.'], 422);
     if (strlen((string)$v['password']) < 8) json_response(['error' => 'Password must be at least 8 characters.'], 422);
     $whatsapp = tpk_normalize_nigerian_phone($v['whatsappNumber']);
     $mobile = empty(trim((string)($v['mobileNumber'] ?? ''))) ? $whatsapp : tpk_normalize_nigerian_phone($v['mobileNumber']);
     if (!$whatsapp || !$mobile) json_response(['error' => 'Enter valid Nigerian WhatsApp and mobile numbers.'], 422);
     if (!filter_var($v['email'], FILTER_VALIDATE_EMAIL)) json_response(['error' => 'Enter a valid email address.'], 422);
+    if (!tpk_whatsapp_is_configured()) json_response(['error' => 'Teacher WhatsApp verification is not configured yet. Please ask a TPK Super Admin to complete the secure WhatsApp server setup.'], 503);
     $email = strtolower(trim($v['email']));
     $existing = $db->prepare('SELECT s.id FROM staff_users s LEFT JOIN teacher_profiles p ON p.staff_user_id=s.id WHERE s.email=? OR p.whatsapp_number_normalized=? LIMIT 1');
     $existing->execute([$email, $whatsapp]);
@@ -51,13 +52,13 @@ if ($method === 'POST' && $path === '/api/teachers/register') {
     try {
         $name = trim($v['firstName'] . ' ' . $v['lastName']);
         $db->prepare("INSERT INTO staff_users(campus_id,name,email,role,access_level,team_status,account_status,is_active) VALUES(?,?,?,'VIEWER','TPK_ADMIN','ACTIVE','PENDING_VERIFICATION',0)")->execute([$campusId, $name, $email]);
-        $staffId = (int)$db->lastInsertId(); $gender = $v['title'] === 'Aunty' ? 'FEMALE' : 'MALE';
+        $staffId = (int)$db->lastInsertId(); $gender = $v['title'] === 'Auntie' ? 'FEMALE' : 'MALE';
         $db->prepare('INSERT INTO teacher_profiles(staff_user_id,title,first_name,last_name,birth_date,gender,marital_status,primary_phone,secondary_phone,residential_address,emergency_contact,emergency_relationship_phone,password_hash,whatsapp_number,whatsapp_number_normalized,mobile_number,mobile_number_normalized) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')->execute([$staffId, $v['title'], trim($v['firstName']), trim($v['lastName']), $v['birthDate'], $gender, 'Not provided', $whatsapp, $mobile === $whatsapp ? null : $mobile, trim($v['residentialAddress']), 'Not provided', 'Not provided', password_hash($v['password'], PASSWORD_DEFAULT), $whatsapp, $whatsapp, $mobile === $whatsapp ? null : $mobile, $mobile === $whatsapp ? null : $mobile]);
         if (!empty($_FILES['profilePhoto']) && ($_FILES['profilePhoto']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) $db->prepare('UPDATE teacher_profiles SET profile_image_url=? WHERE staff_user_id=?')->execute([tpk_store_profile_photo($_FILES['profilePhoto'], $staffId), $staffId]);
         $developmentUrl = teacher_issue_verification($db, $staffId, $whatsapp, $name);
         audit($db, $campusId, 'TEACHER_REGISTERED', 'StaffUser', $staffId, ['email' => $email]);
         $db->commit();
-    } catch (Throwable $e) { if ($db->inTransaction()) $db->rollBack(); throw $e; }
+    } catch (Throwable $e) { if ($db->inTransaction()) $db->rollBack(); error_log('[TPK teacher registration] ' . $e->getMessage()); json_response(['error' => 'We could not send the WhatsApp verification code. Please check the number and try again, or ask a TPK Super Admin for help.'], 502); }
     $response = ['message' => 'We sent a verification code to your WhatsApp number. Enter it to activate your account.'];
     if ($developmentUrl) $response['developmentVerificationCode'] = $developmentUrl;
     json_response($response, 201);
