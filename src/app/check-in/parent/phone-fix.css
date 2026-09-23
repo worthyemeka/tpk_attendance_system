@@ -1,0 +1,11 @@
+@media (max-width: 560px) {
+  .pc-country {
+    min-width: 122px !important;
+    padding: 0 10px !important;
+    font-size: 12px !important;
+  }
+
+  .pc-country svg {
+    margin-left: auto !important;
+  }
+}

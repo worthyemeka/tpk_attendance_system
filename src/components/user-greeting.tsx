@@ -1,13 +1,25 @@
 "use client";
+
 import { useEffect, useState } from "react";
 
-// This mirrors the current signed-in teacher profile. It will be read from the
-// authenticated teacher session once staff login is connected to PHP/MySQL.
-const currentTeacher = { firstName: "Kemi", gender: "FEMALE" as const };
-function timeGreeting(hour: number) { if (hour < 12) return "Morning"; if (hour < 17) return "Afternoon"; return "Evening"; }
+type Teacher = { firstName: string; title: "Aunty" | "Uncle" };
+const fallbackTeacher: Teacher = { firstName: "Kemi", title: "Aunty" };
+function timeGreeting(hour: number) { return hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"; }
+
 export function UserGreeting() {
   const [hour, setHour] = useState(9);
-  useEffect(() => { const update = () => setHour(new Date().getHours()); update(); const timer = window.setInterval(update, 60_000); return () => window.clearInterval(timer); }, []);
-  const title = currentTeacher.gender === "FEMALE" ? "Aunty" : currentTeacher.gender === "MALE" ? "Uncle" : "";
-  return <h1>{timeGreeting(hour)}, {title} {currentTeacher.firstName} <span>👋🏽</span></h1>;
+  const [teacher, setTeacher] = useState<Teacher>(fallbackTeacher);
+
+  useEffect(() => {
+    const update = () => setHour(new Date().getHours());
+    update();
+    const saved = localStorage.getItem("tpk-teacher");
+    if (saved) {
+      try { const profile = JSON.parse(saved); if (profile.firstName && profile.title) setTeacher(profile); } catch { /* keep the demo profile */ }
+    }
+    const timer = window.setInterval(update, 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return <h1>{timeGreeting(hour)}, {teacher.title} {teacher.firstName} <span>👋🏽</span></h1>;
 }

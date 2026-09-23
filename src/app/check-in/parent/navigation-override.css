@@ -1,0 +1,6 @@
+@media (min-width: 921px) {
+  .parent-access-nav {
+    left: calc(44vw + 42px);
+    right: auto;
+  }
+}

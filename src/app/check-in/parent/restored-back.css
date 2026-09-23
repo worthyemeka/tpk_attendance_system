@@ -1,0 +1,3 @@
+.parent-form-back { position: fixed; z-index: 30; top: 35px; left: calc(44vw + 42px); color: #4e668b; text-decoration: none; font: 800 13px var(--font-body, Arial, sans-serif); }
+@media (max-width: 920px) { .parent-form-back { position: absolute; top: 250px; left: 30px; } }
+@media (max-width: 560px) { .parent-form-back { top: 207px; left: 19px; font-size: 11px; } }

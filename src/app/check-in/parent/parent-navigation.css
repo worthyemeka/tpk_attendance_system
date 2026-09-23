@@ -1,0 +1,20 @@
+.parent-access-nav {
+  position: fixed;
+  z-index: 20;
+  top: 22px;
+  right: 34px;
+  display: flex;
+  gap: 18px;
+  font: 800 13px var(--font-body, Arial, sans-serif);
+}
+
+.parent-access-nav a { color: #263f67; text-decoration: none; }
+.parent-access-nav a:last-child { color: #ef4c29; }
+
+@media (max-width: 920px) {
+  .parent-access-nav { position: absolute; top: 240px; right: 26px; }
+}
+
+@media (max-width: 560px) {
+  .parent-access-nav { top: 200px; right: 18px; gap: 13px; font-size: 11px; }
+}

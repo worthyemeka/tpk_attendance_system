@@ -1,0 +1,16 @@
+.pc-service-stay {
+  grid-column: 1 / -1;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 4px 0 0;
+  border: 0;
+  padding: 16px;
+  border-radius: 11px;
+  background: #f4f7fb;
+}
+.pc-service-stay legend { padding: 0; color: #10213d; font-size: 13px; font-weight: 800; }
+.pc-service-stay > div { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin-top: 11px; }
+.pc-service-stay button { min-height: 42px; border: 1px solid #cfd7e3; border-radius: 8px; background: #fff; color: #405778; font: 700 12px var(--font-body, Arial, sans-serif); cursor: pointer; }
+.pc-service-stay button.selected { border-color: #ff4b28; background: #fff3ef; color: #e74220; }
+.pc-service-stay small { display: block; margin-top: 10px; color: #627594; font-size: 11px; line-height: 1.4; }
+@media (max-width: 560px) { .pc-service-stay { padding: 13px; }.pc-service-stay > div { gap: 6px; }.pc-service-stay button { padding: 5px; font-size: 11px; } }
