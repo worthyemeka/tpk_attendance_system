@@ -119,12 +119,51 @@ function api_dashboard(PDO $db): never {
     }
     api_ok(['serviceSession'=>$activeSession?:null,'serviceSessionId'=>$sessionId?:null,'metrics'=>['checkedIn'=>$checked,'pickedUp'=>$picked,'stillPresent'=>$checked-$picked,'activeClasses'=>count($rows)],'classes'=>$rows,'personalAssignment'=>$personalAssignment,'todayTeam'=>$todayTeam,'needsAttention'=>$needs,'childrenRelations'=>$relations,'upcomingRoster'=>$upcoming]);
 }
+function api_is_head_of_service(PDO $db, array $actor, int $serviceSessionId): bool {
+    $s=$db->prepare("SELECT 1 FROM roster_assignments ra JOIN duty_types dt ON dt.id=ra.duty_type_id JOIN service_sessions ss ON ss.id=? WHERE ra.user_id=? AND dt.code='HEAD_OF_SERVICE' AND ra.status NOT IN ('CANCELLED','REPLACED','ABSENT') AND (ra.service_session_id=? OR (ra.service_session_id IS NULL AND ra.assignment_date=ss.service_date)) LIMIT 1");
+    $s->execute([$serviceSessionId,$actor['id'],$serviceSessionId]); return (bool)$s->fetchColumn();
+}
+function api_checkin_request_rows(PDO $db, int $sessionId): array {
+    $s=$db->prepare("SELECT r.id,r.status,r.requested_at AS requestedAt,r.approved_at AS approvedAt,r.child_ids_json,r.request_token AS requestToken,g.first_name AS guardianFirstName,g.last_name AS guardianLastName,g.phone AS guardianPhone,f.surname,pc.display_code AS pickupCode,pc.qr_token AS qrToken FROM check_in_requests r JOIN guardians g ON g.id=r.guardian_id JOIN families f ON f.id=r.family_id LEFT JOIN service_pickup_codes pc ON pc.id=r.pickup_code_id WHERE r.service_session_id=? ORDER BY r.status='PENDING' DESC,r.requested_at DESC");
+    $s->execute([$sessionId]);$rows=$s->fetchAll();
+    foreach($rows as &$row){$ids=json_decode((string)$row['child_ids_json'],true);$ids=is_array($ids)?array_values(array_filter(array_map('intval',$ids))):[];$row['children']=[];if($ids){$marks=implode(',',array_fill(0,count($ids),'?'));$c=$db->prepare("SELECT id,first_name AS firstName,last_name AS lastName FROM children WHERE id IN ($marks) ORDER BY first_name");$c->execute($ids);$row['children']=$c->fetchAll();}unset($row['child_ids_json']);$row['ticketUrl']=!empty($row['qrToken'])?tpk_pickup_ticket_url($row['qrToken']):null;unset($row['qrToken']);}
+    unset($row);return $rows;
+}
+function api_checkin_requests(PDO $db): never {
+    $actor=api_actor($db);$sessionId=(int)($_GET['serviceSessionId']??0);
+    if(!$sessionId){$s=$db->prepare('SELECT id FROM service_sessions WHERE campus_id=? AND is_open=1 ORDER BY starts_at DESC LIMIT 1');$s->execute([$actor['campus_id']]);$sessionId=(int)$s->fetchColumn();}
+    if(!$sessionId) api_ok(['serviceSessionId'=>null,'canApprove'=>false,'items'=>[]]);
+    $canApprove=api_is_head_of_service($db,$actor,$sessionId);
+    if(!$canApprove && $actor['access_level']!=='TPK_SUPER_ADMIN') api_error('FORBIDDEN','Only the Head of Service assigned to this service can view parent check-in requests.',403);
+    api_ok(['serviceSessionId'=>$sessionId,'canApprove'=>$canApprove,'items'=>api_checkin_request_rows($db,$sessionId)]);
+}
+function api_approve_checkin_request(PDO $db, int $requestId): never {
+    $actor=api_actor($db);$db->beginTransaction();
+    try {
+        $s=$db->prepare('SELECT r.*,ss.campus_id FROM check_in_requests r JOIN service_sessions ss ON ss.id=r.service_session_id WHERE r.id=? FOR UPDATE');$s->execute([$requestId]);$request=$s->fetch();
+        if(!$request || (int)$request['campus_id']!==(int)$actor['campus_id']) { $db->rollBack(); api_error('CHECKIN_REQUEST_NOT_FOUND','This check-in request is not available.',404); }
+        if(!api_is_head_of_service($db,$actor,(int)$request['service_session_id'])) { $db->rollBack(); api_error('FORBIDDEN','Only the Head of Service assigned to this service can approve this request.',403); }
+        if($request['status']!=='PENDING') { $db->rollBack(); api_error('CHECKIN_REQUEST_ALREADY_DECIDED','This request has already been '.$request['status'].'.',409); }
+        $ids=json_decode((string)$request['child_ids_json'],true);$ids=is_array($ids)?array_values(array_filter(array_map('intval',$ids))):[];
+        if(!$ids){$db->rollBack();api_error('CHECKIN_REQUEST_INVALID','This request has no children.',422);}
+        $marks=implode(',',array_fill(0,count($ids),'?'));$children=$db->prepare("SELECT id,class_id,is_first_visit,first_name,last_name FROM children WHERE family_id=? AND id IN ($marks) AND is_active=1 FOR UPDATE");$children->execute(array_merge([(int)$request['family_id']],$ids));$rows=$children->fetchAll();
+        if(count($rows)!==count($ids)){$db->rollBack();api_error('CHECKIN_REQUEST_INVALID','One or more children are no longer available for this request.',422);}
+        foreach($rows as $child)if(!$child['class_id']){$db->rollBack();api_error('CLASS_ASSIGNMENT_REQUIRED',trim($child['first_name'].' '.$child['last_name']).' needs a class assignment before approval.',409);}
+        foreach($rows as $child){$db->prepare("INSERT INTO attendance(service_session_id,check_in_request_id,child_id,class_id,status,source,is_first_visit) VALUES(?,?,?,?,'CHECKED_IN','PARENT_QR',?) ON DUPLICATE KEY UPDATE check_in_request_id=VALUES(check_in_request_id),status=status")->execute([(int)$request['service_session_id'],$requestId,(int)$child['id'],(int)$child['class_id'],(int)$child['is_first_visit']]);}
+        $pickup=tpk_issue_pickup_code($db,(int)$request['service_session_id'],(int)$request['family_id'],(int)$request['guardian_id']);
+        $db->prepare("UPDATE check_in_requests SET status='APPROVED',approved_at=NOW(),approved_by_staff_user_id=?,pickup_code_id=? WHERE id=?")->execute([$actor['id'],$pickup['id'],$requestId]);
+        api_audit($db,$actor,'CHECKIN_REQUEST_APPROVED','CheckInRequest',$requestId,['pickupCode'=>$pickup['code'],'children'=>array_column($rows,'id')]);
+        $phone=$db->prepare('SELECT phone,secondary_phone FROM guardians WHERE id=?');$phone->execute([(int)$request['guardian_id']]);$guardian=$phone->fetch()?:[];
+        $db->commit();tpk_send_pickup_code($db,(int)$pickup['id'],[$guardian['phone']??null,$guardian['secondary_phone']??null],$pickup['code'],$pickup['ticketUrl']);
+        api_ok(['id'=>$requestId,'status'=>'APPROVED','pickupCode'=>$pickup['code'],'pickupTicketUrl'=>$pickup['ticketUrl'],'childrenApproved'=>count($rows)]);
+    } catch (Throwable $e) { if($db->inTransaction())$db->rollBack(); throw $e; }
+}
 function api_checkins(PDO $db): never {
     $actor=api_actor($db);$allowed=api_permitted_class_ids($db,$actor);$sessionId=(int)($_GET['serviceSessionId']??0);
     if(!$sessionId){$current=$db->prepare('SELECT id FROM service_sessions WHERE campus_id=? AND is_open=1 ORDER BY starts_at DESC LIMIT 1');$current->execute([$actor['campus_id']]);$sessionId=(int)$current->fetchColumn();}
     if(!$sessionId)api_ok(['serviceSessionId'=>null,'items'=>[]]);$where=['a.service_session_id=?'];$params=[$sessionId];if($allowed!==null){if(!$allowed)api_ok(['serviceSessionId'=>$sessionId,'items'=>[]]);$where[]='a.class_id IN ('.implode(',',array_fill(0,count($allowed),'?')).')';$params=array_merge($params,$allowed);}
     if(($q=trim((string)($_GET['search']??'')))!==''){$where[]='(c.first_name LIKE ? OR c.last_name LIKE ? OR g.first_name LIKE ? OR g.last_name LIKE ?)';$params=array_merge($params,["%$q%","%$q%","%$q%","%$q%"]);}
-    $sql="SELECT a.id,c.id AS childId,c.first_name AS firstName,c.last_name AS lastName,c.gender,cl.name AS className,a.status,a.checked_in_at AS checkedInAt,a.is_first_visit AS firstVisit,g.first_name AS guardianFirstName,g.last_name AS guardianLastName FROM attendance a JOIN children c ON c.id=a.child_id LEFT JOIN classes cl ON cl.id=a.class_id LEFT JOIN child_guardians cg ON cg.child_id=c.id AND cg.is_primary=1 LEFT JOIN guardians g ON g.id=cg.guardian_id WHERE ".implode(' AND ',$where).' ORDER BY a.checked_in_at DESC';$s=$db->prepare($sql);$s->execute($params);api_ok(['serviceSessionId'=>$sessionId,'items'=>$s->fetchAll()]);
+    $sql="SELECT a.id,c.id AS childId,c.first_name AS firstName,c.last_name AS lastName,c.gender,cl.name AS className,a.status,a.checked_in_at AS checkedInAt,a.is_first_visit AS firstVisit,g.first_name AS guardianFirstName,g.last_name AS guardianLastName,cir.id AS checkInRequestId,pc.qr_token AS ticketToken FROM attendance a JOIN children c ON c.id=a.child_id LEFT JOIN classes cl ON cl.id=a.class_id LEFT JOIN child_guardians cg ON cg.child_id=c.id AND cg.is_primary=1 LEFT JOIN guardians g ON g.id=cg.guardian_id LEFT JOIN check_in_requests cir ON cir.id=a.check_in_request_id LEFT JOIN service_pickup_codes pc ON pc.id=cir.pickup_code_id WHERE ".implode(' AND ',$where).' ORDER BY a.checked_in_at DESC';$s=$db->prepare($sql);$s->execute($params);$items=$s->fetchAll();foreach($items as &$item){$item['checkInFormUrl']=!empty($item['ticketToken'])?tpk_pickup_ticket_url($item['ticketToken']):null;unset($item['ticketToken']);}unset($item);api_ok(['serviceSessionId'=>$sessionId,'items'=>$items]);
 }
 function api_pickup_code_lookup(PDO $db): never {
     $actor=api_actor($db);$value=trim((string)($_GET['code']??''));if(str_starts_with($value,'TPK-PICKUP:'))$value=substr($value,11);if($value==='')api_error('VALIDATION_ERROR','Scan a pickup QR code or enter a pickup code.',422);
@@ -193,6 +232,8 @@ try { $db=api_db();$path=api_path();$method=api_method();
     if($method==='GET'&&$path==='/api/v1/me/assignments/upcoming')api_my_roster($db,'upcoming');
     if($method==='POST'&&preg_match('#^/api/v1/roster/assignments/(\d+)/confirm-presence$#',$path,$m))api_confirm_presence($db,(int)$m[1]);
     if($method==='GET'&&$path==='/api/v1/dashboard/overview')api_dashboard($db);
+    if($method==='GET'&&$path==='/api/v1/check-in-requests')api_checkin_requests($db);
+    if($method==='POST'&&preg_match('#^/api/v1/check-in-requests/(\d+)/approve$#',$path,$m))api_approve_checkin_request($db,(int)$m[1]);
     if($method==='GET'&&$path==='/api/v1/check-ins')api_checkins($db);
     if($method==='GET'&&$path==='/api/v1/pickup-codes')api_pickup_code_lookup($db);
     if($method==='POST'&&$path==='/api/v1/pickup-codes/assisted-lookup')api_assisted_pickup_lookup($db);

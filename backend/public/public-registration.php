@@ -120,12 +120,7 @@ function public_registration(PDO $db): never {
             $db->prepare('INSERT INTO child_guardians(child_id,guardian_id,relationship,is_primary,authorised_pickup) VALUES(?,?,?,?,?)')->execute([$childId,$guardianId,public_name($guardian['relationship']),1,1]);
             $care = trim((string)($child['careInformation'] ?? ''));
             if ($care !== '') $db->prepare('INSERT INTO child_care_profiles(child_id,other_relevant_care_information) VALUES(?,?)')->execute([$childId,$care]);
-            $checkedIn = false;
-            if ($classId) {
-                $db->prepare("INSERT INTO attendance(service_session_id,child_id,class_id,status,source,is_first_visit) VALUES(?,?,?,'CHECKED_IN','PARENT_QR',1) ON DUPLICATE KEY UPDATE status=status")->execute([(int)$session['id'],$childId,$classId]);
-                $checkedIn = true;
-            }
-            $registered[] = ['id'=>$childId,'firstName'=>$first,'lastName'=>$last,'classId'=>$classId,'classAssignmentRequired'=>!$classId,'checkedIn'=>$checkedIn];
+            $registered[] = ['id'=>$childId,'firstName'=>$first,'lastName'=>$last,'classId'=>$classId,'classAssignmentRequired'=>!$classId,'checkedIn'=>false];
         }
         $picker = $payload['pickup'] ?? ['mode' => 'SELF'];
         if (($picker['mode'] ?? 'SELF') === 'OTHER') {
@@ -134,11 +129,10 @@ function public_registration(PDO $db): never {
             [$pickupFirst,$pickupLast] = public_split_name($pickerName);
             $db->prepare('INSERT INTO authorized_pickups(family_id,first_name,last_name,phone,relationship,is_active) VALUES(?,?,?,?,?,1)')->execute([$familyId,$pickupFirst,$pickupLast,$pickerPhone,$relationship]);
         }
-        $pickup=tpk_issue_pickup_code($db,(int)$session['id'],$familyId,$guardianId);
-        audit($db, (int)$campus['id'], 'PUBLIC_CHILDREN_REGISTERED', 'Family', $familyId, ['guardianId'=>$guardianId,'childIds'=>array_column($registered,'id'),'serviceSessionId'=>(int)$session['id'],'pickupCode'=>$pickup['code']]);
+        $request=tpk_create_checkin_request($db,(int)$campus['id'],(int)$session['id'],$familyId,$guardianId,array_column($registered,'id'),['pickup'=>$picker,'serviceStay'=>$payload['serviceStay']??null]);
+        audit($db, (int)$campus['id'], 'PUBLIC_CHILDREN_REGISTERED', 'Family', $familyId, ['guardianId'=>$guardianId,'childIds'=>array_column($registered,'id'),'serviceSessionId'=>(int)$session['id'],'checkInRequestId'=>(int)$request['id']]);
         $db->commit();
-        tpk_send_pickup_code($db,$pickup['id'],[$phone,$secondaryPhone],$pickup['code'],$pickup['ticketUrl']);
-        public_reply(['familyId'=>$familyId,'guardianId'=>$guardianId,'serviceSessionId'=>(int)$session['id'],'pickupCode'=>$pickup['code'],'pickupTicketUrl'=>$pickup['ticketUrl'],'children'=>$registered],201);
+        public_reply(['familyId'=>$familyId,'guardianId'=>$guardianId,'serviceSessionId'=>(int)$session['id'],'status'=>'PENDING','requestToken'=>$request['requestToken'],'children'=>$registered],202);
     } catch (Throwable $exception) {
         if ($db->inTransaction()) $db->rollBack();
         throw $exception;
@@ -149,6 +143,17 @@ function public_pickup_ticket(PDO $db, string $token): never {
     $s=$db->prepare("SELECT pc.display_code AS pickupCode,pc.qr_token AS qrToken,pc.collected_at AS collectedAt,ss.name AS serviceName,COALESCE(ss.service_date,DATE(ss.starts_at)) AS serviceDate,f.surname FROM service_pickup_codes pc JOIN service_sessions ss ON ss.id=pc.service_session_id JOIN families f ON f.id=pc.family_id WHERE pc.qr_token=? LIMIT 1");$s->execute([$token]);$ticket=$s->fetch();if(!$ticket)public_error('TICKET_NOT_FOUND','This pickup ticket is unavailable.',404);
     $children=$db->prepare("SELECT c.first_name AS firstName,CONCAT(LEFT(c.last_name,1),'.') AS lastInitial,cl.name AS className FROM attendance a JOIN children c ON c.id=a.child_id LEFT JOIN classes cl ON cl.id=a.class_id JOIN service_pickup_codes pc ON pc.service_session_id=a.service_session_id AND pc.family_id=c.family_id WHERE pc.qr_token=? ORDER BY c.first_name");$children->execute([$token]);$ticket['children']=$children->fetchAll();$ticket['qrData']='TPK-PICKUP:'.$ticket['qrToken'];public_reply($ticket);
 }
+function public_checkin_request_status(PDO $db, string $token): never {
+    if (!preg_match('/^[a-f0-9]{64}$/', $token)) public_error('INVALID_REQUEST', 'This check-in request is invalid.', 422);
+    $s=$db->prepare("SELECT r.id,r.status,r.requested_at AS requestedAt,r.approved_at AS approvedAt,r.decision_note AS decisionNote,r.child_ids_json,r.family_id,pc.display_code AS pickupCode,pc.qr_token AS qrToken FROM check_in_requests r LEFT JOIN service_pickup_codes pc ON pc.id=r.pickup_code_id WHERE r.request_token=? LIMIT 1");$s->execute([$token]);$request=$s->fetch();
+    if(!$request) public_error('REQUEST_NOT_FOUND','This check-in request is unavailable.',404);
+    $ids=json_decode((string)$request['child_ids_json'],true);$ids=is_array($ids)?array_values(array_filter(array_map('intval',$ids))):[];
+    $request['children']=[];
+    if($ids){$marks=implode(',',array_fill(0,count($ids),'?'));$children=$db->prepare("SELECT first_name AS firstName,CONCAT(LEFT(last_name,1),'.') AS lastInitial FROM children WHERE id IN ($marks) ORDER BY first_name");$children->execute($ids);$request['children']=$children->fetchAll();}
+    unset($request['child_ids_json'],$request['family_id']);
+    if(!empty($request['qrToken'])) $request['pickupTicketUrl']=tpk_pickup_ticket_url($request['qrToken']);
+    unset($request['qrToken']); public_reply($request);
+}
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') public_reply(null, 204);
 try {
@@ -156,6 +161,7 @@ try {
     if ($method === 'GET' && $path === '/api/v1/public/service-session/current') public_session_endpoint($db);
     if ($method === 'POST' && $path === '/api/v1/public/registrations') public_registration($db);
     if ($method === 'GET' && preg_match('#^/api/v1/public/pickup-tickets/([a-f0-9]{64})$#', $path, $match)) public_pickup_ticket($db, $match[1]);
+    if ($method === 'GET' && preg_match('#^/api/v1/public/check-in-requests/([a-f0-9]{64})$#', $path, $match)) public_checkin_request_status($db, $match[1]);
     public_error('ROUTE_NOT_FOUND', 'The requested public API endpoint was not found.', 404);
 } catch (PDOException $exception) {
     error_log('[TPK public registration] ' . $exception->getMessage()); public_error('DATA_UNAVAILABLE', 'Registration data is temporarily unavailable. Please ask a TPK team member for help.', 503);

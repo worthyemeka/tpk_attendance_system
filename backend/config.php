@@ -198,3 +198,24 @@ function tpk_send_pickup_code(PDO $db, int $pickupCodeId, array $phones, string 
         $db->prepare('INSERT INTO pickup_code_notifications(pickup_code_id,phone,channel,status,provider_response) VALUES(?,?,?,?,?)')->execute([$pickupCodeId,$phone,$channel,$status,$detail]);
     }
 }
+
+/** Queue a parent request.  This deliberately does not create attendance or a
+ * pickup code: the rostered Head of Service performs that final approval. */
+function tpk_create_checkin_request(PDO $db, int $campusId, int $serviceSessionId, int $familyId, int $guardianId, array $childIds, array $pickupDetails = []): array {
+    $childIds = array_values(array_unique(array_filter(array_map('intval', $childIds))));
+    if (!$childIds) throw new RuntimeException('Select at least one child for check-in.');
+    $existing = $db->prepare("SELECT id,request_token,status FROM check_in_requests WHERE service_session_id=? AND family_id=? AND status='PENDING' ORDER BY id DESC LIMIT 1");
+    $existing->execute([$serviceSessionId, $familyId]);
+    if ($row = $existing->fetch()) {
+        // A family may retry while the Head of Service is still deciding. Keep a
+        // single live request, but ensure it reflects the latest selected children
+        // and pickup details instead of silently approving stale information.
+        $update = $db->prepare('UPDATE check_in_requests SET guardian_id=?,child_ids_json=?,pickup_details_json=?,requested_at=NOW() WHERE id=?');
+        $update->execute([$guardianId,json_encode($childIds, JSON_THROW_ON_ERROR),$pickupDetails ? json_encode($pickupDetails, JSON_THROW_ON_ERROR) : null,(int)$row['id']]);
+        return ['id'=>(int)$row['id'], 'requestToken'=>$row['request_token'], 'status'=>$row['status'], 'reused'=>true];
+    }
+    $token = bin2hex(random_bytes(32));
+    $insert = $db->prepare('INSERT INTO check_in_requests(campus_id,service_session_id,family_id,guardian_id,child_ids_json,pickup_details_json,request_token) VALUES(?,?,?,?,?,?,?)');
+    $insert->execute([$campusId,$serviceSessionId,$familyId,$guardianId,json_encode($childIds, JSON_THROW_ON_ERROR),$pickupDetails ? json_encode($pickupDetails, JSON_THROW_ON_ERROR) : null,$token]);
+    return ['id'=>(int)$db->lastInsertId(), 'requestToken'=>$token, 'status'=>'PENDING', 'reused'=>false];
+}
