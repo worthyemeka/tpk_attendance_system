@@ -82,11 +82,21 @@ function tpk_store_profile_photo(array $file, int $staffUserId): string {
     return '/uploads/profiles/' . $filename;
 }
 
+/**
+ * Accept the original META_WHATSAPP_* names as well as the shorter names used
+ * by the current deployment documentation.  Both variants remain server-only.
+ */
+function tpk_whatsapp_env(string $name): string {
+    $legacy = 'META_WHATSAPP_' . $name;
+    return (string)(getenv('WHATSAPP_' . $name) ?: getenv($legacy) ?: '');
+}
+
 function tpk_send_meta_whatsapp_template(string $number, string $template, string $language, array $bodyParameters): void {
-    $token = getenv('WHATSAPP_ACCESS_TOKEN');
-    $phoneNumberId = getenv('WHATSAPP_PHONE_NUMBER_ID');
+    $token = tpk_whatsapp_env('ACCESS_TOKEN');
+    $phoneNumberId = tpk_whatsapp_env('PHONE_NUMBER_ID');
     if (!$token || !$phoneNumberId) throw new RuntimeException('WhatsApp verification is not configured.');
-    $url = 'https://graph.facebook.com/' . (getenv('WHATSAPP_GRAPH_API_VERSION') ?: 'v25.0') . '/' . rawurlencode($phoneNumberId) . '/messages';
+    $graphVersion = tpk_whatsapp_env('GRAPH_API_VERSION') ?: 'v25.0';
+    $url = 'https://graph.facebook.com/' . $graphVersion . '/' . rawurlencode($phoneNumberId) . '/messages';
     $parameters = array_map(static fn (string $value): array => ['type' => 'text', 'text' => $value], $bodyParameters);
     $payload = json_encode(['messaging_product' => 'whatsapp', 'to' => ltrim($number, '+'), 'type' => 'template', 'template' => ['name' => $template, 'language' => ['code' => $language], 'components' => [['type' => 'body', 'parameters' => $parameters]]]], JSON_THROW_ON_ERROR);
     $request = stream_context_create(['http' => ['method' => 'POST', 'header' => "Authorization: Bearer {$token}\r\nContent-Type: application/json\r\n", 'content' => $payload, 'timeout' => 15, 'ignore_errors' => true]]);
@@ -99,7 +109,7 @@ function tpk_send_meta_whatsapp_template(string $number, string $template, strin
 }
 
 function tpk_whatsapp_is_configured(): bool {
-    return (bool)(getenv('WHATSAPP_ACCESS_TOKEN') && getenv('WHATSAPP_PHONE_NUMBER_ID'));
+    return (bool)(tpk_whatsapp_env('ACCESS_TOKEN') && tpk_whatsapp_env('PHONE_NUMBER_ID'));
 }
 
 function tpk_send_whatsapp_verification(string $number, string $name, string $code): void {

@@ -30,7 +30,7 @@ For WhatsApp OTP verification, create an approved Meta template named `teacher_v
 Hi {{1}}, your TribePetra Kids verification code is {{2}}. It expires in 10 minutes. Do not share this code.
 ```
 
-Set `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_VERIFICATION_TEMPLATE`, and `WHATSAPP_VERIFICATION_LANGUAGE` in `.env`. The access token is server-only; never use a `NEXT_PUBLIC_*` variable. Registration sends the OTP through `POST /api/teachers/register`, and the teacher verifies it through `POST /api/teachers/verify` with `{ "email": "...", "code": "123456" }`.
+Set `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_VERIFICATION_TEMPLATE`, and `WHATSAPP_VERIFICATION_LANGUAGE` in `.env`. The original `META_WHATSAPP_PHONE_NUMBER_ID`, `META_WHATSAPP_ACCESS_TOKEN`, and `META_WHATSAPP_GRAPH_API_VERSION` names are also accepted for compatibility. The access token is server-only; never use a `NEXT_PUBLIC_*` variable or commit it. Registration sends the OTP through `POST /api/teachers/register`, and the teacher verifies it through `POST /api/teachers/verify` with `{ "email": "...", "code": "123456" }`.
 
 Protected v1 endpoints now require `Authorization: Bearer <staff session token>` rather than a caller-supplied staff ID.
 
