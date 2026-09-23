@@ -41,6 +41,7 @@ export function GlobalDropdowns() {
   const known = useRef(new WeakSet<HTMLSelectElement>());
 
   useEffect(() => {
+    let observer: MutationObserver | null = null;
     const discover = () => {
       const next = Array.from(document.querySelectorAll<HTMLSelectElement>("select:not([data-dropdown-native])"))
         .filter((select) => select.isConnected && !known.current.has(select));
@@ -48,10 +49,12 @@ export function GlobalDropdowns() {
       next.forEach((select) => { known.current.add(select); select.dataset.appDropdown = "true"; });
       setSelects((current) => [...current.filter((select) => select.isConnected), ...next]);
     };
-    discover();
-    const observer = new MutationObserver(discover);
-    observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
+    const timer = window.setTimeout(() => {
+      discover();
+      observer = new MutationObserver(discover);
+      observer.observe(document.body, { childList: true, subtree: true });
+    }, 0);
+    return () => { window.clearTimeout(timer); observer?.disconnect(); };
   }, []);
 
   return <>{selects.map((select, index) => select.parentElement && createPortal(<Dropdown key={`${select.name}-${index}`} select={select} />, select.parentElement))}
