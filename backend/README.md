@@ -16,6 +16,22 @@ WHERE id IN (<Courage ID>, <Mafo ID>, <Muyiwa ID>);
 
 New teachers are created as `TPK_ADMIN` and inactive. A Super Admin activates them after approval. The teacher-login response includes the staff-user ID used by the protected v1 API.
 
+### Staff and Super Admin foundation
+
+After the prior teacher and v1 migrations, apply `database/2026_staff_admin_foundation.sql` once. It adds the shared teacher registration fields, normalised WhatsApp identifiers, verification/session records, profile-photo reference, team status, and audited access/status controls.
+
+It also seeds the three approved bootstrap Super Admin WhatsApp identifiers. Those values are only read by the verification backend; they are never sent to the frontend or used as credentials.
+
+For local development set `APP_ENV=development`. In that mode, when no WhatsApp provider is configured, the generated verification message is written to `backend/storage/whatsapp-verifications.log`. In production, set `WHATSAPP_VERIFICATION_WEBHOOK`; registration fails safely if verification delivery is unavailable.
+
+Protected v1 endpoints now require `Authorization: Bearer <staff session token>` rather than a caller-supplied staff ID.
+
+## Service pickup codes and tickets
+
+Apply `database/2026_service_pickup_codes.sql` after `2026_parent_flow.sql`. Every family receives one fresh code for each service session: First Service uses `TPK-A-001` upward and Second Service uses `TPK-B-001` upward. The counter is scoped to that service, so it starts again for the next Sunday.
+
+Set `SMS_PICKUP_WEBHOOK` and `WHATSAPP_PICKUP_WEBHOOK` to notification-provider endpoints. Each endpoint receives `{ to, message }`. In development, both sends are recorded in `backend/storage/pickup-code-notifications.log` instead. The same ticket link opens a printable QR ticket; parents can select **Save as PDF** in the browser print dialog.
+
 ## Import the General Info responses
 
 Use a dry run first:

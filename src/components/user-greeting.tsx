@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { readTeacherSession } from "@/lib/session";
 
 type Teacher = { firstName: string; title: "Aunty" | "Uncle" };
-const fallbackTeacher: Teacher = { firstName: "Kemi", title: "Aunty" };
+const fallbackTeacher: Teacher = { firstName: "there", title: "Aunty" };
 function timeGreeting(hour: number) { return hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"; }
 
 export function UserGreeting() {
@@ -11,12 +12,9 @@ export function UserGreeting() {
   const [teacher, setTeacher] = useState<Teacher>(fallbackTeacher);
 
   useEffect(() => {
-    const update = () => setHour(new Date().getHours());
+    const update = () => setHour(Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", hour: "2-digit", hourCycle: "h23" }).format(new Date())));
     update();
-    const saved = localStorage.getItem("tpk-teacher");
-    if (saved) {
-      try { const profile = JSON.parse(saved); if (profile.firstName && profile.title) setTeacher(profile); } catch { /* keep the demo profile */ }
-    }
+    const profile = readTeacherSession(); if (profile?.firstName && profile.title) setTeacher(profile);
     const timer = window.setInterval(update, 60_000);
     return () => window.clearInterval(timer);
   }, []);

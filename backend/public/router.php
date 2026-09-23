@@ -4,7 +4,7 @@ $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?: '/';
 $file = __DIR__ . $path;
 if ($path !== '/' && is_file($file)) return false;
 
-if (str_starts_with($path, '/api/v1/public/registrations') || $path === '/api/v1/public/service-session/current') {
+if (str_starts_with($path, '/api/v1/public/registrations') || str_starts_with($path, '/api/v1/public/pickup-tickets/') || $path === '/api/v1/public/service-session/current') {
     require __DIR__ . '/public-registration.php';
     return;
 }

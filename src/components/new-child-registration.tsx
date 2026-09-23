@@ -10,12 +10,12 @@ type Service = "FIRST_SERVICE" | "SECOND_SERVICE" | "BOTH_SERVICES";
 type ChildDraft = { id: number; firstName: string; lastName: string; dateOfBirth: string; gender: "" | "MALE" | "FEMALE"; careInformation: string };
 type Guardian = { firstName: string; lastName: string; primaryPhone: string; secondaryPhone: string; relationship: string; email: string; address: string };
 type Picker = { fullName: string; relationship: string; phone: string };
-const blankChild = (): ChildDraft => ({ id: Date.now() + Math.random(), firstName: "", lastName: "", dateOfBirth: "", gender: "", careInformation: "" });
+const blankChild = (id = Date.now() + Math.random()): ChildDraft => ({ id, firstName: "", lastName: "", dateOfBirth: "", gender: "", careInformation: "" });
 const blankGuardian: Guardian = { firstName: "", lastName: "", primaryPhone: "", secondaryPhone: "", relationship: "", email: "", address: "" };
 
 export function NewChildRegistration() {
   const [step, setStep] = useState(0);
-  const [children, setChildren] = useState<ChildDraft[]>([blankChild()]);
+  const [children, setChildren] = useState<ChildDraft[]>([blankChild(1)]);
   const [guardian, setGuardian] = useState<Guardian>(blankGuardian);
   const [pickupMode, setPickupMode] = useState<"SELF" | "OTHER">("SELF");
   const [picker, setPicker] = useState<Picker>({ fullName: "", relationship: "", phone: "" });
@@ -23,12 +23,17 @@ export function NewChildRegistration() {
   const [serviceSessionId, setServiceSessionId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [receipt, setReceipt] = useState<{ pickupCode: string; checkedIn: number; pending: number } | null>(null);
+  const [receipt, setReceipt] = useState<{ pickupCode: string; pickupTicketUrl?: string; checkedIn: number; pending: number } | null>(null);
+  const [currentTime, setCurrentTime] = useState("");
 
   useEffect(() => {
+    const updateTime = () => setCurrentTime(new Intl.DateTimeFormat("en-NG", { weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: "Africa/Lagos" }).format(new Date()));
+    updateTime();
+    const time = window.setInterval(updateTime, 30_000);
     fetch(`${apiBase}/api/v1/public/service-session/current`).then((response) => response.json()).then((result) => {
       if (result.success && result.data?.id) setServiceSessionId(result.data.id);
     }).catch(() => setError("We could not connect to check-in right now. Please ask a TPK team member for help."));
+    return () => window.clearInterval(time);
   }, []);
 
   const validChildren = children.every((child) => child.firstName && child.lastName && child.dateOfBirth && child.gender);
@@ -49,14 +54,14 @@ export function NewChildRegistration() {
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.error?.message || "We could not complete registration.");
       const saved = result.data.children || [];
-      setReceipt({ pickupCode: result.data.pickupCode, checkedIn: saved.filter((child: { checkedIn: boolean }) => child.checkedIn).length, pending: saved.filter((child: { classAssignmentRequired: boolean }) => child.classAssignmentRequired).length });
+      setReceipt({ pickupCode: result.data.pickupCode, pickupTicketUrl: result.data.pickupTicketUrl, checkedIn: saved.filter((child: { checkedIn: boolean }) => child.checkedIn).length, pending: saved.filter((child: { classAssignmentRequired: boolean }) => child.classAssignmentRequired).length });
       setStep(4);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "We could not complete registration."); }
     finally { setSaving(false); }
   };
 
   return <div className="new-reg-page"><ParentPhotoSlider /><main className="new-reg-main">
-    <header className="new-reg-top"><button onClick={goBack} type="button"><FiArrowLeft /> Back</button><time>{new Intl.DateTimeFormat("en-NG", { weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: "Africa/Lagos" }).format(new Date())}</time></header>
+    <header className="new-reg-top"><button onClick={goBack} type="button"><FiArrowLeft /> Back</button><time>{currentTime}</time></header>
     <Progress step={step} />
     <section className="new-reg-card">
       {error && <p className="new-reg-error" role="alert">{error}</p>}
@@ -78,4 +83,4 @@ function GuardianStep({ guardian, setGuardian, back, next, childSummary }: { gua
 function PickupStep({ pickupMode,setPickupMode,picker,setPicker,service,setService,back,next }: { pickupMode:"SELF"|"OTHER";setPickupMode:(value:"SELF"|"OTHER")=>void;picker:Picker;setPicker:(value:Picker)=>void;service:Service;setService:(value:Service)=>void;back:()=>void;next:()=>void }) { const valid=pickupMode==="SELF"||Boolean(picker.fullName&&picker.relationship&&picker.phone); return <><h1>Pickup and service</h1><p>Let us know who to expect and which service your child(ren) will stay for.</p><div className="new-pickup"><button className={pickupMode==="SELF"?"selected":""} onClick={()=>setPickupMode("SELF")} type="button"><FiUser/><b>I will be picking up</b><small>I’ll collect my child(ren) after service.</small></button><button className={pickupMode==="OTHER"?"selected":""} onClick={()=>setPickupMode("OTHER")} type="button"><FiUsers/><b>Someone else will pick up</b><small>Another authorised person will collect my child(ren).</small></button></div>{pickupMode==="OTHER"&&<section className="new-picker"><h3>Picker’s details</h3><p>Please enter the authorised person’s information.</p><div className="new-form-grid"><label>Full Name *<input onChange={(event)=>setPicker({...picker,fullName:event.target.value})} value={picker.fullName}/></label><label>Relationship to Child *<select onChange={(event)=>setPicker({...picker,relationship:event.target.value})} value={picker.relationship}><option value="">Select relationship</option><option value="Father">Father</option><option value="Mother">Mother</option><option value="Guardian">Guardian</option><option value="Other">Other</option></select></label><label className="new-full">Phone Number *<input inputMode="tel" onChange={(event)=>setPicker({...picker,phone:event.target.value})} placeholder="0805 123 4567" value={picker.phone}/></label></div></section>}<fieldset className="new-services"><legend>Which service will your child(ren) be staying for?</legend><div className="new-service-options"><button className={service==="FIRST_SERVICE"?"selected":""} onClick={()=>setService("FIRST_SERVICE")} type="button">1st service</button><button className={service==="SECOND_SERVICE"?"selected":""} onClick={()=>setService("SECOND_SERVICE")} type="button">2nd service</button><button className={service==="BOTH_SERVICES"?"selected":""} onClick={()=>setService("BOTH_SERVICES")} type="button">Both services</button></div><small>Children staying for both services are queued for the second-service check-in at 11:00 AM.</small></fieldset><div className="new-actions"><button className="new-back" onClick={back}>Back</button><button className="new-next" disabled={!valid} onClick={next}>Continue <FiArrowRight /></button></div></>; }
 function ReviewStep({ children,guardian,pickupMode,picker,service,back,submit,saving }: { children:ChildDraft[];guardian:Guardian;pickupMode:"SELF"|"OTHER";picker:Picker;service:Service;back:()=>void;submit:()=>void;saving:boolean }) { const label=service==="FIRST_SERVICE"?"1st service":service==="SECOND_SERVICE"?"2nd service":"Both services"; return <><h1>Just one last check</h1><p>Please make sure everything looks right before we check the children in.</p><div className="new-review"><Review icon={<FiUsers/>} title={`Children (${children.length})`} text={children.map((child)=>`${child.firstName} ${child.lastName}`).join(" · ")}/><Review icon={<FiUser/>} title="Parent/Guardian" text={`${guardian.firstName} ${guardian.lastName} · ${guardian.relationship} · ${guardian.primaryPhone}`}/><Review icon={<FiCheckCircle/>} title="Pickup" text={pickupMode==="SELF"?"I will be picking up":`${picker.fullName} (${picker.relationship}) · ${picker.phone}`}/><Review icon={<FiHome/>} title="Home Address" text={guardian.address}/><Review icon={<FiInfo/>} title="Service" text={label}/></div><div className="new-actions"><button className="new-back" onClick={back}>Back</button><button className="new-next" disabled={saving} onClick={submit}>{saving?"Registering…":"Register & Check In"} <FiArrowRight /></button></div></>; }
 function Review({ icon,title,text }: { icon:React.ReactNode;title:string;text:string }) { return <article className="new-review-item">{icon}<span><b>{title}</b><small>{text}</small></span></article>; }
-function CompleteStep({ receipt,restart }: { receipt:{pickupCode:string;checkedIn:number;pending:number}|null;restart:()=>void }) { return <><div className="new-success"><FiCheck/></div><h1>Welcome to TribePetra!</h1><p>Your registration has been saved.</p>{receipt?.pending ? <p>One or more children need a team member to confirm their class before check-in. Their record is safely saved.</p> : <p>Your child(ren) are registered and checked in.</p>}<div className="new-code"><small>PICKUP CODE</small><b>{receipt?.pickupCode || "TPK"}</b><span>Show this code at the pickup station.</span></div><div className="new-info"><FiCheckCircle/>{receipt?.checkedIn || 0} child{receipt?.checkedIn === 1 ? "" : "ren"} checked in.</div><div className="new-actions"><button className="new-back" onClick={restart}>Check In Another Child</button><button className="new-next" onClick={()=>window.location.assign("/")}>Done</button></div></>; }
+function CompleteStep({ receipt,restart }: { receipt:{pickupCode:string;pickupTicketUrl?:string;checkedIn:number;pending:number}|null;restart:()=>void }) { return <><div className="new-success"><FiCheck/></div><h1>Welcome to TribePetra!</h1><p>Your registration has been saved.</p>{receipt?.pending ? <p>One or more children need a team member to confirm their class before check-in. Their record is safely saved.</p> : <p>Your child(ren) are registered and checked in.</p>}<div className="new-code"><small>PICKUP CODE</small><b>{receipt?.pickupCode || "TPK"}</b><span>Show this code at the pickup station.</span></div>{receipt?.pickupTicketUrl&&<a className="new-back" href={receipt.pickupTicketUrl}>Open QR pickup ticket / save PDF</a>}<div className="new-info"><FiCheckCircle/>{receipt?.checkedIn || 0} child{receipt?.checkedIn === 1 ? "" : "ren"} checked in.</div><div className="new-actions"><button className="new-back" onClick={restart}>Check In Another Child</button><button className="new-next" onClick={()=>window.location.assign("/")}>Done</button></div></>; }

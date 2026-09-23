@@ -48,3 +48,76 @@ function audit(PDO $db, int $campusId, string $action, string $entityType, int $
     $db->prepare('INSERT INTO audit_logs (campus_id, action, entity_type, entity_id, metadata) VALUES (?, ?, ?, ?, ?)')
        ->execute([$campusId, $action, $entityType, $entityId, json_encode($metadata)]);
 }
+
+function tpk_normalize_nigerian_phone(?string $value): ?string {
+    $digits = preg_replace('/\D+/', '', (string)$value);
+    if (str_starts_with($digits, '0') && strlen($digits) === 11) return '+234' . substr($digits, 1);
+    if (str_starts_with($digits, '234') && strlen($digits) === 13) return '+' . $digits;
+    return null;
+}
+
+function tpk_app_environment(): string { return strtolower((string)(getenv('APP_ENV') ?: 'production')); }
+
+function tpk_store_profile_photo(array $file, int $staffUserId): string {
+    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) return '';
+    if (($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) throw new RuntimeException('The profile photo could not be uploaded.');
+    if (($file['size'] ?? 0) > 5 * 1024 * 1024) throw new RuntimeException('Profile photos must be 5 MB or smaller.');
+    $mime = (new finfo(FILEINFO_MIME_TYPE))->file($file['tmp_name']);
+    $extensions = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
+    if (!isset($extensions[$mime])) throw new RuntimeException('Use a JPEG, PNG, or WebP profile photo.');
+    $directory = __DIR__ . '/public/uploads/profiles';
+    if (!is_dir($directory) && !mkdir($directory, 0750, true) && !is_dir($directory)) throw new RuntimeException('Profile-photo storage is unavailable.');
+    $filename = 'staff-' . $staffUserId . '-' . bin2hex(random_bytes(8)) . '.' . $extensions[$mime];
+    if (!move_uploaded_file($file['tmp_name'], $directory . '/' . $filename)) throw new RuntimeException('The profile photo could not be saved.');
+    return '/uploads/profiles/' . $filename;
+}
+
+function tpk_send_whatsapp_verification(string $number, string $name, string $url): void {
+    $message = "Hi {$name},\n\nPlease verify your TribePetra Kids team account:\n{$url}\n\nThis link expires in 24 hours.";
+    $webhook = getenv('WHATSAPP_VERIFICATION_WEBHOOK');
+    if ($webhook) {
+        $payload = json_encode(['to' => $number, 'message' => $message], JSON_THROW_ON_ERROR);
+        $request = stream_context_create(['http' => ['method' => 'POST', 'header' => "Content-Type: application/json\r\n", 'content' => $payload, 'timeout' => 10]]);
+        if (@file_get_contents($webhook, false, $request) === false) throw new RuntimeException('The verification message could not be sent.');
+        return;
+    }
+    if (tpk_app_environment() === 'development') {
+        $directory = __DIR__ . '/storage';
+        if (!is_dir($directory) && !mkdir($directory, 0700, true) && !is_dir($directory)) throw new RuntimeException('Development notification storage is unavailable.');
+        file_put_contents($directory . '/whatsapp-verifications.log', gmdate('c') . " {$number} {$message}\n", FILE_APPEND | LOCK_EX);
+        return;
+    }
+    throw new RuntimeException('WhatsApp verification is not configured.');
+}
+
+function tpk_pickup_ticket_url(string $token): string {
+    $origin = rtrim(getenv('TPK_FRONTEND_URL') ?: (getenv('FRONTEND_ORIGIN') ?: 'http://localhost:3000'), '/');
+    return $origin . '/pickup-ticket?token=' . rawurlencode($token);
+}
+
+function tpk_issue_pickup_code(PDO $db, int $serviceSessionId, int $familyId, ?int $guardianId): array {
+    $existing = $db->prepare('SELECT id,display_code,qr_token FROM service_pickup_codes WHERE service_session_id=? AND family_id=? LIMIT 1');
+    $existing->execute([$serviceSessionId, $familyId]);
+    if ($row = $existing->fetch()) return ['id' => (int)$row['id'], 'code' => $row['display_code'], 'qrToken' => $row['qr_token'], 'ticketUrl' => tpk_pickup_ticket_url($row['qr_token'])];
+    $session = $db->prepare('SELECT service_type,service_order FROM service_sessions WHERE id=? FOR UPDATE'); $session->execute([$serviceSessionId]); $service = $session->fetch();
+    if (!$service) throw new RuntimeException('The service session is unavailable for pickup-code generation.');
+    $letter = $service['service_type'] === 'FIRST_SERVICE' || (int)$service['service_order'] === 1 ? 'A' : 'B';
+    $sequence = $db->prepare('SELECT COALESCE(MAX(sequence_number),0)+1 FROM service_pickup_codes WHERE service_session_id=? FOR UPDATE'); $sequence->execute([$serviceSessionId]); $number = (int)$sequence->fetchColumn();
+    $code = sprintf('TPK-%s-%03d', $letter, $number); $token = bin2hex(random_bytes(32));
+    $insert = $db->prepare('INSERT INTO service_pickup_codes(service_session_id,family_id,guardian_id,sequence_number,display_code,qr_token) VALUES(?,?,?,?,?,?)');
+    $insert->execute([$serviceSessionId, $familyId, $guardianId, $number, $code, $token]);
+    return ['id' => (int)$db->lastInsertId(), 'code' => $code, 'qrToken' => $token, 'ticketUrl' => tpk_pickup_ticket_url($token)];
+}
+
+function tpk_send_pickup_code(PDO $db, int $pickupCodeId, array $phones, string $code, string $ticketUrl): void {
+    $message = "TribePetra Kids pickup code: {$code}. Show this code or ticket QR after service: {$ticketUrl}";
+    foreach (array_unique(array_filter($phones)) as $phone) foreach (['SMS' => getenv('SMS_PICKUP_WEBHOOK'), 'WHATSAPP' => getenv('WHATSAPP_PICKUP_WEBHOOK')] as $channel => $webhook) {
+        $status = 'FAILED'; $detail = null;
+        try {
+            if ($webhook) { $payload=json_encode(['to'=>$phone,'message'=>$message], JSON_THROW_ON_ERROR);$context=stream_context_create(['http'=>['method'=>'POST','header'=>"Content-Type: application/json\r\n",'content'=>$payload,'timeout'=>10]]);if(@file_get_contents($webhook,false,$context)===false)throw new RuntimeException('Provider request failed.');$status='SENT'; }
+            elseif (tpk_app_environment()==='development') { $directory=__DIR__.'/storage';if(!is_dir($directory))mkdir($directory,0700,true);file_put_contents($directory.'/pickup-code-notifications.log',gmdate('c')." {$channel} {$phone} {$message}\n",FILE_APPEND|LOCK_EX);$status='DEVELOPMENT_LOGGED'; }
+            else $detail='Provider is not configured.';
+        } catch (Throwable $e) { $detail=$e->getMessage(); }
+        $db->prepare('INSERT INTO pickup_code_notifications(pickup_code_id,phone,channel,status,provider_response) VALUES(?,?,?,?,?)')->execute([$pickupCodeId,$phone,$channel,$status,$detail]);
+    }
+}
