@@ -4,8 +4,7 @@ import { ParentPhotoSlider } from "@/components/parent-photo-slider";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { FiArrowLeft, FiArrowRight, FiCheck, FiCheckCircle, FiChevronDown, FiClipboard, FiInfo, FiUser, FiUsers } from "react-icons/fi";
-
-const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { apiBase } from "@/lib/session";
 type Step = "find" | "children" | "pickup" | "done";
 type Child = { id: number; firstName: string; lastInitial: string; className: string | null; alreadyCheckedIn: boolean; checkedInAt?: string | null };
 type Service = "FIRST_SERVICE" | "SECOND_SERVICE" | "BOTH_SERVICES";

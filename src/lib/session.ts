@@ -13,7 +13,10 @@ export type TeacherSession = {
   sessionToken: string;
 };
 
-export const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Keep browser requests on the same origin as the app. Next.js then forwards
+// `/api/*` to the configured PHP service, so production and local use the same
+// data source instead of a stale public address baked into the browser bundle.
+export const apiBase = "";
 
 export function readTeacherSession(): TeacherSession | null {
   if (typeof window === "undefined") return null;

@@ -57,8 +57,10 @@ function public_class_for_child(PDO $db, int $campusId, string $dob): ?int {
     return $id === false ? null : (int)$id;
 }
 function public_find_guardian(PDO $db, string $phone): ?array {
-    $rows = $db->query('SELECT id,family_id,phone FROM guardians')->fetchAll();
-    foreach ($rows as $row) if (public_phone($row['phone']) === $phone) return $row;
+    $rows = $db->query('SELECT id,family_id,phone,secondary_phone FROM guardians')->fetchAll();
+    foreach ($rows as $row) {
+        if (public_phone($row['phone']) === $phone || public_phone($row['secondary_phone'] ?? null) === $phone) return $row;
+    }
     return null;
 }
 function public_family_code(PDO $db): string {

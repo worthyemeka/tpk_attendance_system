@@ -3,8 +3,7 @@
 import { ParentPhotoSlider } from "@/components/parent-photo-slider";
 import { useEffect, useMemo, useState } from "react";
 import { FiArrowLeft, FiArrowRight, FiCheck, FiCheckCircle, FiHome, FiInfo, FiPlus, FiTrash2, FiUser, FiUsers } from "react-icons/fi";
-
-const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { apiBase } from "@/lib/session";
 const steps = ["Your Child", "Parent/Guardian", "Pickup", "Review", "Done"];
 type Service = "FIRST_SERVICE" | "SECOND_SERVICE" | "BOTH_SERVICES";
 type ChildDraft = { id: number; firstName: string; lastName: string; dateOfBirth: string; gender: "" | "MALE" | "FEMALE"; careInformation: string };

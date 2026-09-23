@@ -6,7 +6,12 @@ function checkin_response(mixed $data, int $status = 200): never { http_response
 function checkin_error(string $code,string $message,int $status=400): never { http_response_code($status); header('Content-Type: application/json; charset=utf-8'); header('Access-Control-Allow-Origin: ' . tpk_cors_origin()); header('Vary: Origin'); echo json_encode(['success'=>false,'error'=>['code'=>$code,'message'=>$message]], JSON_UNESCAPED_SLASHES); exit; }
 function checkin_input(): array { $value=json_decode(file_get_contents('php://input')?:'{}',true); if(!is_array($value)) checkin_error('INVALID_JSON','Request body must be valid JSON.'); return $value; }
 function checkin_phone(?string $value): ?string { $digits=preg_replace('/\D+/','',(string)$value); if(str_starts_with($digits,'234')&&strlen($digits)===13)$digits='0'.substr($digits,3); return strlen($digits)===11&&str_starts_with($digits,'0')?$digits:null; }
-function checkin_guardian(PDO $db,string $phone): ?array { foreach($db->query('SELECT id,family_id,phone,secondary_phone FROM guardians')->fetchAll() as $guardian) if(checkin_phone($guardian['phone'])===$phone) return $guardian; return null; }
+function checkin_guardian(PDO $db,string $phone): ?array {
+    foreach($db->query('SELECT id,family_id,phone,secondary_phone FROM guardians')->fetchAll() as $guardian) {
+        if(checkin_phone($guardian['phone'])===$phone || checkin_phone($guardian['secondary_phone'] ?? null)===$phone) return $guardian;
+    }
+    return null;
+}
 
 if(($_SERVER['REQUEST_METHOD']??'GET')==='OPTIONS') checkin_response(null,204);
 if(($_SERVER['REQUEST_METHOD']??'GET')!=='POST') checkin_error('METHOD_NOT_ALLOWED','Use POST for check-in.',405);
