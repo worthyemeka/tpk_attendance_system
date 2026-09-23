@@ -13,10 +13,10 @@ export type TeacherSession = {
   sessionToken: string;
 };
 
-// Keep browser requests on the same origin as the app. Next.js then forwards
-// `/api/*` to the configured PHP service, so production and local use the same
-// data source instead of a stale public address baked into the browser bundle.
-export const apiBase = "";
+// A production tunnel can be supplied when the PHP service lives outside
+// Vercel. Local development intentionally falls back to Next's same-origin
+// `/api` bridge, so no browser code needs a different endpoint locally.
+export const apiBase = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
 
 export function readTeacherSession(): TeacherSession | null {
   if (typeof window === "undefined") return null;
