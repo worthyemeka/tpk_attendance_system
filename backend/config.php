@@ -36,11 +36,19 @@ function db(): PDO {
 function json_response(mixed $data, int $status = 200): never {
     http_response_code($status);
     header('Content-Type: application/json; charset=utf-8');
-    header('Access-Control-Allow-Origin: ' . (getenv('FRONTEND_ORIGIN') ?: 'http://localhost:3000'));
+    header('Access-Control-Allow-Origin: ' . tpk_cors_origin());
+    header('Vary: Origin');
     header('Access-Control-Allow-Headers: Content-Type, Authorization');
     header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
     echo json_encode($data, JSON_UNESCAPED_SLASHES);
     exit;
+}
+
+function tpk_cors_origin(): string {
+    $configured = getenv('FRONTEND_ORIGINS') ?: (getenv('FRONTEND_ORIGIN') ?: 'http://localhost:3000');
+    $allowed = array_values(array_filter(array_map('trim', explode(',', $configured))));
+    $requestOrigin = $_SERVER['HTTP_ORIGIN'] ?? '';
+    return in_array($requestOrigin, $allowed, true) ? $requestOrigin : ($allowed[0] ?? 'http://localhost:3000');
 }
 
 function body(): array { return json_decode(file_get_contents('php://input'), true) ?: []; }
@@ -72,18 +80,24 @@ function tpk_store_profile_photo(array $file, int $staffUserId): string {
     return '/uploads/profiles/' . $filename;
 }
 
-function tpk_send_whatsapp_verification(string $number, string $name, string $code): void {
+function tpk_send_meta_whatsapp_template(string $number, string $template, string $language, array $bodyParameters): void {
     $token = getenv('WHATSAPP_ACCESS_TOKEN');
     $phoneNumberId = getenv('WHATSAPP_PHONE_NUMBER_ID');
-    $template = getenv('WHATSAPP_VERIFICATION_TEMPLATE') ?: 'teacher_verification_code';
-    $language = getenv('WHATSAPP_VERIFICATION_LANGUAGE') ?: 'en_US';
     if (!$token || !$phoneNumberId) throw new RuntimeException('WhatsApp verification is not configured.');
     $url = 'https://graph.facebook.com/' . (getenv('WHATSAPP_GRAPH_API_VERSION') ?: 'v25.0') . '/' . rawurlencode($phoneNumberId) . '/messages';
-    $payload = json_encode(['messaging_product' => 'whatsapp', 'to' => $number, 'type' => 'template', 'template' => ['name' => $template, 'language' => ['code' => $language], 'components' => [['type' => 'body', 'parameters' => [['type' => 'text', 'text' => $code]]]]]], JSON_THROW_ON_ERROR);
+    $parameters = array_map(static fn (string $value): array => ['type' => 'text', 'text' => $value], $bodyParameters);
+    $payload = json_encode(['messaging_product' => 'whatsapp', 'to' => ltrim($number, '+'), 'type' => 'template', 'template' => ['name' => $template, 'language' => ['code' => $language], 'components' => [['type' => 'body', 'parameters' => $parameters]]]], JSON_THROW_ON_ERROR);
     $request = stream_context_create(['http' => ['method' => 'POST', 'header' => "Authorization: Bearer {$token}\r\nContent-Type: application/json\r\n", 'content' => $payload, 'timeout' => 15, 'ignore_errors' => true]]);
     $response = @file_get_contents($url, false, $request);
     $status = (int)preg_replace('/.*\s(\d{3})\s.*/s', '$1', $http_response_header[0] ?? '500');
-    if ($response === false || $status < 200 || $status >= 300) throw new RuntimeException('The WhatsApp verification code could not be sent.');
+    if ($response === false || $status < 200 || $status >= 300) {
+        $detail = json_decode((string)$response, true)['error']['message'] ?? 'The WhatsApp message could not be sent.';
+        throw new RuntimeException($detail);
+    }
+}
+
+function tpk_send_whatsapp_verification(string $number, string $name, string $code): void {
+    tpk_send_meta_whatsapp_template($number, getenv('WHATSAPP_VERIFICATION_TEMPLATE') ?: 'teacher_verification_code', getenv('WHATSAPP_VERIFICATION_LANGUAGE') ?: 'en_US', [$name, $code]);
 }
 
 function tpk_pickup_ticket_url(string $token): string {
@@ -107,12 +121,18 @@ function tpk_issue_pickup_code(PDO $db, int $serviceSessionId, int $familyId, ?i
 
 function tpk_send_pickup_code(PDO $db, int $pickupCodeId, array $phones, string $code, string $ticketUrl): void {
     $message = "TribePetra Kids pickup code: {$code}. Show this code or ticket QR after service: {$ticketUrl}";
-    foreach (array_unique(array_filter($phones)) as $phone) foreach (['SMS' => getenv('SMS_PICKUP_WEBHOOK'), 'WHATSAPP' => getenv('WHATSAPP_PICKUP_WEBHOOK')] as $channel => $webhook) {
+    $numbers = array_unique(array_filter(array_map('tpk_normalize_nigerian_phone', $phones)));
+    foreach ($numbers as $phone) foreach (['SMS', 'WHATSAPP'] as $channel) {
         $status = 'FAILED'; $detail = null;
         try {
-            if ($webhook) { $payload=json_encode(['to'=>$phone,'message'=>$message], JSON_THROW_ON_ERROR);$context=stream_context_create(['http'=>['method'=>'POST','header'=>"Content-Type: application/json\r\n",'content'=>$payload,'timeout'=>10]]);if(@file_get_contents($webhook,false,$context)===false)throw new RuntimeException('Provider request failed.');$status='SENT'; }
+            if ($channel === 'WHATSAPP' && getenv('WHATSAPP_ACCESS_TOKEN') && getenv('WHATSAPP_PHONE_NUMBER_ID') && getenv('WHATSAPP_PICKUP_TEMPLATE')) {
+                tpk_send_meta_whatsapp_template($phone, (string)getenv('WHATSAPP_PICKUP_TEMPLATE'), getenv('WHATSAPP_PICKUP_LANGUAGE') ?: 'en_US', [$code]);
+                $status = 'SENT';
+            } elseif ($webhook = getenv($channel === 'SMS' ? 'SMS_PICKUP_WEBHOOK' : 'WHATSAPP_PICKUP_WEBHOOK')) {
+                $payload=json_encode(['to'=>$phone,'message'=>$message], JSON_THROW_ON_ERROR);$context=stream_context_create(['http'=>['method'=>'POST','header'=>"Content-Type: application/json\r\n",'content'=>$payload,'timeout'=>10]]);if(@file_get_contents($webhook,false,$context)===false)throw new RuntimeException('Provider request failed.');$status='SENT';
+            }
             elseif (tpk_app_environment()==='development') { $directory=__DIR__.'/storage';if(!is_dir($directory))mkdir($directory,0700,true);file_put_contents($directory.'/pickup-code-notifications.log',gmdate('c')." {$channel} {$phone} {$message}\n",FILE_APPEND|LOCK_EX);$status='DEVELOPMENT_LOGGED'; }
-            else $detail='Provider is not configured.';
+            else $detail=$channel === 'SMS' ? 'SMS provider is not configured.' : 'WhatsApp pickup template is not configured.';
         } catch (Throwable $e) { $detail=$e->getMessage(); }
         $db->prepare('INSERT INTO pickup_code_notifications(pickup_code_id,phone,channel,status,provider_response) VALUES(?,?,?,?,?)')->execute([$pickupCodeId,$phone,$channel,$status,$detail]);
     }

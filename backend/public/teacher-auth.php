@@ -31,9 +31,11 @@ function teacher_issue_verification(PDO $db, int $staffId, string $whatsapp, str
     return tpk_app_environment() === 'development' ? $code : null;
 }
 
+if ($method === 'GET' && $path === '/api/teachers/register') json_response(['endpoint' => '/api/teachers/register', 'method' => 'POST', 'message' => 'Submit teacher registration details to send a WhatsApp verification code.']);
+
 if ($method === 'POST' && $path === '/api/teachers/register') {
     $v = teacher_input();
-    foreach (['title','firstName','lastName','birthDate','whatsappNumber','email','password','confirmPassword'] as $key) if (empty(trim((string)($v[$key] ?? '')))) json_response(['error' => 'Please complete all required registration details.'], 422);
+    foreach (['title','firstName','lastName','birthDate','whatsappNumber','email','residentialAddress','password','confirmPassword'] as $key) if (empty(trim((string)($v[$key] ?? '')))) json_response(['error' => 'Please complete all required registration details.'], 422);
     if (!in_array($v['title'], ['Aunty', 'Uncle'], true)) json_response(['error' => 'Choose Aunty or Uncle.'], 422);
     if ($v['password'] !== $v['confirmPassword']) json_response(['error' => 'Your passwords do not match.'], 422);
     if (strlen((string)$v['password']) < 8) json_response(['error' => 'Password must be at least 8 characters.'], 422);
@@ -50,7 +52,7 @@ if ($method === 'POST' && $path === '/api/teachers/register') {
         $name = trim($v['firstName'] . ' ' . $v['lastName']);
         $db->prepare("INSERT INTO staff_users(campus_id,name,email,role,access_level,team_status,account_status,is_active) VALUES(?,?,?,'VIEWER','TPK_ADMIN','ACTIVE','PENDING_VERIFICATION',0)")->execute([$campusId, $name, $email]);
         $staffId = (int)$db->lastInsertId(); $gender = $v['title'] === 'Aunty' ? 'FEMALE' : 'MALE';
-        $db->prepare('INSERT INTO teacher_profiles(staff_user_id,title,first_name,last_name,birth_date,gender,marital_status,primary_phone,secondary_phone,residential_address,emergency_contact,emergency_relationship_phone,password_hash,whatsapp_number,whatsapp_number_normalized,mobile_number,mobile_number_normalized) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')->execute([$staffId, $v['title'], trim($v['firstName']), trim($v['lastName']), $v['birthDate'], $gender, 'Not provided', $whatsapp, $mobile === $whatsapp ? null : $mobile, 'Not provided', 'Not provided', 'Not provided', password_hash($v['password'], PASSWORD_DEFAULT), $whatsapp, $whatsapp, $mobile === $whatsapp ? null : $mobile, $mobile === $whatsapp ? null : $mobile]);
+        $db->prepare('INSERT INTO teacher_profiles(staff_user_id,title,first_name,last_name,birth_date,gender,marital_status,primary_phone,secondary_phone,residential_address,emergency_contact,emergency_relationship_phone,password_hash,whatsapp_number,whatsapp_number_normalized,mobile_number,mobile_number_normalized) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')->execute([$staffId, $v['title'], trim($v['firstName']), trim($v['lastName']), $v['birthDate'], $gender, 'Not provided', $whatsapp, $mobile === $whatsapp ? null : $mobile, trim($v['residentialAddress']), 'Not provided', 'Not provided', password_hash($v['password'], PASSWORD_DEFAULT), $whatsapp, $whatsapp, $mobile === $whatsapp ? null : $mobile, $mobile === $whatsapp ? null : $mobile]);
         if (!empty($_FILES['profilePhoto']) && ($_FILES['profilePhoto']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) $db->prepare('UPDATE teacher_profiles SET profile_image_url=? WHERE staff_user_id=?')->execute([tpk_store_profile_photo($_FILES['profilePhoto'], $staffId), $staffId]);
         $developmentUrl = teacher_issue_verification($db, $staffId, $whatsapp, $name);
         audit($db, $campusId, 'TEACHER_REGISTERED', 'StaffUser', $staffId, ['email' => $email]);
@@ -62,10 +64,10 @@ if ($method === 'POST' && $path === '/api/teachers/register') {
 }
 
 if ($method === 'POST' && $path === '/api/teachers/verify') {
-    $v = teacher_input(); $email = strtolower(trim((string)($v['email'] ?? ''))); $code = trim((string)($v['code'] ?? ''));
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL) || !preg_match('/^\d{6}$/', $code)) json_response(['error' => 'Enter the email address and six-digit WhatsApp code.'], 422);
-    $s = $db->prepare('SELECT v.id,v.staff_user_id,su.campus_id FROM staff_whatsapp_verifications v JOIN staff_users su ON su.id=v.staff_user_id WHERE su.email=? AND v.token_hash=? AND v.used_at IS NULL AND v.expires_at>NOW() LIMIT 1');
-    $s->execute([$email, hash('sha256', $code)]); $verification = $s->fetch();
+    $v = teacher_input(); $whatsapp = tpk_normalize_nigerian_phone((string)($v['whatsappNumber'] ?? '')); $code = trim((string)($v['code'] ?? ''));
+    if (!$whatsapp || !preg_match('/^\d{6}$/', $code)) json_response(['error' => 'Enter the WhatsApp number and six-digit code.'], 422);
+    $s = $db->prepare('SELECT v.id,v.staff_user_id,su.campus_id FROM staff_whatsapp_verifications v JOIN staff_users su ON su.id=v.staff_user_id JOIN teacher_profiles p ON p.staff_user_id=su.id WHERE p.whatsapp_number_normalized=? AND v.token_hash=? AND v.used_at IS NULL AND v.expires_at>NOW() LIMIT 1');
+    $s->execute([$whatsapp, hash('sha256', $code)]); $verification = $s->fetch();
     if (!$verification) json_response(['error' => 'That code is invalid or expired.'], 422);
     $bootstrap = $db->prepare('SELECT p.whatsapp_number_normalized FROM teacher_profiles p WHERE p.staff_user_id=?'); $bootstrap->execute([(int)$verification['staff_user_id']]); $whatsapp = $bootstrap->fetchColumn();
     $accessQuery = $db->prepare('SELECT access_level FROM staff_bootstrap_access WHERE whatsapp_number_normalized=? LIMIT 1'); $accessQuery->execute([$whatsapp]); $access = $accessQuery->fetchColumn() ?: 'TPK_ADMIN';
@@ -82,6 +84,7 @@ if ($method === 'POST' && $path === '/api/teachers/verify') {
 
 if ($method === 'GET' && $path === '/api/teachers/verify') {
     $token = (string)($_GET['token'] ?? '');
+    if ($token === '') json_response(['endpoint' => '/api/teachers/verify', 'method' => 'POST', 'message' => 'Submit email and six-digit code to verify a teacher account.']);
     if (!preg_match('/^[a-f0-9]{64}$/', $token)) json_response(['error' => 'This verification link is invalid.'], 422);
     $s = $db->prepare('SELECT v.id,v.staff_user_id,p.whatsapp_number_normalized,su.campus_id FROM staff_whatsapp_verifications v JOIN teacher_profiles p ON p.staff_user_id=v.staff_user_id JOIN staff_users su ON su.id=v.staff_user_id WHERE v.token_hash=? AND v.used_at IS NULL AND v.expires_at>NOW() LIMIT 1');
     $s->execute([hash('sha256', $token)]); $verification = $s->fetch();

@@ -9,8 +9,8 @@ import { apiBase, saveTeacherSession, type TeacherSession } from "@/lib/session"
 
 const steps = ["Your details", "Contact", "Security"];
 type Props = { mode: "login" | "signup" };
-type Values = { title: "" | "Aunty" | "Uncle"; firstName: string; lastName: string; birthDate: string; whatsappNumber: string; mobileNumber: string; email: string; password: string; confirmPassword: string; profilePhoto: File | null };
-const initial: Values = { title: "", firstName: "", lastName: "", birthDate: "", whatsappNumber: "", mobileNumber: "", email: "", password: "", confirmPassword: "", profilePhoto: null };
+type Values = { title: "" | "Aunty" | "Uncle"; firstName: string; lastName: string; birthDate: string; whatsappNumber: string; mobileNumber: string; email: string; residentialAddress: string; password: string; confirmPassword: string; profilePhoto: File | null };
+const initial: Values = { title: "", firstName: "", lastName: "", birthDate: "", whatsappNumber: "", mobileNumber: "", email: "", residentialAddress: "", password: "", confirmPassword: "", profilePhoto: null };
 
 export function TeacherAuth({ mode }: Props) {
   const signup = mode === "signup";
@@ -18,7 +18,7 @@ export function TeacherAuth({ mode }: Props) {
   const [login, setLogin] = useState({ identifier: "", password: "" }); const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false); const [message, setMessage] = useState(""); const [verificationUrl, setVerificationUrl] = useState(""); const [error, setError] = useState("");
   const update = <K extends keyof Values>(key: K, value: Values[K]) => setValues((current) => ({ ...current, [key]: value }));
-  const required = [["title", "firstName", "lastName", "birthDate"], ["whatsappNumber", "email"], ["password", "confirmPassword"]] as const;
+  const required = [["title", "firstName", "lastName", "birthDate"], ["whatsappNumber", "email", "residentialAddress"], ["password", "confirmPassword"]] as const;
   const canContinue = signup && required[step].every((key) => Boolean(values[key]));
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -32,7 +32,7 @@ export function TeacherAuth({ mode }: Props) {
         response = await fetch(`${apiBase}/api/teachers/register`, { method: "POST", body: form });
       } else response = await fetch(`${apiBase}/api/teachers/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(login) });
       const data = await response.json(); if (!response.ok) throw new Error(data.error || "We could not complete that request.");
-      if (signup) { window.location.assign(`/teacher/verify?email=${encodeURIComponent(values.email)}`); }
+      if (signup) { window.location.assign(`/teacher/verify?whatsappNumber=${encodeURIComponent(values.whatsappNumber)}`); }
       else { saveTeacherSession({ ...data.teacher, sessionToken: data.sessionToken } as TeacherSession); window.location.assign("/account/overview"); }
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Please try again."); } finally { setBusy(false); }
   }
@@ -44,7 +44,7 @@ export function TeacherAuth({ mode }: Props) {
     <section className="teacher-auth-card"><p className="teacher-auth-eyebrow">TribePetra Kids</p><h1>{signup ? "Join the TPK Team Portal" : "Welcome back"}</h1><p className="teacher-auth-intro">{signup ? "Create your account to access your TribePetra Kids assignments and tools." : "Sign in with your email address or WhatsApp number."}</p>
       <form className="teacher-auth-form" onSubmit={submit}>{signup ? <>
         {step === 0 && <><ProfilePhotoEditor value={values.profilePhoto} onChange={(profilePhoto) => update("profilePhoto", profilePhoto)} /><label>Title<select required value={values.title} onChange={(event) => update("title", event.target.value as Values["title"])}><option value="" disabled>Select title</option><option>Aunty</option><option>Uncle</option></select></label><div className="teacher-auth-grid">{field("firstName", "First name")}{field("lastName", "Last name")}</div>{field("birthDate", "Date of birth", "date")}</>}
-        {step === 1 && <><label>WhatsApp Number<input type="tel" required value={values.whatsappNumber} onChange={(event) => update("whatsappNumber", event.target.value)} placeholder="0809 866 6128" /></label><label>Mobile Number<input type="tel" value={values.mobileNumber} onChange={(event) => update("mobileNumber", event.target.value)} placeholder="0809 866 6128" /><small>Leave blank if same as WhatsApp number.</small></label>{field("email", "Email Address", "email")}</>}
+        {step === 1 && <><label>WhatsApp Number<input type="tel" required value={values.whatsappNumber} onChange={(event) => update("whatsappNumber", event.target.value)} placeholder="0809 866 6128" /></label><label>Mobile Number<input type="tel" value={values.mobileNumber} onChange={(event) => update("mobileNumber", event.target.value)} placeholder="0809 866 6128" /><small>Leave blank if same as WhatsApp number.</small></label>{field("email", "Email Address", "email")}<label>House Address<textarea name="residentialAddress" required value={values.residentialAddress} onChange={(event) => update("residentialAddress", event.target.value)} placeholder="House number, street, area, city" /><small>Please enter your full residential address.</small></label></>}
         {step === 2 && <><label>Password<span className="teacher-password-field"><input type={showPassword ? "text" : "password"} minLength={8} required value={values.password} onChange={(event) => update("password", event.target.value)} /><button aria-label={showPassword ? "Hide password" : "Show password"} onClick={() => setShowPassword((shown) => !shown)} type="button">{showPassword ? <FiEyeOff /> : <FiEye />}</button></span><small>Use at least 8 characters.</small></label><label>Confirm Password<input type={showPassword ? "text" : "password"} minLength={8} required value={values.confirmPassword} onChange={(event) => update("confirmPassword", event.target.value)} /></label></>}
         <div className="teacher-auth-actions">{step > 0 && <button className="teacher-auth-secondary" type="button" onClick={() => setStep((current) => current - 1)}><FiArrowLeft /> Back</button>}{step < 2 ? <button className="teacher-auth-submit" disabled={!canContinue} type="button" onClick={() => setStep((current) => current + 1)}>Continue <FiArrowRight /></button> : <button className="teacher-auth-submit" disabled={busy || !canContinue} type="submit">{busy ? "Creating account..." : "Create account"}</button>}</div>
         </> : <><label>Email or WhatsApp Number<input required value={login.identifier} onChange={(event) => setLogin({ ...login, identifier: event.target.value })} /></label><label>Password<span className="teacher-password-field"><input type={showPassword ? "text" : "password"} required value={login.password} onChange={(event) => setLogin({ ...login, password: event.target.value })} /><button aria-label={showPassword ? "Hide password" : "Show password"} onClick={() => setShowPassword((shown) => !shown)} type="button">{showPassword ? <FiEyeOff /> : <FiEye />}</button></span></label><Link className="forgot-password" href="mailto:admin@petrachurch.ng?subject=TPK%20password%20reset">Forgot Password?</Link><button className="teacher-auth-submit" disabled={busy} type="submit">{busy ? "Signing in..." : "Sign in"}</button></>}

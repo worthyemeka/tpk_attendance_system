@@ -22,7 +22,13 @@ After the prior teacher and v1 migrations, apply `database/2026_staff_admin_foun
 
 It also seeds the three approved bootstrap Super Admin WhatsApp identifiers. Those values are only read by the verification backend; they are never sent to the frontend or used as credentials.
 
-For local development set `APP_ENV=development`. In that mode, when no WhatsApp provider is configured, the generated verification message is written to `backend/storage/whatsapp-verifications.log`. In production, set `WHATSAPP_VERIFICATION_WEBHOOK`; registration fails safely if verification delivery is unavailable.
+For WhatsApp OTP verification, create an approved Meta template named `teacher_verification_code` with language `en_US` and this body:
+
+```text
+Hi {{1}}, your TribePetra Kids verification code is {{2}}. It expires in 10 minutes. Do not share this code.
+```
+
+Set `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_VERIFICATION_TEMPLATE`, and `WHATSAPP_VERIFICATION_LANGUAGE` in `.env`. The access token is server-only; never use a `NEXT_PUBLIC_*` variable. Registration sends the OTP through `POST /api/teachers/register`, and the teacher verifies it through `POST /api/teachers/verify` with `{ "email": "...", "code": "123456" }`.
 
 Protected v1 endpoints now require `Authorization: Bearer <staff session token>` rather than a caller-supplied staff ID.
 
@@ -30,7 +36,17 @@ Protected v1 endpoints now require `Authorization: Bearer <staff session token>`
 
 Apply `database/2026_service_pickup_codes.sql` after `2026_parent_flow.sql`. Every family receives one fresh code for each service session: First Service uses `TPK-A-001` upward and Second Service uses `TPK-B-001` upward. The counter is scoped to that service, so it starts again for the next Sunday.
 
-Set `SMS_PICKUP_WEBHOOK` and `WHATSAPP_PICKUP_WEBHOOK` to notification-provider endpoints. Each endpoint receives `{ to, message }`. In development, both sends are recorded in `backend/storage/pickup-code-notifications.log` instead. The same ticket link opens a printable QR ticket; parents can select **Save as PDF** in the browser print dialog.
+Each successful parent registration or returning-parent check-in creates the family pickup code and sends it to the guardian's primary number and, where present, secondary number.
+
+For direct WhatsApp delivery through the same Meta account as teacher OTPs, create and approve the `tpk_pickup_code` utility template in `en_US` with this body:
+
+```text
+TribePetra Kids pickup code: {{1}}. Please show this code at the pickup station after service.
+```
+
+Set `WHATSAPP_PICKUP_TEMPLATE=tpk_pickup_code` and `WHATSAPP_PICKUP_LANGUAGE=en_US`. The backend uses `WHATSAPP_ACCESS_TOKEN` and `WHATSAPP_PHONE_NUMBER_ID` already configured for teacher verification; it never exposes them to the browser.
+
+For SMS, set `SMS_PICKUP_WEBHOOK` to your chosen SMS provider or small provider relay. The endpoint receives `{ to, message }`. In development, both sends are recorded in `backend/storage/pickup-code-notifications.log` instead. The same ticket link opens a printable QR ticket; parents can select **Save as PDF** in the browser print dialog.
 
 ## Import the General Info responses
 
