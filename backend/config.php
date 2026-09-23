@@ -72,22 +72,18 @@ function tpk_store_profile_photo(array $file, int $staffUserId): string {
     return '/uploads/profiles/' . $filename;
 }
 
-function tpk_send_whatsapp_verification(string $number, string $name, string $url): void {
-    $message = "Hi {$name},\n\nPlease verify your TribePetra Kids team account:\n{$url}\n\nThis link expires in 24 hours.";
-    $webhook = getenv('WHATSAPP_VERIFICATION_WEBHOOK');
-    if ($webhook) {
-        $payload = json_encode(['to' => $number, 'message' => $message], JSON_THROW_ON_ERROR);
-        $request = stream_context_create(['http' => ['method' => 'POST', 'header' => "Content-Type: application/json\r\n", 'content' => $payload, 'timeout' => 10]]);
-        if (@file_get_contents($webhook, false, $request) === false) throw new RuntimeException('The verification message could not be sent.');
-        return;
-    }
-    if (tpk_app_environment() === 'development') {
-        $directory = __DIR__ . '/storage';
-        if (!is_dir($directory) && !mkdir($directory, 0700, true) && !is_dir($directory)) throw new RuntimeException('Development notification storage is unavailable.');
-        file_put_contents($directory . '/whatsapp-verifications.log', gmdate('c') . " {$number} {$message}\n", FILE_APPEND | LOCK_EX);
-        return;
-    }
-    throw new RuntimeException('WhatsApp verification is not configured.');
+function tpk_send_whatsapp_verification(string $number, string $name, string $code): void {
+    $token = getenv('WHATSAPP_ACCESS_TOKEN');
+    $phoneNumberId = getenv('WHATSAPP_PHONE_NUMBER_ID');
+    $template = getenv('WHATSAPP_VERIFICATION_TEMPLATE') ?: 'teacher_verification_code';
+    $language = getenv('WHATSAPP_VERIFICATION_LANGUAGE') ?: 'en_US';
+    if (!$token || !$phoneNumberId) throw new RuntimeException('WhatsApp verification is not configured.');
+    $url = 'https://graph.facebook.com/' . (getenv('WHATSAPP_GRAPH_API_VERSION') ?: 'v25.0') . '/' . rawurlencode($phoneNumberId) . '/messages';
+    $payload = json_encode(['messaging_product' => 'whatsapp', 'to' => $number, 'type' => 'template', 'template' => ['name' => $template, 'language' => ['code' => $language], 'components' => [['type' => 'body', 'parameters' => [['type' => 'text', 'text' => $code]]]]]], JSON_THROW_ON_ERROR);
+    $request = stream_context_create(['http' => ['method' => 'POST', 'header' => "Authorization: Bearer {$token}\r\nContent-Type: application/json\r\n", 'content' => $payload, 'timeout' => 15, 'ignore_errors' => true]]);
+    $response = @file_get_contents($url, false, $request);
+    $status = (int)preg_replace('/.*\s(\d{3})\s.*/s', '$1', $http_response_header[0] ?? '500');
+    if ($response === false || $status < 200 || $status >= 300) throw new RuntimeException('The WhatsApp verification code could not be sent.');
 }
 
 function tpk_pickup_ticket_url(string $token): string {

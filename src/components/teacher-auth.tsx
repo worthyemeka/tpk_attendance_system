@@ -32,7 +32,7 @@ export function TeacherAuth({ mode }: Props) {
         response = await fetch(`${apiBase}/api/teachers/register`, { method: "POST", body: form });
       } else response = await fetch(`${apiBase}/api/teachers/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(login) });
       const data = await response.json(); if (!response.ok) throw new Error(data.error || "We could not complete that request.");
-      if (signup) { setMessage(data.message); setVerificationUrl(data.developmentVerificationUrl || ""); setStep(0); setValues(initial); }
+      if (signup) { window.location.assign(`/teacher/verify?email=${encodeURIComponent(values.email)}`); }
       else { saveTeacherSession({ ...data.teacher, sessionToken: data.sessionToken } as TeacherSession); window.location.assign("/account/overview"); }
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Please try again."); } finally { setBusy(false); }
   }

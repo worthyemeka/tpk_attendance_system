@@ -3,6 +3,7 @@ import { DM_Serif_Display, Manrope } from "next/font/google";
 import "./globals.css";
 import "./check-in.css";
 import "./teacher-layout.css";
+import "./loading.css";
 import { AppShell } from "@/components/app-shell";
 import { GlobalDropdowns } from "@/components/app-dropdown";
 import { DisplayTypography } from "@/components/display-typography";

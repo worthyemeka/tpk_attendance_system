@@ -9,8 +9,12 @@ export function PagePreloader() {
 
   useEffect(() => {
     setVisible(true);
-    const timer = window.setTimeout(() => setVisible(false), 380);
-    return () => window.clearTimeout(timer);
+    let minimumDone = false;
+    let frameDone = false;
+    const finish = () => { if (minimumDone && frameDone) setVisible(false); };
+    const minimum = window.setTimeout(() => { minimumDone = true; finish(); }, 520);
+    const frame = window.requestAnimationFrame(() => { frameDone = true; finish(); });
+    return () => { window.clearTimeout(minimum); window.cancelAnimationFrame(frame); };
   }, [pathname]);
 
   if (!visible) return null;
