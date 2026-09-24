@@ -62,7 +62,14 @@ if ($method === 'POST' && $path === '/api/teachers/register') {
         $developmentUrl = teacher_issue_verification($db, $staffId, $whatsapp, $name);
         audit($db, $campusId, 'TEACHER_REGISTERED', 'StaffUser', $staffId, ['email' => $email]);
         $db->commit();
-    } catch (Throwable $e) { if ($db->inTransaction()) $db->rollBack(); error_log('[TPK teacher registration] ' . $e->getMessage()); json_response(['error' => 'We could not send the WhatsApp verification code. Please check the number and try again, or ask a TPK Super Admin for help.'], 502); }
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) $db->rollBack();
+        $detail = $e->getMessage(); error_log('[TPK teacher registration] ' . $detail);
+        $templateIssue = stripos($detail, 'template') !== false || stripos($detail, 'category') !== false;
+        json_response(['error' => $templateIssue
+            ? 'WhatsApp verification is waiting for Meta to approve the required Authentication OTP template. Your details were not saved; please try again after the TPK Meta setup is complete.'
+            : 'We could not send the WhatsApp verification code. Please check the number and try again, or ask a TPK Super Admin for help.'], 502);
+    }
     $response = ['message' => 'We sent a verification code to your WhatsApp number. Enter it to activate your account.'];
     if ($developmentUrl) $response['developmentVerificationCode'] = $developmentUrl;
     json_response($response, 201);
