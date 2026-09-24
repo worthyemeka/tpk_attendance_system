@@ -1,0 +1,26 @@
+.cell-unfilled{display:inline-block;color:#8b95a6;font-size:10px;font-weight:800}
+.locked-row td{background:#f2f3f5!important;color:#8a93a1!important}
+.locked-row .teachers button{color:#707987!important;cursor:default}
+.locked-row .teachers button:hover span{text-decoration:none;color:#707987}
+.teacher-profile-modal{position:relative;width:min(100%,460px);border-radius:13px;background:#fffdfa;box-shadow:0 24px 80px #07162a55;overflow:hidden}
+.teacher-profile-modal header{display:flex;align-items:center;gap:12px;padding:22px 24px 17px}
+.teacher-profile-modal header img,.teacher-profile-modal header i{width:46px;height:46px;flex:none;border-radius:50%;object-fit:cover}
+.teacher-profile-modal header i{display:grid;place-items:center;background:#e8effb;color:#2c66a7;font-size:13px;font-style:normal;font-weight:900}
+.teacher-profile-modal h2{margin:0;font-family:var(--font-display),Georgia,serif;font-size:23px}
+.teacher-profile-modal header p{margin:3px 0 0;color:#69768e;font-size:11px}
+.teacher-profile-modal header p span{margin-left:6px;padding:3px 7px;border-radius:99px;background:#fff1dc;color:#a96800;font-weight:800}
+.teacher-profile-modal nav{display:flex;border-top:1px solid #eee9e2;border-bottom:1px solid #eee9e2}
+.teacher-profile-modal nav button{flex:1;padding:12px 8px;border:0;border-bottom:2px solid transparent;background:#fffdfa;color:#69768e;font:800 11px var(--font-body);cursor:pointer}
+.teacher-profile-modal nav button.active{color:#ec5231;border-bottom-color:#ff5734}
+.teacher-profile-content,.teacher-roster-list{padding:18px 24px;min-height:150px}
+.teacher-duty{display:flex;align-items:center;gap:8px;margin:0 0 16px;color:#2a3d5b;font-size:12px;font-weight:800}
+.contact-actions{display:flex;gap:9px}
+.contact-actions a,.team-profile-link{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid #dce1e8;border-radius:7px;padding:9px 12px;color:#263b5b;font-size:11px;font-weight:800;text-decoration:none}
+.contact-actions a:hover,.team-profile-link:hover{border-color:#ff6a48;color:#e74c2f}
+.team-profile-link{margin-top:13px}.no-contact{margin:0;color:#78849a;font-size:11px}
+.teacher-roster-list{display:grid;gap:8px;max-height:270px;overflow:auto}
+.teacher-roster-list>div{display:grid;grid-template-columns:58px 1fr;gap:2px 10px;padding:9px;border-radius:7px;background:#faf8f4;color:#32435f;font-size:11px}
+.teacher-roster-list b{grid-row:span 2;font-size:11px}.teacher-roster-list small{color:#758198;font-size:10px}.teacher-roster-list>p{color:#758198;font-size:11px}
+.teacher-profile-modal footer{display:flex;justify-content:flex-end;gap:9px;padding:14px 20px;border-top:1px solid #eee9e2}.teacher-profile-modal footer button{height:38px}
+.danger-button{border:0;border-radius:7px;padding:0 12px;background:#fff0eb;color:#d8442c;font:800 11px var(--font-body);cursor:pointer}
+@media(max-width:560px){.teacher-profile-modal{width:100%}.teacher-profile-modal header,.teacher-profile-content,.teacher-roster-list{padding-left:18px;padding-right:18px}}
