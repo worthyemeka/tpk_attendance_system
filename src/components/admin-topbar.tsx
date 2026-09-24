@@ -1,11 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { FiCheck, FiChevronDown, FiClock, FiCopy, FiGrid, FiX } from "react-icons/fi";
 import { NotificationBell } from "@/components/notification-bell";
+import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
+import { type ActiveService, readActiveService, setActiveService } from "@/lib/active-service";
 
-const services = ["First Service · 8:30 AM", "Second Service · 10:30 AM"];
+type ServiceChoice = { id:number; name:string; serviceType?:string; startsAt?:string|null };
 
 function lagosParts(now: Date) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -18,11 +21,7 @@ function lagosParts(now: Date) {
   };
 }
 
-function scheduledService(now: Date) {
-  const { day, hour, minute } = lagosParts(now);
-  const isFirstServiceWindow = day === "Sun" && (hour < 10 || (hour === 10 && minute < 30));
-  return isFirstServiceWindow ? services[0] : services[1];
-}
+function serviceLabel(service:ServiceChoice) { return service.startsAt ? `${service.name} · ${new Intl.DateTimeFormat("en-NG", { hour:"numeric", minute:"2-digit", hour12:true, timeZone:"Africa/Lagos" }).format(new Date(service.startsAt))}` : service.name; }
 
 function dateTime(now: Date) {
   return new Intl.DateTimeFormat("en-NG", {
@@ -32,55 +31,56 @@ function dateTime(now: Date) {
 }
 
 export function AdminTopbar() {
+  const pathname = usePathname();
   const [now, setNow] = useState<Date | null>(null);
-  const [service, setService] = useState(services[1]);
+  const [services, setServices] = useState<ServiceChoice[]>([]);
+  const [service, setService] = useState<ActiveService | null>(null);
   const [menu, setMenu] = useState(false);
   const [qr, setQr] = useState(false);
   const [copied, setCopied] = useState(false);
-  const scheduledServiceRef = useRef(services[1]);
+  const session = readTeacherSession();
 
   useEffect(() => {
-    const updateClockAndSchedule = () => {
-      const currentTime = new Date();
-      const nextScheduledService = scheduledService(currentTime);
-      setNow(currentTime);
-      if (nextScheduledService !== scheduledServiceRef.current) {
-        scheduledServiceRef.current = nextScheduledService;
-        setService(nextScheduledService);
-      }
-    };
-    updateClockAndSchedule();
-    const id = window.setInterval(updateClockAndSchedule, 1000);
+    const updateClock = () => setNow(new Date());
+    updateClock();
+    const id = window.setInterval(updateClock, 1000);
     return () => window.clearInterval(id);
   }, []);
 
-  useEffect(() => {
-    window.localStorage.setItem("tpk:selected-service", service);
-    window.dispatchEvent(new CustomEvent("tpk:service", { detail: service }));
-  }, [service]);
+  useEffect(() => { if (!session) return; void fetch(`${apiBase}/api/v1/service-sessions`, { headers:authHeaders(session) }).then(r => r.json()).then(result => {
+    if (!result.success) return;
+    const choices:ServiceChoice[] = (result.data || []).filter((item:ServiceChoice) => item.serviceType === "FIRST_SERVICE" || item.serviceType === "SECOND_SERVICE");
+    setServices(choices);
+    const saved = readActiveService();
+    const selected = choices.find(item => item.id === saved?.id) || choices[0];
+    if (selected) { const next={ id:selected.id, label:serviceLabel(selected), serviceType:selected.serviceType }; setService(next); setActiveService(next); }
+  }).catch(() => undefined); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const chooseService = (choice:ServiceChoice) => { const next={ id:choice.id, label:serviceLabel(choice), serviceType:choice.serviceType }; setService(next); setActiveService(next); setMenu(false); };
 
   const serviceOpen = now ? lagosParts(now).day === "Sun" && lagosParts(now).hour >= 6 : false;
   const link = typeof window === "undefined" ? "/check-in/parent" : `${window.location.origin}/check-in/parent`;
+  const isPickupPage = pathname === "/account/pick-up";
 
   return <section className="universal-service-bar">
     <div className="universal-meta">
       <time dateTime={now?.toISOString()}><FiClock />{now ? dateTime(now) : "Loading current time…"}</time>
-      <NotificationBell />
+      <NotificationBell serviceSessionId={service?.id} />
     </div>
     <div className="universal-actions">
       <div className="service-menu">
         <button className="service-menu-trigger" onClick={() => setMenu(!menu)} aria-expanded={menu}>
-          {service}<FiChevronDown />
+          {service?.label || "Loading service…"}<FiChevronDown />
         </button>
         {menu && <div className="service-menu-options">
-          {services.map((item) => <button key={item} onClick={() => { setService(item); setMenu(false); }}>
-            {item === service && <FiCheck />}<span>{item}</span>
+          {services.map((item) => <button key={item.id} onClick={() => chooseService(item)}>
+            {item.id === service?.id && <FiCheck />}<span>{serviceLabel(item)}</span>
           </button>)}
         </div>}
       </div>
       <span className={`universal-open ${serviceOpen ? "" : "closed"}`}><i />{serviceOpen ? "Check-in open" : "Check-in closed · Opens Sunday 6:00 AM"}</span>
       <button className="universal-qr" onClick={() => setQr(true)}><FiGrid />View Check-In QR</button>
-      <Link className="universal-assist" href="/check-in/parent?assisted=1">Assisted Check-In</Link>
+      <Link className="universal-assist" href={isPickupPage ? "/account/pick-up#assisted" : "/account/check-in/assisted"}>{isPickupPage ? "Start Assisted Pick-Up" : "Assisted Check-In"}</Link>
     </div>
     {qr && <div className="modal-backdrop"><div className="qr-modal">
       <button className="close-modal" onClick={() => setQr(false)}><FiX /></button>

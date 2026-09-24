@@ -38,7 +38,7 @@ function public_split_name(string $name): array {
     return [$first, implode(' ', $parts) ?: 'Pickup'];
 }
 function public_current_session(PDO $db, int $campusId): ?array {
-    $statement = $db->prepare('SELECT id,campus_id,service_date,service_type,starts_at,ends_at FROM service_sessions WHERE campus_id=? AND is_open=1 AND service_date=CURDATE() ORDER BY starts_at DESC LIMIT 1');
+    $statement = $db->prepare("SELECT id,campus_id,service_date,service_type,starts_at,ends_at FROM service_sessions WHERE campus_id=? AND is_open=1 AND service_date=CURDATE() AND service_type IN ('FIRST_SERVICE','SECOND_SERVICE') ORDER BY starts_at DESC LIMIT 1");
     $statement->execute([$campusId]);
     return $statement->fetch() ?: null;
 }
@@ -88,7 +88,7 @@ function public_registration(PDO $db): never {
     $secondaryPhone = empty($guardian['secondaryPhone']) ? null : public_phone($guardian['secondaryPhone']);
     if (!empty($guardian['secondaryPhone']) && !$secondaryPhone) public_error('INVALID_PHONE', 'Enter a valid Nigerian secondary phone number.', 422);
     $sessionId = isset($payload['serviceSessionId']) ? (int)$payload['serviceSessionId'] : 0;
-    $session = $sessionId ? (function () use ($db, $sessionId, $campus) { $s=$db->prepare('SELECT id,campus_id,service_type,service_order FROM service_sessions WHERE id=? AND campus_id=? AND is_open=1 AND service_date=CURDATE()'); $s->execute([$sessionId,$campus['id']]); return $s->fetch() ?: null; })() : public_current_session($db, (int)$campus['id']);
+    $session = $sessionId ? (function () use ($db, $sessionId, $campus) { $s=$db->prepare("SELECT id,campus_id,service_type,service_order FROM service_sessions WHERE id=? AND campus_id=? AND is_open=1 AND service_date=CURDATE() AND service_type IN ('FIRST_SERVICE','SECOND_SERVICE')"); $s->execute([$sessionId,$campus['id']]); return $s->fetch() ?: null; })() : public_current_session($db, (int)$campus['id']);
     if (!$session) public_error('SERVICE_SESSION_NOT_OPEN', 'Check-in is not open right now. Please ask a TPK team member for help.', 409);
     $db->beginTransaction();
     try {
@@ -111,7 +111,7 @@ function public_registration(PDO $db): never {
             $first = public_name((string)($child['firstName'] ?? '')); $last = public_name((string)($child['lastName'] ?? '')); $dob = (string)($child['dateOfBirth'] ?? '');
             if (!$first || !$last || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dob)) public_error('VALIDATION_ERROR', 'Every child needs a first name, last name and valid date of birth.', 422);
             if ((new DateTimeImmutable($dob)) > new DateTimeImmutable('today')) public_error('VALIDATION_ERROR', 'A child date of birth cannot be in the future.', 422);
-            $gender = strtoupper((string)($child['gender'] ?? 'UNSPECIFIED')); if (!in_array($gender, ['MALE','FEMALE','UNSPECIFIED'], true)) public_error('VALIDATION_ERROR', 'Gender must be MALE, FEMALE or UNSPECIFIED.', 422);
+            $gender = strtoupper((string)($child['gender'] ?? '')); if (!in_array($gender, ['MALE','FEMALE'], true)) public_error('VALIDATION_ERROR', 'Choose Male or Female.', 422);
             $duplicate = $db->prepare('SELECT id FROM children WHERE family_id=? AND first_name=? AND last_name=? AND date_of_birth=? LIMIT 1'); $duplicate->execute([$familyId,$first,$last,$dob]);
             if ($duplicate->fetchColumn()) public_error('DUPLICATE_CHILD', "$first $last is already registered for this family.", 409);
             $classId = public_class_for_child($db, (int)$campus['id'], $dob);

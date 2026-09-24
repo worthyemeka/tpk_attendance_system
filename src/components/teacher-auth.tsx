@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { FiArrowLeft, FiArrowRight, FiCheck, FiChevronDown, FiEye, FiEyeOff } from "react-icons/fi";
 import { ParentPhotoSlider } from "@/components/parent-photo-slider";
 import { ProfilePhotoEditor } from "@/components/profile-photo-editor";
@@ -38,19 +38,48 @@ function passwordStrength(password: string) {
 function BirthDateField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const initial = value ? value.split("-") : ["", "", ""];
   const [day, setDay] = useState(initial[2] || ""); const [month, setMonth] = useState(initial[1] || ""); const [year, setYear] = useState(initial[0] || "");
-  const monthInput = useRef<HTMLInputElement>(null); const yearInput = useRef<HTMLInputElement>(null);
+  const dayInput = useRef<HTMLInputElement>(null); const monthInput = useRef<HTMLInputElement>(null); const yearInput = useRef<HTMLInputElement>(null);
   const publish = (nextDay: string, nextMonth: string, nextYear: string) => {
     if (nextDay.length !== 2 || nextMonth.length !== 2 || nextYear.length !== 4) return onChange("");
     const candidate = `${nextYear}-${nextMonth}-${nextDay}`; const date = new Date(`${candidate}T00:00:00`);
     onChange(!Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === candidate && candidate <= new Date().toISOString().slice(0, 10) ? candidate : "");
   };
   const digits = (input: string, length: number) => input.replace(/\D/g, "").slice(0, length);
-  return <div className="teacher-birth-date"><span>Date of birth</span><span className="teacher-date-fields"><input aria-label="Day of birth" autoComplete="bday-day" inputMode="numeric" maxLength={2} onChange={(event) => { const next = digits(event.currentTarget.value, 2); setDay(next); publish(next, month, year); if (next.length === 2) monthInput.current?.focus(); }} placeholder="DD" value={day} /><input aria-label="Month of birth" autoComplete="bday-month" inputMode="numeric" maxLength={2} onChange={(event) => { const next = digits(event.currentTarget.value, 2); setMonth(next); publish(day, next, year); if (next.length === 2) yearInput.current?.focus(); }} placeholder="MM" ref={monthInput} value={month} /><input aria-label="Year of birth" autoComplete="bday-year" inputMode="numeric" maxLength={4} onChange={(event) => { const next = digits(event.currentTarget.value, 4); setYear(next); publish(day, month, next); }} placeholder="YYYY" ref={yearInput} value={year} /></span><small>Enter day, month, then year.</small><style jsx>{`.teacher-birth-date{display:grid;gap:7px;color:#4c5361;font-size:11px;font-weight:800}.teacher-date-fields{display:grid;grid-template-columns:1fr 1fr 1.45fr;gap:8px}.teacher-date-fields input{width:100%;min-width:0;height:44px;border:1px solid #cfd7e3;border-radius:9px;padding:0 12px;background:#fff;color:#10213d;text-align:center;font:800 13px var(--font-body);letter-spacing:.4px;outline-color:#ff5d34}.teacher-date-fields input::placeholder{color:#9aa7ba;font-weight:700;letter-spacing:0}.teacher-birth-date small{color:#687184;font-size:10px;font-weight:600}`}</style></div>;
+  const publishFromInputs = (overrides: { day?: string; month?: string; year?: string } = {}) => {
+    const nextDay = overrides.day ?? digits(dayInput.current?.value || "", 2);
+    const nextMonth = overrides.month ?? digits(monthInput.current?.value || "", 2);
+    const nextYear = overrides.year ?? digits(yearInput.current?.value || "", 4);
+    publish(nextDay, nextMonth, nextYear);
+  };
+  useEffect(() => {
+    // Safari can fill date fragments without emitting React input events. Read
+    // those values once the browser has completed autofill so Continue reflects
+    // what the teacher can actually see on screen.
+    const syncAutofill = () => {
+      const nextDay = digits(dayInput.current?.value || "", 2);
+      const nextMonth = digits(monthInput.current?.value || "", 2);
+      const nextYear = digits(yearInput.current?.value || "", 4);
+      if (!nextDay && !nextMonth && !nextYear) return;
+      setDay(nextDay); setMonth(nextMonth); setYear(nextYear); publish(nextDay, nextMonth, nextYear);
+    };
+    const early = window.setTimeout(syncAutofill, 100);
+    const settled = window.setTimeout(syncAutofill, 700);
+    return () => { window.clearTimeout(early); window.clearTimeout(settled); };
+  // This needs to run only after the three native inputs have mounted.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    // Commit after React has accepted each date fragment. This also covers
+    // browser autofill, which can populate the fields between input events.
+    publish(day, month, year);
+  }, [day, month, year]);
+  return <div className="teacher-birth-date"><span>Date of birth</span><span className="teacher-date-fields"><input aria-label="Day of birth" autoComplete="bday-day" inputMode="numeric" maxLength={2} onChange={(event) => { const next = digits(event.currentTarget.value, 2); setDay(next); publishFromInputs({ day: next }); if (next.length === 2) monthInput.current?.focus(); }} placeholder="DD" ref={dayInput} value={day} /><input aria-label="Month of birth" autoComplete="bday-month" inputMode="numeric" maxLength={2} onChange={(event) => { const next = digits(event.currentTarget.value, 2); setMonth(next); publishFromInputs({ month: next }); if (next.length === 2) yearInput.current?.focus(); }} placeholder="MM" ref={monthInput} value={month} /><input aria-label="Year of birth" autoComplete="bday-year" inputMode="numeric" maxLength={4} onChange={(event) => { const next = digits(event.currentTarget.value, 4); setYear(next); publishFromInputs({ year: next }); }} placeholder="YYYY" ref={yearInput} value={year} /></span><small>Enter day, month, then year.</small><style jsx>{`.teacher-birth-date{display:grid;gap:7px;color:#4c5361;font-size:11px;font-weight:800}.teacher-date-fields{display:grid;grid-template-columns:1fr 1fr 1.45fr;gap:8px}.teacher-date-fields input{width:100%;min-width:0;height:44px;border:1px solid #cfd7e3;border-radius:9px;padding:0 12px;background:#fff;color:#10213d;text-align:center;font:800 13px var(--font-body);letter-spacing:.4px;outline-color:#ff5d34}.teacher-date-fields input::placeholder{color:#9aa7ba;font-weight:700;letter-spacing:0}.teacher-birth-date small{color:#687184;font-size:10px;font-weight:600}`}</style></div>;
 }
 
 export function TeacherAuth({ mode }: Props) {
   const signup = mode === "signup";
   const [step, setStep] = useState(0); const [values, setValues] = useState<Values>(initial);
+  const signupFormRef = useRef<HTMLFormElement>(null);
   const [login, setLogin] = useState({ identifier: "", password: "" }); const [showPassword, setShowPassword] = useState(false);
   const [genderOpen, setGenderOpen] = useState(false);
   const [busy, setBusy] = useState(false); const [message, setMessage] = useState(""); const [verificationUrl, setVerificationUrl] = useState(""); const [error, setError] = useState("");
@@ -63,6 +92,30 @@ export function TeacherAuth({ mode }: Props) {
   const strength = passwordStrength(values.password);
   const loginReady = Boolean(login.identifier.trim() && login.password);
   const genderLabel = values.gender === "FEMALE" ? "Female" : values.gender === "MALE" ? "Male" : "Select gender";
+
+  useEffect(() => {
+    if (!signup) return;
+    // Browser password/address managers can fill native inputs after hydration
+    // without dispatching input/change. Keep React state in sync so validation,
+    // disabled buttons and the submitted record agree with the visible form.
+    const syncAutofill = () => {
+      const form = signupFormRef.current;
+      if (!form) return;
+      const read = (name: string) => String(new FormData(form).get(name) || "").trim();
+      const filled = {
+        firstName: read("firstName"), lastName: read("lastName"),
+        whatsappNumber: normaliseNigerianSubscriber(read("whatsappNumber")),
+        mobileNumber: normaliseNigerianSubscriber(read("mobileNumber")),
+        email: read("email"), residentialAddress: read("street-address"),
+        password: read("password"), confirmPassword: read("confirmPassword"),
+      };
+      if (!Object.values(filled).some(Boolean)) return;
+      setValues((current) => ({ ...current, ...Object.fromEntries(Object.entries(filled).filter(([, value]) => value)) }));
+    };
+    const early = window.setTimeout(syncAutofill, 100);
+    const settled = window.setTimeout(syncAutofill, 700);
+    return () => { window.clearTimeout(early); window.clearTimeout(settled); };
+  }, [signup]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError(""); setMessage(""); setVerificationUrl("");
@@ -78,6 +131,11 @@ export function TeacherAuth({ mode }: Props) {
         if (values.profilePhoto) form.append("profilePhoto", values.profilePhoto);
         response = await fetch(`${apiBase}/api/teachers/register`, { method: "POST", body: form });
         const data = await response.json(); if (!response.ok) throw new Error(data.error || "We could not complete that request.");
+        if (data.verificationMode === "CLICK_TO_CHAT" && data.whatsappVerificationLink && data.verificationToken) {
+          sessionStorage.setItem("tpk-teacher-whatsapp-verification", JSON.stringify({ link: data.whatsappVerificationLink, token: data.verificationToken }));
+          window.location.assign(`/teacher/verify?mode=whatsapp&whatsappNumber=${encodeURIComponent(whatsappNumber)}`);
+          return;
+        }
         window.location.assign(`/teacher/verify?whatsappNumber=${encodeURIComponent(whatsappNumber)}`);
         return;
       } else response = await fetch(`${apiBase}/api/teachers/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(login) });
@@ -92,7 +150,7 @@ export function TeacherAuth({ mode }: Props) {
     <header className="teacher-auth-top"><Link href="/"><FiArrowLeft /> Back</Link><span>Teacher access</span></header>
     {signup && <nav className="teacher-auth-progress" aria-label="Teacher registration progress">{steps.map((label, index) => <span className={index < step ? "done" : index === step ? "active" : ""} key={label}><i>{index < step ? <FiCheck /> : index + 1}</i>{label}</span>)}</nav>}
     <section className="teacher-auth-card"><p className="teacher-auth-eyebrow">TribePetra Kids</p><h1>{signup ? "Join the TPK Team Portal" : "Welcome back"}</h1><p className="teacher-auth-intro">{signup ? "Create your account to access your TribePetra Kids assignments and tools." : "Sign in with your email address or WhatsApp number."}</p>
-      <form className="teacher-auth-form" onSubmit={submit}>{signup ? <>
+      <form className="teacher-auth-form" onSubmit={submit} ref={signup ? signupFormRef : undefined}>{signup ? <>
         {step === 0 && <><div className="teacher-photo-row"><ProfilePhotoEditor value={values.profilePhoto} onChange={(profilePhoto) => update("profilePhoto", profilePhoto)} /></div><div className="teacher-field-label"><span>Gender</span><span className={`teacher-dropdown${genderOpen ? " open" : ""}`}><button aria-expanded={genderOpen} aria-haspopup="listbox" className="teacher-dropdown-trigger" onClick={() => setGenderOpen((open) => !open)} type="button"><span>{genderLabel}</span><FiChevronDown aria-hidden="true" /></button>{genderOpen && <span className="teacher-dropdown-menu" role="listbox" aria-label="Gender">{([['FEMALE', 'Female'], ['MALE', 'Male']] as const).map(([value, label]) => <button aria-selected={values.gender === value} key={value} onClick={() => { update("gender", value); setGenderOpen(false); }} role="option" type="button"><span>{label}</span></button>)}</span>}</span></div><div className="teacher-auth-grid">{field("firstName", "First name", "text", "given-name")}{field("lastName", "Last name", "text", "family-name")}</div><div className="teacher-birth-date-row"><BirthDateField value={values.birthDate} onChange={(birthDate) => update("birthDate", birthDate)} /></div></>}
         {step === 1 && <>{phoneField("whatsappNumber", "WhatsApp Number", "Enter the 10 Nigerian digits after +234.")}{phoneField("mobileNumber", "Mobile Number", "Leave blank if same as WhatsApp number.")}{field("email", "Email Address", "email", "email")}<label htmlFor="teacher-residentialAddress">House Address<textarea autoComplete="street-address" id="teacher-residentialAddress" name="street-address" required value={values.residentialAddress} onChange={(event) => update("residentialAddress", event.currentTarget.value)} onInput={(event) => update("residentialAddress", event.currentTarget.value)} placeholder="House number, street, area, city" /><small>Your saved browser address can be autofilled here.</small></label></>}
         {step === 2 && <><label htmlFor="teacher-password">Password<span className="teacher-password-field"><input autoComplete="new-password" id="teacher-password" minLength={8} name="password" type={showPassword ? "text" : "password"} required value={values.password} onChange={(event) => update("password", event.currentTarget.value)} onInput={(event) => update("password", event.currentTarget.value)} /><button aria-label={showPassword ? "Hide password" : "Show password"} onClick={() => setShowPassword((shown) => !shown)} type="button">{showPassword ? <FiEyeOff /> : <FiEye />}</button></span><span aria-live="polite" className={`password-strength strength-${strength.score}`}><span className="password-strength-track"><i style={{ width: `${strength.score * 20}%` }} /></span><b>{strength.label}</b><small>{strength.hint}</small></span></label><label htmlFor="teacher-confirmPassword">Confirm Password<input autoComplete="new-password" id="teacher-confirmPassword" minLength={8} name="confirmPassword" type={showPassword ? "text" : "password"} required value={values.confirmPassword} onChange={(event) => update("confirmPassword", event.currentTarget.value)} onInput={(event) => update("confirmPassword", event.currentTarget.value)} />{values.confirmPassword && <small className={values.confirmPassword === values.password ? "password-match" : "password-mismatch"}>{values.confirmPassword === values.password ? "Passwords match." : "Passwords do not match yet."}</small>}</label></>}

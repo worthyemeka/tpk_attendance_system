@@ -5,7 +5,7 @@ import { readTeacherSession } from "@/lib/session";
 
 type Teacher = { firstName: string; title: "Auntie" | "Uncle" };
 const fallbackTeacher: Teacher = { firstName: "there", title: "Auntie" };
-function timeGreeting(hour: number) { return hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"; }
+function timeGreeting(hour: number) { return hour < 12 ? "Morning" : hour < 17 ? "Afternoon" : "Evening"; }
 
 export function UserGreeting() {
   const [hour, setHour] = useState(9);

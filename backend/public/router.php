@@ -12,6 +12,10 @@ if ($path === '/api/v1/public/check-ins') {
     require __DIR__ . '/public-check-in.php';
     return;
 }
+if ($path === '/api/whatsapp-webhook') {
+    require __DIR__ . '/whatsapp-webhook.php';
+    return;
+}
 if ($path === '/api') {
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode([

@@ -32,6 +32,17 @@ function teacher_issue_verification(PDO $db, int $staffId, string $whatsapp, str
     tpk_send_whatsapp_verification($whatsapp, $name, $code);
     return tpk_app_environment() === 'development' ? $code : null;
 }
+function teacher_click_to_chat_is_configured(): bool {
+    return (bool)(getenv('WHATSAPP_CLICK_TO_CHAT_NUMBER') && getenv('META_APP_SECRET') && getenv('WHATSAPP_WEBHOOK_VERIFY_TOKEN'));
+}
+function teacher_issue_click_to_chat_verification(PDO $db, int $staffId): array {
+    $token = bin2hex(random_bytes(32));
+    $db->prepare('UPDATE staff_whatsapp_verifications SET used_at=COALESCE(used_at,NOW()) WHERE staff_user_id=? AND used_at IS NULL')->execute([$staffId]);
+    $db->prepare('INSERT INTO staff_whatsapp_verifications(staff_user_id,token_hash,expires_at) VALUES(?,?,DATE_ADD(NOW(), INTERVAL 10 MINUTE))')->execute([$staffId, hash('sha256', $token)]);
+    $businessNumber = preg_replace('/\D+/', '', (string)getenv('WHATSAPP_CLICK_TO_CHAT_NUMBER'));
+    if ($businessNumber === '') throw new RuntimeException('The TPK WhatsApp number is not configured.');
+    return ['token' => $token, 'link' => 'https://wa.me/' . $businessNumber . '?text=' . rawurlencode('TPK VERIFY ' . $token)];
+}
 
 if ($method === 'GET' && $path === '/api/teachers/register') json_response(['endpoint' => '/api/teachers/register', 'method' => 'POST', 'message' => 'Submit teacher registration details to send a WhatsApp verification code.']);
 
@@ -47,7 +58,8 @@ if ($method === 'POST' && $path === '/api/teachers/register') {
     $mobile = empty(trim((string)($v['mobileNumber'] ?? ''))) ? $whatsapp : tpk_normalize_nigerian_phone($v['mobileNumber']);
     if (!$whatsapp || !$mobile) json_response(['error' => 'Enter valid Nigerian WhatsApp and mobile numbers.'], 422);
     if (!filter_var($v['email'], FILTER_VALIDATE_EMAIL)) json_response(['error' => 'Enter a valid email address.'], 422);
-    if (!tpk_whatsapp_is_configured()) json_response(['error' => 'Teacher WhatsApp verification is not configured yet. Please ask a TPK Super Admin to complete the secure WhatsApp server setup.'], 503);
+    $useClickToChat = teacher_click_to_chat_is_configured();
+    if (!$useClickToChat && !tpk_whatsapp_is_configured()) json_response(['error' => 'Teacher WhatsApp verification is not configured yet. Please ask a TPK Super Admin to complete the secure WhatsApp server setup.'], 503);
     $email = strtolower(trim($v['email']));
     $existing = $db->prepare('SELECT s.id FROM staff_users s LEFT JOIN teacher_profiles p ON p.staff_user_id=s.id WHERE s.email=? OR p.whatsapp_number_normalized=? LIMIT 1');
     $existing->execute([$email, $whatsapp]);
@@ -59,7 +71,8 @@ if ($method === 'POST' && $path === '/api/teachers/register') {
         $staffId = (int)$db->lastInsertId();
         $db->prepare('INSERT INTO teacher_profiles(staff_user_id,title,first_name,last_name,birth_date,gender,marital_status,primary_phone,secondary_phone,residential_address,emergency_contact,emergency_relationship_phone,password_hash,whatsapp_number,whatsapp_number_normalized,mobile_number,mobile_number_normalized) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')->execute([$staffId, $title, trim($v['firstName']), trim($v['lastName']), $v['birthDate'], $gender, 'Not provided', $whatsapp, $mobile === $whatsapp ? null : $mobile, trim($v['residentialAddress']), 'Not provided', 'Not provided', password_hash($v['password'], PASSWORD_DEFAULT), $whatsapp, $whatsapp, $mobile === $whatsapp ? null : $mobile, $mobile === $whatsapp ? null : $mobile]);
         if (!empty($_FILES['profilePhoto']) && ($_FILES['profilePhoto']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) $db->prepare('UPDATE teacher_profiles SET profile_image_url=? WHERE staff_user_id=?')->execute([tpk_store_profile_photo($_FILES['profilePhoto'], $staffId), $staffId]);
-        $developmentUrl = teacher_issue_verification($db, $staffId, $whatsapp, $name);
+        $clickToChat = $useClickToChat ? teacher_issue_click_to_chat_verification($db, $staffId) : null;
+        $developmentUrl = $useClickToChat ? null : teacher_issue_verification($db, $staffId, $whatsapp, $name);
         audit($db, $campusId, 'TEACHER_REGISTERED', 'StaffUser', $staffId, ['email' => $email]);
         $db->commit();
     } catch (Throwable $e) {
@@ -70,7 +83,9 @@ if ($method === 'POST' && $path === '/api/teachers/register') {
             ? 'WhatsApp verification is waiting for Meta to approve the required Authentication OTP template. Your details were not saved; please try again after the TPK Meta setup is complete.'
             : 'We could not send the WhatsApp verification code. Please check the number and try again, or ask a TPK Super Admin for help.'], 502);
     }
-    $response = ['message' => 'We sent a verification code to your WhatsApp number. Enter it to activate your account.'];
+    $response = $useClickToChat
+        ? ['message' => 'Open WhatsApp and send the prefilled verification message to activate your account.', 'verificationMode' => 'CLICK_TO_CHAT', 'whatsappVerificationLink' => $clickToChat['link'], 'verificationToken' => $clickToChat['token']]
+        : ['message' => 'We sent a verification code to your WhatsApp number. Enter it to activate your account.'];
     if ($developmentUrl) $response['developmentVerificationCode'] = $developmentUrl;
     json_response($response, 201);
 }
@@ -94,24 +109,21 @@ if ($method === 'POST' && $path === '/api/teachers/verify') {
     json_response(['message' => 'Account verified.']);
 }
 
+if ($method === 'POST' && $path === '/api/teachers/verification-status') {
+    $token = trim((string)(teacher_input()['token'] ?? ''));
+    if (!preg_match('/^[a-f0-9]{64}$/', $token)) json_response(['error' => 'This verification request is invalid.'], 422);
+    $s = $db->prepare('SELECT su.account_status,su.is_active FROM staff_whatsapp_verifications v JOIN staff_users su ON su.id=v.staff_user_id WHERE v.token_hash=? LIMIT 1');
+    $s->execute([hash('sha256', $token)]); $status = $s->fetch();
+    if (!$status) json_response(['error' => 'This verification request has expired.'], 410);
+    json_response(['verified' => $status['account_status'] === 'VERIFIED' && (bool)$status['is_active']]);
+}
+
 if ($method === 'GET' && $path === '/api/teachers/verify') {
     $token = (string)($_GET['token'] ?? '');
     if ($token === '') json_response(['endpoint' => '/api/teachers/verify', 'method' => 'POST', 'message' => 'Submit email and six-digit code to verify a teacher account.']);
-    if (!preg_match('/^[a-f0-9]{64}$/', $token)) json_response(['error' => 'This verification link is invalid.'], 422);
-    $s = $db->prepare('SELECT v.id,v.staff_user_id,p.whatsapp_number_normalized,su.campus_id FROM staff_whatsapp_verifications v JOIN teacher_profiles p ON p.staff_user_id=v.staff_user_id JOIN staff_users su ON su.id=v.staff_user_id WHERE v.token_hash=? AND v.used_at IS NULL AND v.expires_at>NOW() LIMIT 1');
-    $s->execute([hash('sha256', $token)]); $verification = $s->fetch();
-    if (!$verification) json_response(['error' => 'This verification link has expired or was already used.'], 410);
-    $bootstrap = $db->prepare('SELECT access_level FROM staff_bootstrap_access WHERE whatsapp_number_normalized=? LIMIT 1'); $bootstrap->execute([$verification['whatsapp_number_normalized']]);
-    $access = $bootstrap->fetchColumn() ?: 'TPK_ADMIN';
-    $db->beginTransaction();
-    try {
-        $db->prepare('UPDATE staff_whatsapp_verifications SET used_at=NOW() WHERE id=? AND used_at IS NULL')->execute([$verification['id']]);
-        $db->prepare("UPDATE staff_users SET account_status='VERIFIED',is_active=1,access_level=? WHERE id=?")->execute([$access, $verification['staff_user_id']]);
-        $db->prepare('UPDATE teacher_profiles SET whatsapp_verified_at=NOW() WHERE staff_user_id=?')->execute([$verification['staff_user_id']]);
-        audit($db, (int)$verification['campus_id'], 'TEACHER_WHATSAPP_VERIFIED', 'StaffUser', (int)$verification['staff_user_id'], ['accessLevel' => $access]);
-        $db->commit();
-    } catch (Throwable $e) { if ($db->inTransaction()) $db->rollBack(); throw $e; }
-    json_response(['message' => 'Account verified. Your TribePetra Kids account is ready.']);
+    // A copied browser URL cannot prove control of a WhatsApp number. The
+    // incoming WhatsApp webhook is the only activation route for this token.
+    json_response(['error' => 'Open the WhatsApp verification message and send it from your registered WhatsApp number to activate the account.'], 410);
 }
 
 if ($method === 'POST' && $path === '/api/teachers/login') {

@@ -6,15 +6,17 @@ import { FiCheckCircle, FiChevronRight, FiClock, FiUsers } from "react-icons/fi"
 import { QuickActions } from "@/components/quick-actions";
 import { UserGreeting } from "@/components/user-greeting";
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
+import { subscribeToActiveService } from "@/lib/active-service";
 
 type DashboardClass = { id: number; name: string; ageLabel: string; checkedIn: number; total: number };
 type Attention = { type: string; severity: string; message: string; actionLabel: string; actionDestination: string };
 type Dashboard = { serviceSession: { serviceType?: string; name?: string } | null; metrics: { checkedIn: number; pickedUp: number; stillPresent: number; activeClasses: number }; classes: DashboardClass[]; personalAssignment: { assignmentDate: string; dutyName: string; className?: string; serviceName?: string } | null; todayTeam: { serviceType: string; assigned: number; present: number; notConfirmed: number }[]; needsAttention: Attention[]; childrenRelations: { total: number; contacted: number; pending: number }; upcomingRoster: { assignmentDate: string; serviceSessionId: number; duties: number; filled: number }[] };
 const empty: Dashboard = { serviceSession: null, metrics: { checkedIn: 0, pickedUp: 0, stillPresent: 0, activeClasses: 0 }, classes: [], personalAssignment: null, todayTeam: [], needsAttention: [], childrenRelations: { total: 0, contacted: 0, pending: 0 }, upcomingRoster: [] };
 export default function AccountOverview() {
-  const session = readTeacherSession(); const [dashboard, setDashboard] = useState<Dashboard>(empty); const [live, setLive] = useState(false); const [today, setToday] = useState("");
+  const session = readTeacherSession(); const [dashboard, setDashboard] = useState<Dashboard>(empty); const [live, setLive] = useState(false); const [today, setToday] = useState(""); const [serviceSessionId, setServiceSessionId] = useState<number | undefined>();
   useEffect(() => { setToday(new Date().toISOString().slice(0, 10)); }, []);
-  useEffect(() => { if (!session) return; fetch(`${apiBase}/api/v1/dashboard/overview`, { headers: authHeaders(session) }).then((response) => response.ok ? response.json() : Promise.reject()).then((response) => { if (response.success) { setDashboard(response.data); setLive(true); } }).catch(() => setLive(false)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => subscribeToActiveService(service => setServiceSessionId(service?.id)), []);
+  useEffect(() => { if (!session || !serviceSessionId) return; setLive(false); fetch(`${apiBase}/api/v1/dashboard/overview?serviceSessionId=${serviceSessionId}`, { headers: authHeaders(session) }).then((response) => response.ok ? response.json() : Promise.reject()).then((response) => { if (response.success) { setDashboard(response.data); setLive(true); } }).catch(() => setLive(false)); }, [serviceSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
   const superAdmin = session?.accessLevel === "TPK_SUPER_ADMIN"; const { metrics, classes } = dashboard;
   return <div className="overview"><header className="overview-header"><div><p className="eyebrow">Petra Wuse {live && <span className="live-status">Live</span>}</p><UserGreeting /><p className="intro">{superAdmin ? "Here’s what’s happening across TribePetra Kids." : "Here’s what you’re responsible for at TribePetra Kids."}</p></div></header>
     {dashboard.personalAssignment && <section className="panel assignment-card"><div><p className="eyebrow">{today && dashboard.personalAssignment.assignmentDate === today ? "You’re Serving Today" : "Your Next Assignment"}</p><h2>{dashboard.personalAssignment.dutyName}</h2><p>{[dashboard.personalAssignment.serviceName, dashboard.personalAssignment.className].filter(Boolean).join(" · ")}</p></div><Link className="outline-button" href="/account/roster">View My Roster <FiChevronRight /></Link></section>}

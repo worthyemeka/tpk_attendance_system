@@ -3,11 +3,12 @@
 import { FormEvent, useState } from "react";
 import { FiCamera, FiCheckCircle, FiHelpCircle, FiSearch } from "react-icons/fi";
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
+import { PickupDashboard } from "@/components/pickup-dashboard";
 
 type Pickup = { id: number; pickupCode: string; surname: string; serviceName: string; collectedAt?: string | null; children: { attendanceId: number; firstName: string; lastName: string; className?: string; status: string }[] };
 type VerificationMethod = "PICKUP_CODE" | "QR_CODE" | "ASSISTED_BIRTH_DATE";
 
-export default function AccountPickupPage() {
+function LegacyAccountPickupPage() {
   const session = readTeacherSession();
   const [code, setCode] = useState("");
   const [pickup, setPickup] = useState<Pickup | null>(null);
@@ -65,3 +66,5 @@ export default function AccountPickupPage() {
     <style jsx>{`.pickup-page h1,.pickup-page h2{font-family:var(--font-display),Georgia,serif}.pickup-page header{margin-bottom:22px}.pickup-panel{max-width:760px}.pickup-panel>form:first-child{display:flex;gap:10px}.pickup-panel>form:first-child label{height:46px;display:flex;align-items:center;gap:10px;flex:1;padding:0 12px;border:1px solid var(--line);border-radius:8px}.pickup-panel input{width:100%;border:0;background:transparent;outline:0;font:14px var(--font-body)}.pickup-message{font-size:12px;color:#a63c27}.pickup-result{margin-top:20px;padding-top:20px;border-top:1px solid var(--line)}.pickup-result h2{margin:5px 0}.pickup-result p:not(.eyebrow){color:var(--muted);font-size:12px}.pickup-children{display:grid;gap:8px;margin:16px 0}.pickup-children span{display:flex;justify-content:space-between;padding:10px;border:1px solid var(--line);border-radius:7px;font-size:12px}.pickup-children small{color:var(--muted)}.completed{display:flex;gap:8px;align-items:center;color:var(--green)!important;font-weight:800}.assisted-toggle{display:inline-flex;align-items:center;gap:7px;margin-top:13px;padding:0;border:0;background:transparent;color:#a44b28;font:800 11px var(--font-body);cursor:pointer}.assisted-form{margin-top:13px;padding:14px;border:1px solid #ead9c5;border-radius:9px;background:#fff9f1}.assisted-form p{margin:0 0 12px;color:var(--muted);font-size:11px;line-height:1.5}.assisted-form>div{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}.assisted-form label{display:grid;gap:6px;color:#5d574f;font-size:10px;font-weight:800}.assisted-form input{height:39px;padding:0 10px;border:1px solid var(--line);border-radius:7px;background:#fff}.assisted-form button{margin-top:12px}.verification-note{margin-top:14px;color:#626962;font-size:11px;font-weight:700}@media(max-width:590px){.pickup-panel>form:first-child{display:grid}.pickup-panel>form:first-child button{width:100%}.assisted-form>div{grid-template-columns:1fr}}`}</style>
   </section>;
 }
+
+export default function AccountPickupPage() { return <PickupDashboard />; }

@@ -41,7 +41,7 @@ function json_response(mixed $data, int $status = 200): never {
     header('Access-Control-Allow-Origin: ' . tpk_cors_origin());
     header('Vary: Origin');
     header('Access-Control-Allow-Headers: Content-Type, Authorization');
-    header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+    header('Access-Control-Allow-Methods: GET, POST, PATCH, DELETE, OPTIONS');
     echo json_encode($data, JSON_UNESCAPED_SLASHES);
     exit;
 }

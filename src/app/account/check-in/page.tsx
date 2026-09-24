@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { FiCheck, FiClock, FiExternalLink, FiSearch, FiUserPlus } from "react-icons/fi";
+import { FiCheck, FiClock, FiExternalLink, FiSearch } from "react-icons/fi";
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
+import { subscribeToActiveService } from "@/lib/active-service";
 
 type CheckInRow = { id: number; firstName: string; lastName: string; className?: string; status: string; checkedInAt: string; firstVisit: boolean; guardianFirstName?: string; guardianLastName?: string; checkInFormUrl?: string | null };
 type RequestChild = { id: number; firstName: string; lastName?: string };
@@ -19,29 +20,34 @@ export default function AccountCheckInPage() {
   const [requestError, setRequestError] = useState("");
   const [loading, setLoading] = useState(true);
   const [approvingId, setApprovingId] = useState<number | null>(null);
+  const [serviceSessionId, setServiceSessionId] = useState<number | undefined>();
 
   const load = useCallback(async () => {
     if (!session) return;
     setLoading(true); setError("");
     try {
-      const response = await fetch(`${apiBase}/api/v1/check-ins?search=${encodeURIComponent(query)}`, { headers: authHeaders(session) });
+      if (!serviceSessionId) { setItems([]); return; }
+      const response = await fetch(`${apiBase}/api/v1/check-ins?serviceSessionId=${serviceSessionId}&search=${encodeURIComponent(query)}`, { headers: authHeaders(session) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error?.message || "We could not load check-ins.");
       setItems(result.data.items || []);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "We could not load check-ins."); }
     finally { setLoading(false); }
-  }, [query, session]);
+  }, [query, serviceSessionId, session]);
 
   const loadRequests = useCallback(async () => {
     if (!session) return;
     try {
-      const response = await fetch(`${apiBase}/api/v1/check-in-requests`, { headers: authHeaders(session) });
+      if (!serviceSessionId) { setCanApprove(false); setRequests([]); return; }
+      const response = await fetch(`${apiBase}/api/v1/check-in-requests?serviceSessionId=${serviceSessionId}`, { headers: authHeaders(session) });
       const result = await response.json();
       if (response.status === 403) { setCanApprove(false); setRequests([]); return; }
       if (!response.ok || !result.success) throw new Error(result.error?.message || "We could not load check-in requests.");
       setCanApprove(Boolean(result.data.canApprove)); setRequests(result.data.items || []); setRequestError("");
     } catch (reason) { setRequestError(reason instanceof Error ? reason.message : "We could not load check-in requests."); }
-  }, [session]);
+  }, [serviceSessionId, session]);
+
+  useEffect(() => subscribeToActiveService(service => setServiceSessionId(service?.id)), []);
 
   useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 180); return () => window.clearTimeout(timer); }, [load]);
   useEffect(() => { void loadRequests(); const timer = window.setInterval(() => { void loadRequests(); }, 7_500); return () => window.clearInterval(timer); }, [loadRequests]);
@@ -60,7 +66,7 @@ export default function AccountCheckInPage() {
 
   const pending = requests.filter((request) => request.status === "PENDING");
   return <section className="staff-checkin">
-    <header><div><p className="eyebrow">Petra Wuse</p><h1>Check-In</h1><p className="intro">Monitor live arrivals and confirm the parent requests assigned to you.</p></div><Link href="/check-in/parent?assisted=1" className="solid-button"><FiUserPlus />Assist a Check-In</Link></header>
+    <header><div><p className="eyebrow">Petra Wuse</p><h1>Check-In</h1><p className="intro">Monitor live arrivals and confirm the parent requests assigned to you.</p></div></header>
     {canApprove && <section className="approval-panel"><div className="approval-heading"><span><FiClock /></span><div><h2>Parent check-in requests</h2><p>As today’s Head of Service, you approve each request before attendance and a pickup code are created.</p></div><b>{pending.length} waiting</b></div>{requestError && <p className="error">{requestError}</p>}<div className="request-grid">{pending.map((request) => <article className="request-card" key={request.id}><div><b>{[request.guardianFirstName, request.guardianLastName].filter(Boolean).join(" ") || "Parent / Guardian"}</b><small>{request.guardianPhone || "Phone unavailable"} · {new Intl.DateTimeFormat("en-NG", { timeStyle: "short", timeZone: "Africa/Lagos" }).format(new Date(request.requestedAt))}</small></div><p>{request.children.map((child) => `${child.firstName}${child.lastName ? ` ${child.lastName}` : ""}`).join(" · ")}</p><button className="approve-button" disabled={approvingId === request.id} onClick={() => approve(request.id)}>{approvingId === request.id ? "Approving…" : <><FiCheck />Approve check-in</>}</button></article>)}{!pending.length && <p className="request-empty">No parent check-in requests are waiting right now.</p>}</div></section>}
     <section className="panel"><div className="checkin-toolbar"><label><FiSearch /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search child or guardian" /></label><span>{loading ? "Loading…" : `${items.length} live check-ins`}</span></div>{error ? <p className="error">{error}</p> : <div className="table-wrap"><table><thead><tr><th>Child</th><th>Class</th><th>Guardian</th><th>Visit</th><th>Check-In</th><th>Status</th><th>Form</th></tr></thead><tbody>{items.map((item) => <tr key={item.id}><td><b>{item.firstName} {item.lastName}</b></td><td>{item.className || "Class assignment required"}</td><td>{[item.guardianFirstName, item.guardianLastName].filter(Boolean).join(" ") || "—"}</td><td>{item.firstVisit ? "First Visit" : "Returning"}</td><td>{new Intl.DateTimeFormat("en-NG", { timeStyle: "short", timeZone: "Africa/Lagos" }).format(new Date(item.checkedInAt))}</td><td>{item.status.replaceAll("_", " ")}</td><td>{item.checkInFormUrl ? <a className="form-link" href={item.checkInFormUrl} rel="noreferrer" target="_blank">View check-in form <FiExternalLink /></a> : "—"}</td></tr>)}{!items.length && !loading && <tr><td colSpan={7} className="empty">No children have checked in for the current service.</td></tr>}</tbody></table></div>}</section>
     <style jsx>{`
