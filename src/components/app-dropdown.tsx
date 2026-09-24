@@ -44,6 +44,10 @@ export function GlobalDropdowns() {
     let observer: MutationObserver | null = null;
     const discover = () => {
       const next = Array.from(document.querySelectorAll<HTMLSelectElement>("select:not([data-dropdown-native])"))
+        // Teacher registration is a streamed Suspense boundary. Do not insert a
+        // portal into it while React is hydrating; native selects are reliable
+        // and keep the country-code control accessible on every device.
+        .filter((select) => !select.closest(".teacher-auth-page"))
         .filter((select) => select.isConnected && !known.current.has(select));
       if (!next.length) return;
       next.forEach((select) => { known.current.add(select); select.dataset.appDropdown = "true"; });

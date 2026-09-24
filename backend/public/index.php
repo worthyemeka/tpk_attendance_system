@@ -25,7 +25,7 @@ function family_rows(PDO $db, int $campusId, string $q): array {
 }
 
 function active_session(PDO $db, int $campusId): ?array {
-    $stmt=$db->prepare('SELECT id, service_date, service_order FROM service_sessions WHERE campus_id=? AND is_open=1 ORDER BY starts_at DESC LIMIT 1'); $stmt->execute([$campusId]); return $stmt->fetch() ?: null;
+    $stmt=$db->prepare('SELECT id, service_date, service_order FROM service_sessions WHERE campus_id=? AND is_open=1 AND service_date=CURDATE() ORDER BY starts_at DESC LIMIT 1'); $stmt->execute([$campusId]); return $stmt->fetch() ?: null;
 }
 
 function create_service_follow_up(PDO $db, int $campusId, int $sessionId): array {

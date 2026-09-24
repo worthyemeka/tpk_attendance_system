@@ -8,7 +8,7 @@ export type TeacherSession = {
   title: "Auntie" | "Uncle";
   accessLevel: AccessLevel;
   teamStatus: TeamStatus;
-  role: "TPK Super Admin" | "TPK Admin";
+  role: "TPK Teacher";
   profileImageUrl?: string | null;
   sessionToken: string;
 };

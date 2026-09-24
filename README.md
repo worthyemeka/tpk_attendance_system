@@ -24,7 +24,7 @@ The initial report delivery channel is the in-app queue. Email, SMS, or WhatsApp
 Copy `.env.example` to `.env`, then run:
 
 ```bash
-/Applications/XAMPP/xamppfiles/bin/php -S 127.0.0.1:8000 -t backend/public backend/public/router.php
+/Applications/MAMP/bin/php/php8.5.2/bin/php -S 127.0.0.1:8000 -t backend/public backend/public/router.php
 npm install
 npm run dev
 ```

@@ -68,6 +68,14 @@ function tpk_normalize_nigerian_phone(?string $value): ?string {
 
 function tpk_app_environment(): string { return strtolower((string)(getenv('APP_ENV') ?: 'production')); }
 
+/**
+ * Pickup tickets are PDF/QR-first.  Provider delivery stays opt-in so an
+ * unapproved SMS sender or WhatsApp template can never interrupt check-in.
+ */
+function tpk_pickup_notifications_enabled(): bool {
+    return filter_var((string)(getenv('TPK_PICKUP_NOTIFICATIONS_ENABLED') ?: 'false'), FILTER_VALIDATE_BOOLEAN);
+}
+
 function tpk_store_profile_photo(array $file, int $staffUserId): string {
     if (($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) return '';
     if (($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) throw new RuntimeException('The profile photo could not be uploaded.');
@@ -178,6 +186,7 @@ function tpk_issue_pickup_code(PDO $db, int $serviceSessionId, int $familyId, ?i
 }
 
 function tpk_send_pickup_code(PDO $db, int $pickupCodeId, array $phones, string $code, string $ticketUrl): void {
+    if (!tpk_pickup_notifications_enabled()) return;
     $message = "TribePetra Kids pickup code: {$code}. Show this code or ticket QR after service: {$ticketUrl}";
     $numbers = array_unique(array_filter(array_map('tpk_normalize_nigerian_phone', $phones)));
     foreach ($numbers as $phone) foreach (['SMS', 'WHATSAPP'] as $channel) {

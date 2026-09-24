@@ -9,14 +9,14 @@ This guide is the short list to use when operating or inspecting the live TPK sy
 | Campus and classes | `campuses`, `classes`, `service_sessions` | The Wuse campus, age groups, and each open service. |
 | Families and children | `families`, `guardians`, `children`, `child_guardians`, `authorized_pickups` | Parent/guardian records, child records, household links, and approved collectors. |
 | Check-in approval, attendance and pickup | `check_in_requests`, `attendance`, `service_pickup_codes`, `pickup_code_notifications` | Parent requests awaiting the rostered Head of Service, approved check-ins, `TPK-A-001` / `TPK-B-001` codes, QR tickets, pickup completion, and delivery attempts. |
-| Team | `staff_users`, `teacher_profiles`, `staff_sessions`, `staff_bootstrap_access` | Teacher identity, the shared sign-in, profile information, and the three initial Super Admin recognitions. |
+| Team | `staff_users`, `teacher_profiles`, `staff_sessions`, `staff_bootstrap_access` | One teacher identity uses two linked rows: `staff_users.id` is the secure account/session record and `teacher_profiles.staff_user_id` is the matching teacher profile. They are not two kinds of people. New TPK teachers always receive both rows. |
 | Team management | `staff_class_assignments`, `roster_assignments`, `duty_types`, `staff_access_audits`, `staff_team_status_audits` | Classroom/roster responsibilities and accountable role or status changes. |
 | Care and follow-up | `child_care_profiles`, `child_emergency_profiles`, `child_ministry_profiles`, `follow_up_tasks` | Safeguarding care details and ministry follow-up. |
 | Accountability | `audit_logs`, `staff_whatsapp_verifications`, `service_report_dispatches` | Important action history, staff verification, and report delivery history. |
 
 ## Historical or compatibility tables — keep, do not use for new features
 
-These are retained so that earlier prototypes and migration history are not broken. New application work must use the operational tables above instead.
+These are retained so that earlier prototypes and migration history are not broken. New application work must use the operational tables above instead. Legacy `staff_users` records without a matching `teacher_profiles` row are intentionally excluded from the live Team and roster screens.
 
 - `family_passes`, `pickup_passes`, `pickup_notifications`, `pickup_events`
 - `daily_attendance`, `calendar_years`, `calendar_months`, `calendar_weeks`

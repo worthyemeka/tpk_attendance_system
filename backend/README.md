@@ -38,11 +38,19 @@ Protected v1 endpoints now require `Authorization: Bearer <staff session token>`
 
 Apply `database/2026_service_pickup_codes.sql` after `2026_parent_flow.sql`. Every family receives one fresh code for each service session: First Service uses `TPK-A-001` upward and Second Service uses `TPK-B-001` upward. The counter is scoped to that service, so it starts again for the next Sunday.
 
-Each successful parent registration or returning-parent check-in creates the family pickup code and sends it to the guardian's primary number and, where present, secondary number.
+Each approved parent check-in creates the family pickup code and a printable QR ticket. The ticket is the primary parent hand-off: it opens on the parent’s device and can be saved as a PDF or shared with the pickup adult. No SMS or WhatsApp account is required for a family to collect a child.
 
 The staff Pick-Up desk accepts the code or QR first. If neither is available, an authenticated teacher can use the child’s first name, last name, and date of birth for an assisted lookup. This is separately audited as `ASSISTED_BIRTH_DATE`; it does not introduce a new pickup state and the teacher still reviews the checked-in children before completing the release.
 
-For direct WhatsApp delivery through the same Meta account as teacher OTPs, create and approve the `tpk_pickup_code` utility template in `en_US` with this body:
+### Optional future provider delivery
+
+TPK currently uses PDF/QR tickets only. SMS and WhatsApp delivery are disabled by default, so an unapproved provider cannot create failed delivery records or affect check-in. To enable either option later, set this server-only variable only after the ministry has an approved provider sender or template:
+
+```env
+TPK_PICKUP_NOTIFICATIONS_ENABLED=true
+```
+
+For optional direct WhatsApp delivery through the same Meta account as teacher OTPs, create and approve the `tpk_pickup_code` utility template in `en_US` with this body:
 
 ```text
 TribePetra Kids pickup code: {{1}}. Please show this code at the pickup station after service.
@@ -50,9 +58,9 @@ TribePetra Kids pickup code: {{1}}. Please show this code at the pickup station 
 
 Set `WHATSAPP_PICKUP_TEMPLATE=tpk_pickup_code` and `WHATSAPP_PICKUP_LANGUAGE=en_US`. The backend uses `WHATSAPP_ACCESS_TOKEN` and `WHATSAPP_PHONE_NUMBER_ID` already configured for teacher verification; it never exposes them to the browser.
 
-### SMS delivery with Termii
+### Optional SMS delivery with Termii
 
-The pickup flow sends one SMS to every valid primary and secondary guardian number after a successful new-parent registration or returning-parent check-in. Numbers are normalised to Nigerian international format before sending.
+When provider delivery is explicitly enabled, the pickup flow sends one SMS to every valid primary and secondary guardian number after the Head of Service approves check-in. Numbers are normalised to Nigerian international format before sending.
 
 In Termii, request a **transactional** SMS Sender ID for `TPK` (or the exact 3–11 character Sender ID that Termii approves). Use the Termii dashboard values in the server-only `.env` file:
 
@@ -63,9 +71,9 @@ TERMII_SENDER_ID="TPK"
 TERMII_SMS_CHANNEL="dnd"
 ```
 
-Termii requires the `dnd` route to be activated on the account for reliable transactional delivery, including DND numbers. Until the Sender ID and DND route are approved, the application records the delivery failure in `pickup_code_notifications` without interrupting the parent check-in. Never place the Termii key in a `NEXT_PUBLIC_*` variable or commit it to Git.
+Termii requires the `dnd` route to be activated on the account for reliable transactional delivery, including DND numbers. Keep `TPK_PICKUP_NOTIFICATIONS_ENABLED=false` until the Sender ID and DND route are approved. Never place the Termii key in a `NEXT_PUBLIC_*` variable or commit it to Git.
 
-`SMS_PICKUP_WEBHOOK` remains supported for a different SMS provider; it receives `{ to, message }`. In development, unconfigured sends are written to `backend/storage/pickup-code-notifications.log` instead. The same ticket link opens a printable QR ticket; parents can select **Save as PDF** in the browser print dialog.
+`SMS_PICKUP_WEBHOOK` remains supported for a different SMS provider; it receives `{ to, message }`. The same ticket link opens a printable QR ticket; parents can select **Save as PDF** in the browser print dialog.
 
 ## Import the General Info responses
 

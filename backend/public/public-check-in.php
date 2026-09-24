@@ -18,7 +18,7 @@ if(($_SERVER['REQUEST_METHOD']??'GET')!=='POST') checkin_error('METHOD_NOT_ALLOW
 try {
     $db=db(); $payload=checkin_input(); $phone=checkin_phone($payload['phone']??null); $sessionId=(int)($payload['serviceSessionId']??0); $childIds=array_values(array_unique(array_map('intval',(array)($payload['childIds']??[]))));
     if(!$phone||!$sessionId||!$childIds) checkin_error('VALIDATION_ERROR','Provide a valid phone number, service session and at least one child.',422);
-    $session=$db->prepare('SELECT id,campus_id FROM service_sessions WHERE id=? AND is_open=1');$session->execute([$sessionId]);$session=$session->fetch();if(!$session)checkin_error('SERVICE_SESSION_NOT_OPEN','Check-in is not open right now.',409);
+    $session=$db->prepare('SELECT id,campus_id FROM service_sessions WHERE id=? AND is_open=1 AND service_date=CURDATE()');$session->execute([$sessionId]);$session=$session->fetch();if(!$session)checkin_error('SERVICE_SESSION_NOT_OPEN','Check-in is not open right now.',409);
     $guardian=checkin_guardian($db,$phone);if(!$guardian)checkin_error('REGISTRATION_NOT_FOUND','We could not find a registration for that phone number.',404);
     $marks=implode(',',array_fill(0,count($childIds),'?'));
     $children=$db->prepare("SELECT c.id,c.class_id,c.first_name,c.last_name FROM children c JOIN child_guardians cg ON cg.child_id=c.id WHERE cg.guardian_id=? AND c.id IN ($marks) AND c.is_active=1");$children->execute(array_merge([(int)$guardian['id']],$childIds));$rows=$children->fetchAll();if(count($rows)!==count($childIds))checkin_error('CHILD_NOT_AUTHORISED','One or more selected children are not linked to this registration.',403);
