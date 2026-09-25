@@ -94,10 +94,20 @@ type Detail = {
   } | null;
   monthly: {
     month: string;
-    sessions: { id: number; serviceDate: string }[];
+    sessions: { id: number; serviceDate: string; name?: string }[];
     presentByDate: Record<string, number[]>;
   };
   notes: { id: number; note: string; author: string; createdAt: string }[];
+  weeklyReviews: {
+    id: number;
+    serviceSessionId: number;
+    serviceDate: string;
+    serviceName?: string;
+    workedWell?: string;
+    needsImprovement?: string;
+    author: string;
+    createdAt: string;
+  }[];
 };
 const initials = (name: string) =>
   name
@@ -125,8 +135,14 @@ function useService() {
   return service;
 }
 function Avatar({ teacher }: { teacher: Teacher }) {
-  return teacher.profileImageUrl ? (
-    <img className="teacher-photo" src={teacher.profileImageUrl} alt="" />
+  const [imageFailed, setImageFailed] = useState(false);
+  return teacher.profileImageUrl && !imageFailed ? (
+    <img
+      className="teacher-photo"
+      src={teacher.profileImageUrl}
+      alt=""
+      onError={() => setImageFailed(true)}
+    />
   ) : (
     <i className="teacher-photo">{initials(teacher.name)}</i>
   );
@@ -405,6 +421,7 @@ export function ClassroomsOverview() {
         </section>
       )}
       <style jsx>{styles}</style>
+      <style jsx>{mobileDetailStyles}</style>
     </section>
   );
 }
@@ -444,7 +461,9 @@ export function ClassroomDetail({ classId }: { classId: number }) {
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   const [error, setError] = useState("");
   const [assignmentOpen, setAssignmentOpen] = useState(false);
-  const [note, setNote] = useState("");
+  const [reviewSessionId, setReviewSessionId] = useState("");
+  const [workedWell, setWorkedWell] = useState("");
+  const [needsImprovement, setNeedsImprovement] = useState("");
   const load = useCallback(async () => {
     if (!session) return;
     setData(null);
@@ -460,6 +479,10 @@ export function ClassroomDetail({ classId }: { classId: number }) {
           b.error?.message || "We could not load this classroom.",
         );
       setData(b.data);
+      setReviewSessionId(
+        (value) =>
+          value || String(active?.id || b.data.serviceSession?.id || ""),
+      );
       setError("");
     } catch (reason) {
       setError(
@@ -487,15 +510,31 @@ export function ClassroomDetail({ classId }: { classId: number }) {
     );
     void load();
   };
-  const addNote = async () => {
-    if (!session || !note.trim()) return;
-    const r = await fetch(`${apiBase}/api/v1/classrooms/${classId}/notes`, {
-      method: "POST",
-      headers: { ...authHeaders(session), "Content-Type": "application/json" },
-      body: JSON.stringify({ note, serviceSessionId: active?.id }),
-    });
+  const addWeeklyReview = async () => {
+    if (
+      !session ||
+      !reviewSessionId ||
+      (!workedWell.trim() && !needsImprovement.trim())
+    )
+      return;
+    const r = await fetch(
+      `${apiBase}/api/v1/classrooms/${classId}/weekly-reviews`,
+      {
+        method: "POST",
+        headers: {
+          ...authHeaders(session),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          serviceSessionId: Number(reviewSessionId),
+          workedWell,
+          needsImprovement,
+        }),
+      },
+    );
     if (r.ok) {
-      setNote("");
+      setWorkedWell("");
+      setNeedsImprovement("");
       void load();
     }
   };
@@ -593,10 +632,20 @@ export function ClassroomDetail({ classId }: { classId: number }) {
         <div className="teacher-cards">
           {data.teachers.map((teacher) => (
             <article key={teacher.userId}>
-              <Avatar teacher={teacher} />
+              <Link
+                href={`/account/team?member=${teacher.userId}`}
+                aria-label={`View ${teacher.name}'s profile`}
+              >
+                <Avatar teacher={teacher} />
+              </Link>
               <div>
-                <b>{teacher.name}</b>
+                <Link href={`/account/team?member=${teacher.userId}`}>
+                  <b>{teacher.name}</b>
+                </Link>
                 <small>{teacher.dutyName || "Class teacher"}</small>
+                <small>
+                  Assigned {formatDate(data.serviceSession?.serviceDate)}
+                </small>
                 {teacher.whatsappNumber && (
                   <small>{teacher.whatsappNumber}</small>
                 )}
@@ -621,7 +670,7 @@ export function ClassroomDetail({ classId }: { classId: number }) {
           ["children", `Children (${data.children.length})`],
           ["attendance", "Attendance"],
           ["assignments", "Assignments"],
-          ["notes", "Notes"],
+          ["notes", "Weekly Discussion"],
           ["details", "Class Details"],
         ].map(([id, title]) => (
           <button
@@ -697,30 +746,18 @@ export function ClassroomDetail({ classId }: { classId: number }) {
         />
       )}{" "}
       {tab === "notes" && (
-        <section className="notes-panel">
-          {data.canManage && (
-            <>
-              <textarea
-                value={note}
-                onChange={(event) => setNote(event.target.value)}
-                placeholder="Add a useful operational class note..."
-              />
-              <button className="primary" onClick={addNote}>
-                Save Note
-              </button>
-            </>
-          )}
-          {data.notes.map((item) => (
-            <article key={item.id}>
-              <b>{item.author}</b>
-              <small>{formatDate(item.createdAt)}</small>
-              <p>{item.note}</p>
-            </article>
-          ))}
-          {!data.notes.length && (
-            <p className="cw-empty">No class notes yet.</p>
-          )}
-        </section>
+        <WeeklyReviews
+          data={data}
+          month={month}
+          setMonth={setMonth}
+          reviewSessionId={reviewSessionId}
+          setReviewSessionId={setReviewSessionId}
+          workedWell={workedWell}
+          setWorkedWell={setWorkedWell}
+          needsImprovement={needsImprovement}
+          setNeedsImprovement={setNeedsImprovement}
+          onSave={addWeeklyReview}
+        />
       )}
       {tab === "details" && (
         <section className="class-info">
@@ -763,6 +800,139 @@ export function ClassroomDetail({ classId }: { classId: number }) {
   );
 }
 
+function WeeklyReviews({
+  data,
+  month,
+  setMonth,
+  reviewSessionId,
+  setReviewSessionId,
+  workedWell,
+  setWorkedWell,
+  needsImprovement,
+  setNeedsImprovement,
+  onSave,
+}: {
+  data: Detail;
+  month: string;
+  setMonth: (value: string) => void;
+  reviewSessionId: string;
+  setReviewSessionId: (value: string) => void;
+  workedWell: string;
+  setWorkedWell: (value: string) => void;
+  needsImprovement: string;
+  setNeedsImprovement: (value: string) => void;
+  onSave: () => void;
+}) {
+  const sessions = [
+    ...(data.serviceSession ? [data.serviceSession] : []),
+    ...data.monthly.sessions,
+  ].filter(
+    (item, index, list) =>
+      list.findIndex((other) => other.id === item.id) === index,
+  );
+  return (
+    <section className="weekly-reviews">
+      <header>
+        <div>
+          <p className="eyebrow">Class reflection</p>
+          <h2>Weekly discussion</h2>
+          <p>
+            Capture what worked and what the team should improve after each
+            Sunday.
+          </p>
+        </div>
+        <label>
+          Month
+          <input
+            type="month"
+            value={month}
+            onChange={(event) => setMonth(event.target.value)}
+          />
+        </label>
+      </header>
+      {data.canManage && (
+        <section className="review-form">
+          <div className="review-form-heading">
+            <b>Add this Sunday’s review</b>
+            <select
+              value={reviewSessionId}
+              onChange={(event) => setReviewSessionId(event.target.value)}
+            >
+              <option value="">Choose Sunday</option>
+              {sessions.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {formatDate(item.serviceDate)} ·{" "}
+                  {item.name || data.serviceSession?.name || "Service"}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="review-fields">
+            <label>
+              What worked well?
+              <textarea
+                value={workedWell}
+                onChange={(event) => setWorkedWell(event.target.value)}
+                placeholder="What helped the children learn, participate or settle well?"
+              />
+            </label>
+            <label>
+              What should we improve?
+              <textarea
+                value={needsImprovement}
+                onChange={(event) => setNeedsImprovement(event.target.value)}
+                placeholder="What needs attention before the next Sunday?"
+              />
+            </label>
+          </div>
+          <button
+            className="primary"
+            disabled={
+              !reviewSessionId ||
+              (!workedWell.trim() && !needsImprovement.trim())
+            }
+            onClick={onSave}
+          >
+            Save weekly review
+          </button>
+        </section>
+      )}
+      <div className="review-list">
+        {data.weeklyReviews.map((review) => (
+          <article key={review.id}>
+            <header>
+              <div>
+                <b>{formatDate(review.serviceDate)}</b>
+                <small>
+                  {review.serviceName || "Sunday service"} · {review.author}
+                </small>
+              </div>
+              <FiMessageCircle />
+            </header>
+            {review.workedWell && (
+              <p>
+                <strong>Worked well</strong>
+                {review.workedWell}
+              </p>
+            )}
+            {review.needsImprovement && (
+              <p>
+                <strong>Improve next time</strong>
+                {review.needsImprovement}
+              </p>
+            )}
+          </article>
+        ))}
+        {!data.weeklyReviews.length && (
+          <p className="cw-empty">
+            No weekly discussion has been added for this month yet.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function ChildrenTable({
   rows,
   assignment,
@@ -773,7 +943,7 @@ function ChildrenTable({
   onSubmission: (id: number, status: string) => void;
 }) {
   return (
-    <div className="cw-table">
+    <div className="cw-table children-table">
       <table>
         <thead>
           <tr>
@@ -789,15 +959,15 @@ function ChildrenTable({
         <tbody>
           {rows.map((child) => (
             <tr key={child.id}>
-              <td>
+              <td data-label="Child">
                 <Link href={`/account/children?childId=${child.id}`}>
                   <b>
                     {child.firstName} {child.lastName}
                   </b>
                 </Link>
               </td>
-              <td>{child.age ?? "—"}</td>
-              <td>
+              <td data-label="Age">{child.age ?? "—"}</td>
+              <td data-label="Guardian">
                 {child.guardianId ? (
                   <Link
                     href={`/account/guardians?guardianId=${child.guardianId}`}
@@ -809,16 +979,16 @@ function ChildrenTable({
                   "—"
                 )}
               </td>
-              <td>
+              <td data-label="Today">
                 <Status value={child.todayStatus} />
               </td>
-              <td>
+              <td data-label="Assignment">
                 {assignment ? <Status value={child.assignmentStatus} /> : "—"}
               </td>
-              <td>
+              <td data-label="Profile">
                 <Status value={child.profileStatus} />
               </td>
-              <td>
+              <td data-label="Actions">
                 {assignment && child.todayStatus === "PRESENT" ? (
                   <select
                     value={child.assignmentStatus}
@@ -919,6 +1089,40 @@ function Attendance({
             ))}
           </tbody>
         </table>
+      </div>
+      <div className="attendance-cards">
+        {data.children.map((child) => (
+          <article key={child.id}>
+            <b>
+              {child.firstName} {child.lastName}
+            </b>
+            <div>
+              {data.monthly.sessions.map((week) => {
+                const notExpected = Boolean(
+                  child.joinedAt && child.joinedAt > week.serviceDate,
+                );
+                return (
+                  <span key={week.id}>
+                    <small>{formatDate(week.serviceDate)}</small>
+                    {notExpected ? (
+                      "—"
+                    ) : (
+                      <Status
+                        value={
+                          data.monthly.presentByDate[
+                            week.serviceDate
+                          ]?.includes(child.id)
+                            ? "PRESENT"
+                            : "ABSENT"
+                        }
+                      />
+                    )}
+                  </span>
+                );
+              })}
+            </div>
+          </article>
+        ))}
       </div>
     </section>
   );
@@ -1059,3 +1263,8 @@ function AssignmentForm({
 }
 
 const styles = `.cw-page{max-width:1260px;padding-top:16px}.cw-heading{margin-bottom:17px}.eyebrow{color:#ff5938;font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase}.cw-page h1,.cw-page h2,.cw-page h3{font-family:var(--font-display,Georgia,serif);color:#101d3b}.cw-page h1{margin:5px 0;font-size:37px;letter-spacing:-1.2px}.cw-heading>div>p:last-child,.detail-header p{margin:0;color:#617493;font-size:15px}.cw-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:19px 0}.cw-metric{min-height:104px;padding:17px;border:1px solid #f0e6df;border-radius:10px;background:#fff5f1;display:grid;grid-template-columns:51px 1fr;grid-template-rows:30px 20px 18px}.cw-metric>i{grid-row:1/4;width:43px;height:43px;border-radius:10px;background:#ffe2db;color:#ff5938;display:grid;place-items:center;font-size:22px}.cw-metric b{font:700 28px Georgia,serif}.cw-metric strong{font-size:12px}.cw-metric small{color:#70809a;font-size:10px}.cw-metric.green{background:#effbf4}.cw-metric.green>i{background:#d7f6e3;color:#009653}.cw-metric.purple{background:#f5f0ff}.cw-metric.purple>i{background:#e7dcff;color:#7440e8}.cw-metric.red{background:#fff1ee}.cw-metric.red>i{background:#ffdcd7;color:#f04d35}.cw-metric.blue{background:#edf6ff}.cw-metric.blue>i{background:#dceeff;color:#1576d2}.cw-tools,.detail-tools{display:grid;grid-template-columns:minmax(250px,1.7fr) 180px 180px auto;gap:10px;margin:18px 0}.cw-tools label,.detail-tools label{height:41px;border:1px solid #dbe1eb;border-radius:8px;background:#fff;display:flex;align-items:center;gap:9px;padding:0 12px;color:#6580a3}.cw-tools input,.detail-tools input{min-width:0;width:100%;border:0;outline:0;background:transparent;font:12px var(--font-body)}.cw-tools select,.detail-tools select,.cw-table select{height:41px;border:1px solid #dbe1eb;border-radius:8px;background:#fff;padding:0 10px;color:#1a2c4a;font:700 11px var(--font-body)}.cw-tools button,.detail-tools button{height:41px;border:1px solid #dbe1eb;border-radius:8px;background:#fff;padding:0 13px;font:800 11px var(--font-body);display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer}.cw-list-heading{display:flex;align-items:center;justify-content:space-between;margin-top:24px}.cw-list-heading h2{font-size:22px;margin:0}.cw-list-heading span{color:#5d6e89;font-size:11px}.class-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px;margin-top:15px}.class-card{min-height:270px;border:1px solid #e1e4e9;border-radius:10px;background:#fff;padding:16px;display:flex;flex-direction:column}.class-card>header{display:flex;justify-content:space-between;gap:10px}.class-card>header>div{display:grid;grid-template-columns:47px 1fr;column-gap:10px}.class-symbol{grid-row:1/3;width:45px;height:45px;border-radius:11px;display:grid;place-items:center;background:#fbe5f6;color:#d336a7;font-size:21px}.class-card h3{margin:2px 0 3px;font-size:18px}.class-card header p{margin:0;color:#6d7e99;font-size:11px}.cw-status{width:max-content;max-width:100%;display:inline-flex;align-items:center;gap:4px;border-radius:6px;padding:5px 8px;font-size:10px;font-weight:900;white-space:nowrap}.cw-status.good{background:#e6f8ec;color:#07844f}.cw-status.warn{background:#fff0e8;color:#d85332}.cw-status.quiet{background:#eff2f7;color:#5e6d85}.teacher-heading{margin:17px 0 8px;color:#1b2b49;font-size:11px;font-weight:900}.teacher-strip{display:flex;gap:9px;min-height:46px;flex-wrap:wrap}.teacher-strip>span{display:grid;grid-template-columns:31px auto;column-gap:6px;min-width:105px}.teacher-strip b{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.teacher-strip small{grid-column:2;color:#71809a;font-size:9px}.teacher-photo{width:31px;height:31px;border-radius:50%;object-fit:cover;background:#e9effa;color:#2d67a7;display:grid;place-items:center;font-size:9px;font-style:normal;font-weight:900}.no-teacher{font-size:10px;color:#d64e32;text-decoration:none;display:flex;gap:4px;align-items:center}.class-numbers{display:grid;grid-template-columns:repeat(3,1fr);margin:14px 0}.class-numbers b{font:700 21px Georgia,serif}.class-numbers small{display:block;color:#71809a;font:600 10px var(--font-body)}.attendance-progress{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;font-size:10px;font-weight:800;color:#18345e}.attendance-progress:before{content:"";grid-area:1/1;height:9px;border-radius:99px;background:#e8edf3}.attendance-progress i{grid-area:1/1;height:9px;border-radius:99px;background:#00af65;z-index:1}.attendance-progress span{grid-area:1/2}.class-card footer{display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:13px;border-top:1px solid #edf0f3}.class-card footer small{display:flex;align-items:center;gap:5px;color:#71809a;font-size:9px}.class-card footer a,.assigned header a,.class-info a{border:1px solid #dce2eb;border-radius:7px;padding:8px 10px;color:#075dd3;text-decoration:none;font-size:10px;font-weight:900;display:flex;align-items:center;gap:4px}.cw-empty{min-height:90px;display:grid;place-items:center;gap:6px;color:#74829a;font-size:12px;text-align:center}.cw-empty b{color:#1d2f4c}.cw-error{padding:13px;border-radius:8px;background:#fff0ed;color:#c6452d}.cw-back{display:inline-flex;align-items:center;gap:7px;color:#476187;text-decoration:none;font-size:11px;font-weight:800}.detail-header{display:flex;align-items:center;justify-content:space-between;margin:10px 0 14px}.detail-header h1{margin:4px 0}.detail-metrics{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}.assigned{padding:15px;border:1px solid #e1e4e9;border-radius:10px;background:#fff}.assigned header{display:flex;align-items:center;justify-content:space-between;gap:10px}.assigned h2{margin:0;font-size:19px}.teacher-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px}.teacher-cards article{min-height:78px;padding:12px;border:1px solid #e1e5eb;border-radius:8px;display:flex;align-items:flex-start;gap:9px}.teacher-cards article>div{min-width:0;flex:1;display:grid;gap:4px}.teacher-cards b{font-size:11px}.teacher-cards small{overflow:hidden;color:#70809a;font-size:9px;text-overflow:ellipsis;white-space:nowrap}.teacher-cards p{margin:0;color:#6f7f97;font-size:11px}.teacher-cards p a{color:#075dd3}.class-tabs{display:flex;gap:5px;margin-top:20px;border-bottom:1px solid #e2e6eb;overflow:auto}.class-tabs button{flex:none;border:0;border-bottom:2px solid transparent;background:transparent;padding:11px 14px;color:#64738c;font:800 11px var(--font-body);cursor:pointer}.class-tabs button.selected{border-color:#ff5938;color:#142543}.detail-tools{grid-template-columns:minmax(220px,1.5fr) repeat(3,170px) auto}.primary{border-color:#ff5938!important;background:#ff5938!important;color:#fff!important}.cw-table{overflow:auto;border:1px solid #e0e4ea;border-radius:9px;background:#fff}.cw-table table{width:100%;border-collapse:collapse;min-width:720px}.cw-table th{padding:11px;text-align:left;background:#fbfaf7;color:#73819a;font-size:9px;text-transform:uppercase;letter-spacing:.05em}.cw-table td{padding:11px;border-top:1px solid #ebedf0;color:#203451;font-size:11px}.cw-table td a{color:#153d86;text-decoration:none}.cw-table td small{display:block;color:#71809b;font-size:9px;margin-top:3px}.cw-table select{height:31px;font-size:10px}.attendance-view>header,.assignment-panel>header{display:flex;justify-content:space-between;align-items:center;padding:16px 0}.attendance-view h2,.assignment-panel h2{margin:0;font-size:21px}.attendance-view p,.assignment-panel p{color:#697a95;font-size:12px}.attendance-view input{height:38px;border:1px solid #dbe1eb;border-radius:7px;padding:0 9px;font:11px var(--font-body)}.matrix th small{display:block;margin-top:3px;font-size:8px}.notes-panel{display:grid;gap:10px;padding:16px 0}.notes-panel textarea{min-height:90px;border:1px solid #dce1e8;border-radius:8px;padding:11px;font:12px var(--font-body);resize:vertical}.notes-panel article{padding:13px;border:1px solid #e2e5ea;border-radius:8px;background:#fff}.notes-panel article small{margin-left:8px;color:#75829a;font-size:9px}.notes-panel article p{margin:7px 0 0;color:#586a85;font-size:12px;white-space:pre-wrap}.class-info{display:grid;gap:10px;padding:17px 0}.class-info p{display:grid;gap:3px;margin:0;color:#677995;font-size:12px}.class-info b{color:#182b48}.assignment-panel{padding:5px 0}.assignment-panel>header{padding-bottom:8px}.cw-modal{position:fixed;z-index:99;inset:0;background:#0a173a77;display:grid;place-items:center;padding:20px}.cw-modal>section{position:relative;width:min(100%,510px);padding:25px;border-radius:12px;background:#fffdfa;box-shadow:0 20px 60px #101c373d;display:grid;gap:12px}.cw-modal h2{margin:0;font:700 26px Georgia,serif}.cw-modal label{display:grid;gap:6px;color:#33445f;font-size:11px;font-weight:800}.cw-modal input,.cw-modal textarea{border:1px solid #dce2eb;border-radius:8px;padding:10px;font:12px var(--font-body)}.cw-modal textarea{min-height:90px;resize:vertical}.modal-close{position:absolute;top:12px;right:14px;border:0;background:none;font-size:23px;cursor:pointer}.cw-modal footer{display:flex;justify-content:flex-end;gap:9px}.cw-modal footer button{height:40px;border:1px solid #dce2eb;border-radius:8px;padding:0 14px;background:#fff;font:800 11px var(--font-body);cursor:pointer}@media(max-width:1100px){.cw-metrics{grid-template-columns:repeat(2,1fr)}.class-grid{grid-template-columns:1fr}.cw-tools,.detail-tools{grid-template-columns:1fr 1fr}.cw-tools label,.detail-tools label{grid-column:1/-1}.teacher-cards{grid-template-columns:1fr 1fr}}@media(max-width:650px){.cw-page{padding-top:0}.cw-page h1{font-size:31px}.cw-metrics,.cw-tools,.detail-tools,.teacher-cards{grid-template-columns:1fr}.cw-tools label,.detail-tools label{grid-column:auto}.cw-list-heading{align-items:flex-start;gap:7px;flex-direction:column}.class-card{min-height:285px}.detail-header{align-items:flex-start;gap:10px;flex-direction:column}.assigned header{align-items:flex-start;flex-direction:column}.class-tabs button{padding:11px 9px;font-size:10px}.cw-modal{align-items:end;padding:0}.cw-modal>section{width:100%;border-radius:14px 14px 0 0}.teacher-cards article{min-width:0}}`;
+
+const mobileDetailStyles = `
+  .attendance-cards{display:none}.weekly-reviews{padding:18px 0}.weekly-reviews>header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:14px}.weekly-reviews h2{margin:4px 0;font-size:23px}.weekly-reviews p{margin:0;color:#697a95;font-size:12px}.weekly-reviews>header label{display:grid;gap:5px;color:#62718a;font-size:10px;font-weight:800}.weekly-reviews input,.review-form select,.review-form textarea{border:1px solid #dce2eb;border-radius:8px;background:#fff;padding:10px;color:#203451;font:12px var(--font-body)}.review-form{padding:15px;border:1px solid #e1e5eb;border-radius:10px;background:#fffdfa}.review-form-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;color:#243653;font-size:12px}.review-form-heading select{min-width:220px}.review-fields{display:grid;grid-template-columns:1fr 1fr;gap:11px}.review-fields label{display:grid;gap:6px;color:#40516d;font-size:11px;font-weight:800}.review-fields textarea{min-height:96px;resize:vertical}.review-form .primary{height:39px;margin-top:12px}.review-form .primary:disabled{cursor:not-allowed;opacity:.48}.review-list{display:grid;gap:10px;margin-top:14px}.review-list article{padding:14px;border:1px solid #e2e5ea;border-radius:9px;background:#fff}.review-list article header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.review-list article header div{display:grid;gap:4px}.review-list article header b{font-size:12px}.review-list article header small{color:#71809b;font-size:10px}.review-list article header svg{color:#ff5938}.review-list article p{display:grid;gap:4px;margin:12px 0 0;white-space:pre-wrap;color:#586a85;line-height:1.5}.review-list article strong{color:#203451;font-size:11px}.teacher-cards article>a{display:block;line-height:0}.teacher-cards article>div>a{color:#172a48;text-decoration:none}.teacher-cards article>div>a:hover{text-decoration:underline}
+  @media(max-width:650px){.cw-page{width:100%;max-width:100%;overflow:hidden}.cw-table.children-table{overflow:visible;border:0;background:transparent}.children-table table,.children-table tbody,.children-table tr,.children-table td{display:block;width:100%;box-sizing:border-box;min-width:0}.children-table thead{display:none}.children-table tr{margin-bottom:10px;overflow:hidden;border:1px solid #e0e4ea;border-radius:10px;background:#fff}.children-table td{display:flex;align-items:center;justify-content:space-between;gap:14px;border-top:1px solid #edf0f2;padding:10px 12px;text-align:right}.children-table td:first-child{border-top:0;background:#fbfaf7;text-align:left}.children-table td:before{content:attr(data-label);flex:none;color:#74819a;text-align:left;font-size:9px;font-weight:900;letter-spacing:.04em;text-transform:uppercase}.children-table td:first-child:before{display:none}.children-table td select{max-width:155px}.matrix{display:none}.attendance-cards{display:grid;gap:9px;margin-top:13px}.attendance-cards article{padding:12px;border:1px solid #e0e4ea;border-radius:9px;background:#fff}.attendance-cards article>b{display:block;margin-bottom:8px;font-size:12px;color:#203451}.attendance-cards article>div{display:grid;gap:7px}.attendance-cards article span{display:flex;align-items:center;justify-content:space-between;gap:9px}.attendance-cards article small{color:#70809a;font-size:10px}.weekly-reviews>header{align-items:flex-start;flex-direction:column}.weekly-reviews>header label,.weekly-reviews input{width:100%;box-sizing:border-box}.review-form-heading{align-items:stretch;flex-direction:column}.review-form-heading select{min-width:0;width:100%}.review-fields{grid-template-columns:1fr}.review-form .primary{width:100%}.teacher-cards article{min-width:0}.class-tabs{padding-bottom:1px}.class-tabs button{font-size:9px}.detail-metrics{grid-template-columns:1fr 1fr}.detail-metrics .cw-metric{min-height:92px;padding:12px;grid-template-columns:42px 1fr}.detail-metrics .cw-metric>i{width:35px;height:35px;font-size:18px}.detail-metrics .cw-metric b{font-size:23px}}
+`;
