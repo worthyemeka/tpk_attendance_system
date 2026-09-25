@@ -3,10 +3,8 @@
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   FiAlertTriangle,
-  FiCalendar,
   FiCheckCircle,
   FiChevronDown,
-  FiChevronLeft,
   FiChevronRight,
   FiDownload,
   FiFileText,
@@ -18,6 +16,7 @@ import {
   FiX,
 } from "react-icons/fi";
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
+import { MonthPicker } from "@/components/month-picker";
 
 type Summary = {
   childrenAttended: number;
@@ -78,10 +77,6 @@ type Archive = {
   uploadedBy: string;
 };
 
-const monthLabel = (year: number, month: number) =>
-  new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" }).format(
-    new Date(year, month - 1, 1),
-  );
 const formatDate = (value?: string) =>
   value
     ? new Intl.DateTimeFormat("en-GB", {
@@ -182,10 +177,9 @@ export function ReportsWorkspace() {
     if (tab === "archive") void loadArchive();
   }, [loadArchive, tab]);
 
-  const shiftMonth = (delta: number) => {
-    const next = new Date(year, month - 1 + delta, 1);
-    setYear(next.getFullYear());
-    setMonth(next.getMonth() + 1);
+  const setSelectedMonth = (next: Date) => {
+    setYear(next.getUTCFullYear());
+    setMonth(next.getUTCMonth() + 1);
   };
   const downloadCsv = () => {
     if (!report) return;
@@ -214,6 +208,28 @@ export function ReportsWorkspace() {
     link.download = `tpk-${report.monthLabel.toLowerCase().replaceAll(" ", "-")}-report.csv`;
     link.click();
     URL.revokeObjectURL(url);
+  };
+  const downloadArchive = async (record: Archive) => {
+    if (!session) return;
+    try {
+      const response = await fetch(
+        `${apiBase}/api/v1/archive-records/${record.id}/download`,
+        { headers: authHeaders(session) },
+      );
+      if (!response.ok) throw new Error("The original file is not available.");
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = record.originalFilename;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "The original file is not available.",
+      );
+    }
   };
 
   return (
@@ -246,8 +262,7 @@ export function ReportsWorkspace() {
           months={months}
           year={year}
           month={month}
-          shiftMonth={shiftMonth}
-          setYear={setYear}
+          setSelectedMonth={setSelectedMonth}
           openDrawer={() => {
             setDrawerTab("overview");
             setDrawer(true);
@@ -265,6 +280,7 @@ export function ReportsWorkspace() {
           type={archiveType}
           setType={setArchiveType}
           upload={() => setUploadOpen(true)}
+          download={downloadArchive}
         />
       )}{" "}
       {error && <p className="reports-error">{error}</p>}
@@ -298,8 +314,7 @@ function ReportsView({
   months,
   year,
   month,
-  shiftMonth,
-  setYear,
+  setSelectedMonth,
   openDrawer,
   downloadCsv,
 }: {
@@ -307,8 +322,7 @@ function ReportsView({
   months: MonthRow[];
   year: number;
   month: number;
-  shiftMonth: (delta: number) => void;
-  setYear: (year: number) => void;
+  setSelectedMonth: (value: Date) => void;
   openDrawer: () => void;
   downloadCsv: () => void;
 }) {
@@ -316,18 +330,11 @@ function ReportsView({
   return (
     <>
       <section className="report-controls">
-        <div>
-          <button aria-label="Previous month" onClick={() => shiftMonth(-1)}>
-            <FiChevronLeft />
-          </button>
-          <span>
-            <FiCalendar />
-            {monthLabel(year, month)}
-          </span>
-          <button aria-label="Next month" onClick={() => shiftMonth(1)}>
-            <FiChevronRight />
-          </button>
-        </div>
+        <MonthPicker
+          value={new Date(Date.UTC(year, month - 1, 1))}
+          onChange={setSelectedMonth}
+          ariaLabel="Choose report month"
+        />
         <span className="report-note">
           Reports use new-system records only.
         </span>
@@ -381,18 +388,6 @@ function ReportsView({
           </button>
         </div>
         <div className="report-toolbar">
-          <span className="app-dropdown-host">
-            <select
-              value={year}
-              onChange={(event) => setYear(Number(event.target.value))}
-            >
-              {[year - 1, year, year + 1].map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
-          </span>
           <button onClick={downloadCsv}>
             <FiDownload />
             Export CSV / Excel
@@ -634,6 +629,7 @@ function ArchiveView({
   type,
   setType,
   upload,
+  download,
 }: {
   records: Archive[];
   total: number;
@@ -644,6 +640,7 @@ function ArchiveView({
   type: string;
   setType: (value: string) => void;
   upload: () => void;
+  download: (record: Archive) => void;
 }) {
   return (
     <>
@@ -736,7 +733,14 @@ function ArchiveView({
                 <td>{record.uploadedBy}</td>
                 <td>{formatDate(record.uploadedAt)}</td>
                 <td>
-                  <FiChevronRight />
+                  <button
+                    className="row-action archive-download"
+                    onClick={() => download(record)}
+                    title={`Download ${record.originalFilename}`}
+                    type="button"
+                  >
+                    <FiDownload />
+                  </button>
                 </td>
               </tr>
             ))}

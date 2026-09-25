@@ -130,7 +130,7 @@ export function TeacherAuth({ mode }: Props) {
         Object.entries(registrationValues).forEach(([key, value]) => { if (key !== "profilePhoto" && value) form.append(key, value); });
         if (values.profilePhoto) form.append("profilePhoto", values.profilePhoto);
         response = await fetch(`${apiBase}/api/teachers/register`, { method: "POST", body: form });
-        const data = await response.json(); if (!response.ok) throw new Error(data.error || "We could not complete that request.");
+        const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || "The TPK service could not complete that request.");
         if (data.verificationMode === "CLICK_TO_CHAT" && data.whatsappVerificationLink && data.verificationToken) {
           sessionStorage.setItem("tpk-teacher-whatsapp-verification", JSON.stringify({ link: data.whatsappVerificationLink, token: data.verificationToken }));
           window.location.assign(`/teacher/verify?mode=whatsapp&whatsappNumber=${encodeURIComponent(whatsappNumber)}`);
@@ -139,9 +139,9 @@ export function TeacherAuth({ mode }: Props) {
         window.location.assign(`/teacher/verify?whatsappNumber=${encodeURIComponent(whatsappNumber)}`);
         return;
       } else response = await fetch(`${apiBase}/api/teachers/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(login) });
-      const data = await response.json(); if (!response.ok) throw new Error(data.error || "We could not complete that request.");
+      const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || "The TPK sign-in service is temporarily unavailable.");
       saveTeacherSession({ ...data.teacher, sessionToken: data.sessionToken } as TeacherSession); window.location.assign("/account/overview");
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Please try again."); } finally { setBusy(false); }
+    } catch (reason) { const message = reason instanceof Error ? reason.message : ""; setError(/failed to fetch|load failed|networkerror/i.test(message) ? "The TPK sign-in service cannot be reached right now. Please try again shortly or contact a Super Admin." : (message || "Please try again.")); } finally { setBusy(false); }
   }
   const field = (key: keyof Values, label: string, type = "text", autoComplete?: string) => <label htmlFor={`teacher-${key}`}>{label}<input autoComplete={autoComplete} id={`teacher-${key}`} name={key} type={type} value={typeof values[key] === "string" ? values[key] : ""} onChange={(event) => update(key, event.currentTarget.value as never)} onInput={(event) => update(key, event.currentTarget.value as never)} required /></label>;
   const phoneField = (key: "whatsappNumber" | "mobileNumber", label: string, helper?: string) => <label htmlFor={`teacher-${key}`}>{label}<span className="teacher-phone-control"><select aria-label="Country code" className="teacher-country-select" defaultValue="NG"><option value="NG">NG +234</option></select><input autoComplete="tel-national" id={`teacher-${key}`} inputMode="numeric" maxLength={10} name={key} placeholder="809 866 6128" required={key === "whatsappNumber"} type="tel" value={normaliseNigerianSubscriber(values[key])} onChange={(event) => update(key, normaliseNigerianSubscriber(event.currentTarget.value))} onInput={(event) => update(key, normaliseNigerianSubscriber(event.currentTarget.value))} /></span>{helper && <small>{helper}</small>}</label>;

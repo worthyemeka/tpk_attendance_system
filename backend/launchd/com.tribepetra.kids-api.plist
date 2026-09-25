@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.tribepetra.kids-api</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Applications/MAMP/bin/php/php8.5.2/bin/php</string>
+    <string>-S</string>
+    <string>127.0.0.1:8000</string>
+    <string>-t</string>
+    <string>/Users/worthychukwuemeka/Documents/tpk_attendance_system/backend/public</string>
+    <string>/Users/worthychukwuemeka/Documents/tpk_attendance_system/backend/public/router.php</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/worthychukwuemeka/Documents/tpk_attendance_system</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/tmp/tribepetra-kids-api.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/tribepetra-kids-api-error.log</string>
+</dict>
+</plist>

@@ -4,6 +4,13 @@ $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?: '/';
 $file = __DIR__ . $path;
 if ($path !== '/' && is_file($file)) return false;
 
+// The Tailscale Funnel is an API bridge for the Vercel app, not a second
+// staff-facing site. Send anyone opening its root to the actual TPK website.
+if ($path === '/' && str_ends_with((string)($_SERVER['HTTP_HOST'] ?? ''), '.ts.net')) {
+    header('Location: https://tpk-checkin.vercel.app', true, 302);
+    exit;
+}
+
 if (str_starts_with($path, '/api/v1/public/registrations') || str_starts_with($path, '/api/v1/public/pickup-tickets/') || str_starts_with($path, '/api/v1/public/check-in-requests/') || $path === '/api/v1/public/service-session/current') {
     require __DIR__ . '/public-registration.php';
     return;

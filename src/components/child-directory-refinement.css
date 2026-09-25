@@ -1,0 +1,8 @@
+.children-directory .child-tools{grid-template-columns:minmax(280px,1.7fr) 150px 150px 155px auto;align-items:center}
+.children-directory .child-tools .app-dropdown-host{min-width:0}
+.children-directory .table-sort{display:inline-flex;align-items:center;gap:5px;margin:0;padding:0;border:0;background:transparent;color:#707b91;font:800 9px var(--font-body);letter-spacing:.5px;text-transform:uppercase;cursor:pointer}
+.children-directory .table-sort svg{width:12px;height:12px;opacity:.55;transition:transform .16s ease}.children-directory .table-sort:hover,.children-directory .table-sort.active{color:#e95231}.children-directory .table-sort.active svg{opacity:1}.children-directory .table-sort svg.desc{transform:rotate(180deg)}
+.children-directory .sex-badge{display:inline-flex;min-width:59px;justify-content:center;padding:6px 8px;border-radius:999px;font-size:9px;font-weight:900;letter-spacing:.1px}.children-directory .sex-badge.male{background:#e9f2ff;color:#2166ad}.children-directory .sex-badge.female{background:#fff0f6;color:#b23e78}
+.children-directory .visit-badge{border-radius:999px;padding:6px 9px}.children-directory .visit-badge.visit-first{background:#fff1dc;color:#a75f00}.children-directory .visit-badge.visit-returning{background:#e9f8ef;color:#087b50}
+@media(max-width:1100px){.children-directory .child-tools{grid-template-columns:1fr 1fr 1fr}.children-directory .child-search{grid-column:1/-1}}
+@media(max-width:650px){.children-directory .child-tools{grid-template-columns:1fr}.children-directory .child-search{grid-column:auto}}

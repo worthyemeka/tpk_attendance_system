@@ -16,7 +16,7 @@ export function NotificationBell({ serviceSessionId }: { serviceSessionId?:numbe
   const [open,setOpen]=useState(false); const [items,setItems]=useState<Notice[]>([]); const [read,setRead]=useState<Set<string>>(new Set()); const [loading,setLoading]=useState(false);
   useEffect(()=>setRead(readAcknowledgements()),[]);
   const load=useCallback(async()=>{if(!session)return;setLoading(true);try{const query=serviceSessionId?`?serviceSessionId=${serviceSessionId}`:"";const response=await fetch(`${apiBase}/api/v1/notifications${query}`,{headers:authHeaders(session)});const result=await response.json();if(response.ok&&result.success)setItems(result.data?.items||[]);}catch{setItems([]);}finally{setLoading(false)}},[serviceSessionId,session]);
-  useEffect(()=>{void load();const timer=window.setInterval(()=>void load(),60000);return()=>window.clearInterval(timer);},[load]);
+  useEffect(()=>{void load();const timer=window.setInterval(()=>void load(),10_000);return()=>window.clearInterval(timer);},[load]);
   useEffect(()=>{if(open)void load();},[load,open]);
   const unread=items.filter(item=>!read.has(item.id)).length;
   const saveRead=(next:Set<string>)=>{setRead(next);try{window.localStorage.setItem(storageKey,JSON.stringify([...next].slice(-100)));}catch{}};

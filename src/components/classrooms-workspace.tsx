@@ -1,0 +1,1061 @@
+"use client";
+
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  FiAlertTriangle,
+  FiArrowLeft,
+  FiCalendar,
+  FiCheckCircle,
+  FiChevronRight,
+  FiClipboard,
+  FiFileText,
+  FiFilter,
+  FiMessageCircle,
+  FiSearch,
+  FiUsers,
+} from "react-icons/fi";
+import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
+import {
+  readActiveService,
+  subscribeToActiveService,
+  type ActiveService,
+} from "@/lib/active-service";
+
+type Teacher = {
+  userId: number;
+  name: string;
+  dutyName?: string;
+  status: string;
+  profileImageUrl?: string;
+  whatsappNumber?: string;
+  mobileNumber?: string;
+};
+type Classroom = {
+  id: number;
+  name: string;
+  ageLabel?: string;
+  minAge?: number;
+  maxAge?: number;
+  registered: number;
+  present: number;
+  absent: number;
+  attendancePercentage: number;
+  teachers: Teacher[];
+  teacherCount: number;
+  attentionCount: number;
+  status: string;
+};
+type Overview = {
+  serviceSession?: { id: number; name: string; serviceDate: string } | null;
+  summary: {
+    activeClasses: number;
+    checkedIn: number;
+    teachersAssigned: number;
+    needsAttention: number;
+  };
+  items: Classroom[];
+};
+type Child = {
+  id: number;
+  firstName: string;
+  lastName: string;
+  age?: number;
+  guardianId?: number;
+  guardianName?: string;
+  guardianPhone?: string;
+  todayStatus: string;
+  assignmentStatus: string;
+  profileStatus: string;
+  joinedAt?: string;
+};
+type Detail = {
+  class: { id: number; name: string; ageLabel?: string; active: boolean };
+  serviceSession?: {
+    id: number;
+    name: string;
+    serviceDate: string;
+    serviceType: string;
+  } | null;
+  canManage: boolean;
+  isSuperAdmin: boolean;
+  teachers: Teacher[];
+  children: Child[];
+  summary: { present: number; absent: number; registered: number };
+  assignment?: {
+    id: number;
+    title: string;
+    instructions?: string;
+    dateGiven: string;
+    dueDate?: string;
+    createdBy: string;
+    submittedCount: number;
+    pendingCount: number;
+  } | null;
+  monthly: {
+    month: string;
+    sessions: { id: number; serviceDate: string }[];
+    presentByDate: Record<string, number[]>;
+  };
+  notes: { id: number; note: string; author: string; createdAt: string }[];
+};
+const initials = (name: string) =>
+  name
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+const label = (value?: string) =>
+  value
+    ?.replaceAll("_", " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase()) || "—";
+const formatDate = (value?: string) =>
+  value
+    ? new Intl.DateTimeFormat("en-NG", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      }).format(new Date(`${value.slice(0, 10)}T12:00:00`))
+    : "—";
+function useService() {
+  const [service, setService] = useState<ActiveService | null>(null);
+  useEffect(() => subscribeToActiveService(setService), []);
+  return service;
+}
+function Avatar({ teacher }: { teacher: Teacher }) {
+  return teacher.profileImageUrl ? (
+    <img className="teacher-photo" src={teacher.profileImageUrl} alt="" />
+  ) : (
+    <i className="teacher-photo">{initials(teacher.name)}</i>
+  );
+}
+function Status({ value }: { value: string }) {
+  const tone =
+    value === "RUNNING_SMOOTHLY" ||
+    value === "PRESENT" ||
+    value === "SUBMITTED" ||
+    value === "COMPLETE"
+      ? "good"
+      : value === "ABSENT" ||
+          value === "NEEDS_ATTENTION" ||
+          value === "NOT_SUBMITTED"
+        ? "warn"
+        : "quiet";
+  return (
+    <span className={`cw-status ${tone}`}>
+      {value === "RUNNING_SMOOTHLY" ||
+      value === "PRESENT" ||
+      value === "SUBMITTED" ||
+      value === "COMPLETE" ? (
+        <FiCheckCircle />
+      ) : value === "ABSENT" ||
+        value === "NEEDS_ATTENTION" ||
+        value === "NOT_SUBMITTED" ? (
+        <FiAlertTriangle />
+      ) : null}
+      {label(value)}
+    </span>
+  );
+}
+
+export function ClassroomsOverview() {
+  const session = useMemo(() => readTeacherSession(), []);
+  const service = useService();
+  const [data, setData] = useState<Overview>({
+    summary: {
+      activeClasses: 0,
+      checkedIn: 0,
+      teachersAssigned: 0,
+      needsAttention: 0,
+    },
+    items: [],
+  });
+  const [query, setQuery] = useState("");
+  const [classId, setClassId] = useState("");
+  const [status, setStatus] = useState("");
+  const [moreFilters, setMoreFilters] = useState(false);
+  const [sort, setSort] = useState("name");
+  const [loading, setLoading] = useState(true);
+  const load = useCallback(async () => {
+    if (!session) return;
+    setLoading(true);
+    try {
+      const p = new URLSearchParams();
+      if (service?.id) p.set("serviceSessionId", String(service.id));
+      if (query) p.set("search", query);
+      if (classId) p.set("classId", classId);
+      if (status) p.set("status", status);
+      const r = await fetch(`${apiBase}/api/v1/classrooms?${p}`, {
+        headers: authHeaders(session),
+      });
+      const b = await r.json();
+      if (!r.ok || !b.success)
+        throw new Error(b.error?.message || "We could not load classrooms.");
+      setData(b.data);
+    } finally {
+      setLoading(false);
+    }
+  }, [classId, query, service?.id, session, status]);
+  useEffect(() => {
+    const id = window.setTimeout(() => void load(), query ? 180 : 0);
+    return () => window.clearTimeout(id);
+  }, [load, query]);
+  const classes = useMemo(
+    () =>
+      [...data.items].sort((left, right) =>
+        sort === "attendance"
+          ? right.attendancePercentage - left.attendancePercentage
+          : left.name.localeCompare(right.name),
+      ),
+    [data.items, sort],
+  );
+  return (
+    <section className="cw-page">
+      <header className="cw-heading">
+        <div>
+          <p className="eyebrow">Petra Wuse</p>
+          <h1>Classrooms</h1>
+          <p>See attendance, children and teachers across TPK classrooms.</p>
+        </div>
+      </header>
+      <section className="cw-metrics">
+        <Metric
+          icon={<FiUsers />}
+          value={data.summary.activeClasses}
+          title="Active Classes"
+          text="Classrooms in this service"
+        />
+        <Metric
+          icon={<FiCheckCircle />}
+          value={data.summary.checkedIn}
+          title="Children Checked In"
+          text="Selected service"
+          tone="green"
+        />
+        <Metric
+          icon={<FiUsers />}
+          value={data.summary.teachersAssigned}
+          title="Teachers Assigned"
+          text="Across all classes"
+          tone="purple"
+        />
+        <Metric
+          icon={<FiAlertTriangle />}
+          value={data.summary.needsAttention}
+          title="Need Attention"
+          text="Operational items to review"
+          tone="red"
+        />
+      </section>
+      <section className="cw-tools">
+        <label>
+          <FiSearch />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search classroom, child or teacher..."
+          />
+        </label>
+        <select
+          value={classId}
+          onChange={(event) => setClassId(event.target.value)}
+        >
+          <option value="">All Classes</option>
+          {classes.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.name}
+            </option>
+          ))}
+        </select>
+        <select
+          value={status}
+          onChange={(event) => setStatus(event.target.value)}
+        >
+          <option value="">All Statuses</option>
+          <option value="RUNNING_SMOOTHLY">Running Smoothly</option>
+          <option value="NEEDS_ATTENTION">Needs Attention</option>
+          <option value="NO_TEACHER_ASSIGNED">No Teacher Assigned</option>
+        </select>
+        <button
+          onClick={() => setMoreFilters((value) => !value)}
+          aria-expanded={moreFilters}
+        >
+          <FiFilter />
+          More Filters
+        </button>
+      </section>
+      {moreFilters && (
+        <section
+          className="cw-more-filters"
+          style={{ display: "flex", alignItems: "end", gap: 10, marginTop: -8 }}
+        >
+          <label
+            style={{
+              display: "grid",
+              gap: 6,
+              color: "#53647d",
+              fontSize: 11,
+              fontWeight: 800,
+            }}
+          >
+            Sort classrooms
+            <select
+              value={sort}
+              onChange={(event) => setSort(event.target.value)}
+            >
+              <option value="name">Class name A–Z</option>
+              <option value="attendance">Highest attendance</option>
+            </select>
+          </label>
+          <button
+            onClick={() => {
+              setQuery("");
+              setClassId("");
+              setStatus("");
+              setSort("name");
+            }}
+          >
+            Clear Filters
+          </button>
+        </section>
+      )}
+      <div className="cw-list-heading">
+        <h2>Classrooms ({classes.length})</h2>
+        <span>{service?.label || "Choose a service"}</span>
+      </div>
+      {loading ? (
+        <p className="cw-empty">Loading classrooms…</p>
+      ) : (
+        <section className="class-grid">
+          {classes.map((item) => (
+            <article className="class-card" key={item.id}>
+              <header>
+                <div>
+                  <i className="class-symbol">
+                    <FiUsers />
+                  </i>
+                  <h3>{item.name}</h3>
+                  <p>{item.ageLabel || "Age range not set"}</p>
+                </div>
+                <Status value={item.status} />
+              </header>
+              <p className="teacher-heading">
+                {data.serviceSession?.serviceDate ===
+                new Date().toISOString().slice(0, 10)
+                  ? "Today’s Teachers"
+                  : "Assigned Teachers"}
+              </p>
+              <div className="teacher-strip">
+                {item.teachers.length ? (
+                  item.teachers.map((teacher) => (
+                    <span key={teacher.userId}>
+                      <Avatar teacher={teacher} />
+                      <b>{teacher.name}</b>
+                      <small>
+                        {teacher.status === "PRESENT"
+                          ? "Confirmed present"
+                          : "Not confirmed"}
+                      </small>
+                    </span>
+                  ))
+                ) : (
+                  <Link href="/account/roster" className="no-teacher">
+                    No teacher assigned <FiChevronRight />
+                  </Link>
+                )}
+              </div>
+              <div className="class-numbers">
+                <b>
+                  {item.present}
+                  <small>Present</small>
+                </b>
+                <b>
+                  {item.absent}
+                  <small>Absent</small>
+                </b>
+                <b>
+                  {item.registered}
+                  <small>Registered</small>
+                </b>
+              </div>
+              <div className="attendance-progress">
+                <i style={{ width: `${item.attendancePercentage}%` }} />
+                <span>{item.attendancePercentage}% present</span>
+              </div>
+              <footer>
+                <small>
+                  <FiCalendar />
+                  {data.serviceSession?.serviceDate
+                    ? `Service: ${formatDate(data.serviceSession.serviceDate)}`
+                    : "No selected service"}
+                </small>
+                <Link
+                  href={`/account/classrooms/${item.id}${service?.id ? `?serviceSessionId=${service.id}` : ""}`}
+                >
+                  Open Class <FiChevronRight />
+                </Link>
+              </footer>
+            </article>
+          ))}
+          {!classes.length && (
+            <p className="cw-empty">No classrooms match these filters.</p>
+          )}
+        </section>
+      )}
+      <style jsx>{styles}</style>
+    </section>
+  );
+}
+
+function Metric({
+  icon,
+  value,
+  title,
+  text,
+  tone = "orange",
+}: {
+  icon: React.ReactNode;
+  value: number;
+  title: string;
+  text: string;
+  tone?: string;
+}) {
+  return (
+    <article className={`cw-metric ${tone}`}>
+      <i>{icon}</i>
+      <b>{value}</b>
+      <strong>{title}</strong>
+      <small>{text}</small>
+    </article>
+  );
+}
+
+export function ClassroomDetail({ classId }: { classId: number }) {
+  const session = useMemo(() => readTeacherSession(), []);
+  const active = useService();
+  const [data, setData] = useState<Detail | null>(null);
+  const [tab, setTab] = useState("children");
+  const [query, setQuery] = useState("");
+  const [attendanceFilter, setAttendanceFilter] = useState("");
+  const [assignmentFilter, setAssignmentFilter] = useState("");
+  const [profileFilter, setProfileFilter] = useState("");
+  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [error, setError] = useState("");
+  const [assignmentOpen, setAssignmentOpen] = useState(false);
+  const [note, setNote] = useState("");
+  const load = useCallback(async () => {
+    if (!session) return;
+    setData(null);
+    try {
+      const p = new URLSearchParams({ month });
+      if (active?.id) p.set("serviceSessionId", String(active.id));
+      const r = await fetch(`${apiBase}/api/v1/classrooms/${classId}?${p}`, {
+        headers: authHeaders(session),
+      });
+      const b = await r.json();
+      if (!r.ok || !b.success)
+        throw new Error(
+          b.error?.message || "We could not load this classroom.",
+        );
+      setData(b.data);
+      setError("");
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "We could not load this classroom.",
+      );
+    }
+  }, [active?.id, classId, month, session]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  const updateSubmission = async (childId: number, status: string) => {
+    if (!data?.assignment || !session) return;
+    await fetch(
+      `${apiBase}/api/v1/classroom-assignments/${data.assignment.id}/children/${childId}`,
+      {
+        method: "PATCH",
+        headers: {
+          ...authHeaders(session),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status }),
+      },
+    );
+    void load();
+  };
+  const addNote = async () => {
+    if (!session || !note.trim()) return;
+    const r = await fetch(`${apiBase}/api/v1/classrooms/${classId}/notes`, {
+      method: "POST",
+      headers: { ...authHeaders(session), "Content-Type": "application/json" },
+      body: JSON.stringify({ note, serviceSessionId: active?.id }),
+    });
+    if (r.ok) {
+      setNote("");
+      void load();
+    }
+  };
+  if (error)
+    return (
+      <section className="cw-page">
+        <p className="cw-error">{error}</p>
+      </section>
+    );
+  if (!data)
+    return (
+      <section className="cw-page">
+        <p className="cw-empty">Loading classroom…</p>
+      </section>
+    );
+  const visible = data.children.filter(
+    (child) =>
+      `${child.firstName} ${child.lastName}`
+        .toLowerCase()
+        .includes(query.toLowerCase()) &&
+      (!attendanceFilter || child.todayStatus === attendanceFilter) &&
+      (!assignmentFilter || child.assignmentStatus === assignmentFilter) &&
+      (!profileFilter || child.profileStatus === profileFilter),
+  );
+  return (
+    <section className="cw-page class-detail">
+      <Link className="cw-back" href="/account/classrooms">
+        <FiArrowLeft />
+        Classrooms
+      </Link>
+      <header className="detail-header">
+        <div>
+          <p className="eyebrow">Classrooms · {data.class.name}</p>
+          <h1>{data.class.name}</h1>
+          <p>
+            {data.class.ageLabel || "Configured age range"} ·{" "}
+            {data.serviceSession?.name || "No service selected"}
+          </p>
+        </div>
+        <Status
+          value={
+            data.teachers.length ? "RUNNING_SMOOTHLY" : "NO_TEACHER_ASSIGNED"
+          }
+        />
+      </header>
+      <section className="cw-metrics detail-metrics">
+        <Metric
+          icon={<FiUsers />}
+          value={data.summary.present}
+          title="Present"
+          text="Selected service"
+          tone="green"
+        />
+        <Metric
+          icon={<FiAlertTriangle />}
+          value={data.summary.absent}
+          title="Absent"
+          text="Expected children"
+          tone="red"
+        />
+        <Metric
+          icon={<FiUsers />}
+          value={data.summary.registered}
+          title="Registered"
+          text="Children in class"
+          tone="blue"
+        />
+        {data.assignment && (
+          <>
+            <Metric
+              icon={<FiCheckCircle />}
+              value={data.assignment.submittedCount}
+              title="Submitted Assignment"
+              text="Present children"
+              tone="purple"
+            />
+            <Metric
+              icon={<FiClipboard />}
+              value={data.assignment.pendingCount}
+              title="Pending Assignment"
+              text="Needs recording"
+            />
+          </>
+        )}
+      </section>
+      <section className="assigned">
+        <header>
+          <h2>Assigned Teachers ({data.teachers.length})</h2>
+          {data.isSuperAdmin && (
+            <Link href="/account/roster">
+              Manage in Team & Roster <FiChevronRight />
+            </Link>
+          )}
+        </header>
+        <div className="teacher-cards">
+          {data.teachers.map((teacher) => (
+            <article key={teacher.userId}>
+              <Avatar teacher={teacher} />
+              <div>
+                <b>{teacher.name}</b>
+                <small>{teacher.dutyName || "Class teacher"}</small>
+                {teacher.whatsappNumber && (
+                  <small>{teacher.whatsappNumber}</small>
+                )}
+              </div>
+              <Status
+                value={
+                  teacher.status === "PRESENT" ? "PRESENT" : "NOT_CONFIRMED"
+                }
+              />
+            </article>
+          ))}
+          {!data.teachers.length && (
+            <p>
+              No teacher has been assigned for this service.{" "}
+              <Link href="/account/roster">Open Team & Roster</Link>
+            </p>
+          )}
+        </div>
+      </section>
+      <nav className="class-tabs">
+        {[
+          ["children", `Children (${data.children.length})`],
+          ["attendance", "Attendance"],
+          ["assignments", "Assignments"],
+          ["notes", "Notes"],
+          ["details", "Class Details"],
+        ].map(([id, title]) => (
+          <button
+            key={id}
+            className={tab === id ? "selected" : ""}
+            onClick={() => setTab(id)}
+          >
+            {title}
+          </button>
+        ))}
+      </nav>
+      {tab === "children" && (
+        <section>
+          <div className="detail-tools">
+            <label>
+              <FiSearch />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search child by name..."
+              />
+            </label>
+            <select
+              value={attendanceFilter}
+              onChange={(event) => setAttendanceFilter(event.target.value)}
+            >
+              <option value="">All Attendance</option>
+              <option value="PRESENT">Present</option>
+              <option value="ABSENT">Absent</option>
+            </select>
+            <select
+              value={assignmentFilter}
+              onChange={(event) => setAssignmentFilter(event.target.value)}
+            >
+              <option value="">All Assignment Status</option>
+              <option value="SUBMITTED">Submitted</option>
+              <option value="NOT_SUBMITTED">Not Submitted</option>
+              <option value="EXCUSED">Excused</option>
+              <option value="NOT_IN_CLASS">Not in class</option>
+            </select>
+            <select
+              value={profileFilter}
+              onChange={(event) => setProfileFilter(event.target.value)}
+            >
+              <option value="">All Profile Status</option>
+              <option value="COMPLETE">Complete</option>
+              <option value="NEEDS_INFO">Needs Info</option>
+            </select>
+            {data.canManage && (
+              <button
+                className="primary"
+                onClick={() => setAssignmentOpen(true)}
+              >
+                Add Assignment
+              </button>
+            )}
+          </div>
+          <ChildrenTable
+            rows={visible}
+            assignment={Boolean(data.assignment)}
+            onSubmission={updateSubmission}
+          />
+        </section>
+      )}
+      {tab === "attendance" && (
+        <Attendance data={data} month={month} setMonth={setMonth} />
+      )}{" "}
+      {tab === "assignments" && (
+        <Assignments
+          data={data}
+          onNew={() => setAssignmentOpen(true)}
+          onSubmission={updateSubmission}
+        />
+      )}{" "}
+      {tab === "notes" && (
+        <section className="notes-panel">
+          {data.canManage && (
+            <>
+              <textarea
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                placeholder="Add a useful operational class note..."
+              />
+              <button className="primary" onClick={addNote}>
+                Save Note
+              </button>
+            </>
+          )}
+          {data.notes.map((item) => (
+            <article key={item.id}>
+              <b>{item.author}</b>
+              <small>{formatDate(item.createdAt)}</small>
+              <p>{item.note}</p>
+            </article>
+          ))}
+          {!data.notes.length && (
+            <p className="cw-empty">No class notes yet.</p>
+          )}
+        </section>
+      )}
+      {tab === "details" && (
+        <section className="class-info">
+          <p>
+            <b>Class</b>
+            {data.class.name}
+          </p>
+          <p>
+            <b>Age range</b>
+            {data.class.ageLabel || "Not configured"}
+          </p>
+          <p>
+            <b>Status</b>
+            {data.class.active ? "Active" : "Inactive"}
+          </p>
+          <p>
+            <b>Registered children</b>
+            {data.summary.registered}
+          </p>
+          {data.isSuperAdmin && (
+            <Link href="/account/classes">
+              Manage Class Configuration <FiChevronRight />
+            </Link>
+          )}
+        </section>
+      )}
+      {assignmentOpen && (
+        <AssignmentForm
+          classId={classId}
+          serviceId={active?.id}
+          close={() => setAssignmentOpen(false)}
+          done={() => {
+            setAssignmentOpen(false);
+            void load();
+          }}
+        />
+      )}
+      <style jsx>{styles}</style>
+    </section>
+  );
+}
+
+function ChildrenTable({
+  rows,
+  assignment,
+  onSubmission,
+}: {
+  rows: Child[];
+  assignment: boolean;
+  onSubmission: (id: number, status: string) => void;
+}) {
+  return (
+    <div className="cw-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Child</th>
+            <th>Age</th>
+            <th>Guardian</th>
+            <th>Today</th>
+            <th>Assignment</th>
+            <th>Profile</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((child) => (
+            <tr key={child.id}>
+              <td>
+                <Link href={`/account/children?childId=${child.id}`}>
+                  <b>
+                    {child.firstName} {child.lastName}
+                  </b>
+                </Link>
+              </td>
+              <td>{child.age ?? "—"}</td>
+              <td>
+                {child.guardianId ? (
+                  <Link
+                    href={`/account/guardians?guardianId=${child.guardianId}`}
+                  >
+                    {child.guardianName}
+                    <small>{child.guardianPhone}</small>
+                  </Link>
+                ) : (
+                  "—"
+                )}
+              </td>
+              <td>
+                <Status value={child.todayStatus} />
+              </td>
+              <td>
+                {assignment ? <Status value={child.assignmentStatus} /> : "—"}
+              </td>
+              <td>
+                <Status value={child.profileStatus} />
+              </td>
+              <td>
+                {assignment && child.todayStatus === "PRESENT" ? (
+                  <select
+                    value={child.assignmentStatus}
+                    onChange={(event) =>
+                      onSubmission(child.id, event.target.value)
+                    }
+                  >
+                    <option value="NOT_SUBMITTED">Not Submitted</option>
+                    <option value="SUBMITTED">Submitted</option>
+                    <option value="EXCUSED">Excused</option>
+                  </select>
+                ) : (
+                  <Link href={`/account/children?childId=${child.id}`}>
+                    <FiChevronRight />
+                  </Link>
+                )}
+              </td>
+            </tr>
+          ))}
+          {!rows.length && (
+            <tr>
+              <td colSpan={7} className="cw-empty">
+                No children match this filter.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+function Attendance({
+  data,
+  month,
+  setMonth,
+}: {
+  data: Detail;
+  month: string;
+  setMonth: (value: string) => void;
+}) {
+  return (
+    <section className="attendance-view">
+      <header>
+        <div>
+          <h2>Attendance</h2>
+          <p>
+            {data.summary.present} present · {data.summary.absent} absent for
+            the selected service.
+          </p>
+        </div>
+        <input
+          type="month"
+          value={month}
+          onChange={(event) => setMonth(event.target.value)}
+        />
+      </header>
+      <div className="cw-table matrix">
+        <table>
+          <thead>
+            <tr>
+              <th>Child</th>
+              {data.monthly.sessions.map((item) => (
+                <th key={item.id}>
+                  Sun<small>{formatDate(item.serviceDate)}</small>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {data.children.map((child) => (
+              <tr key={child.id}>
+                <td>
+                  {child.firstName} {child.lastName}
+                </td>
+                {data.monthly.sessions.map((week) => {
+                  const notExpected = Boolean(
+                    child.joinedAt && child.joinedAt > week.serviceDate,
+                  );
+                  return (
+                    <td key={week.id}>
+                      {notExpected ? (
+                        <span>—</span>
+                      ) : (
+                        <Status
+                          value={
+                            data.monthly.presentByDate[
+                              week.serviceDate
+                            ]?.includes(child.id)
+                              ? "PRESENT"
+                              : "ABSENT"
+                          }
+                        />
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+function Assignments({
+  data,
+  onNew,
+  onSubmission,
+}: {
+  data: Detail;
+  onNew: () => void;
+  onSubmission: (id: number, status: string) => void;
+}) {
+  return (
+    <section className="assignment-panel">
+      {data.assignment ? (
+        <>
+          <header>
+            <div>
+              <h2>{data.assignment.title}</h2>
+              <p>
+                Given {formatDate(data.assignment.dateGiven)} ·{" "}
+                {data.assignment.createdBy}
+              </p>
+            </div>
+            <Status value="SUBMITTED" />
+          </header>
+          <p>{data.assignment.instructions || "No additional instructions."}</p>
+          <p>
+            <b>{data.assignment.submittedCount} submitted</b> ·{" "}
+            {data.assignment.pendingCount} pending
+          </p>
+          <ChildrenTable
+            rows={data.children}
+            assignment
+            onSubmission={onSubmission}
+          />
+        </>
+      ) : (
+        <div className="cw-empty">
+          <FiClipboard />
+          <b>No assignment for this service</b>
+          <span>
+            Assignments only appear when a teacher records one for this
+            classroom.
+          </span>
+          <button className="primary" onClick={onNew}>
+            Add Assignment
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+function AssignmentForm({
+  classId,
+  serviceId,
+  close,
+  done,
+}: {
+  classId: number;
+  serviceId?: number;
+  close: () => void;
+  done: () => void;
+}) {
+  const session = useMemo(() => readTeacherSession(), []);
+  const [title, setTitle] = useState("");
+  const [instructions, setInstructions] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [error, setError] = useState("");
+  const submit = async () => {
+    if (!session) return;
+    const r = await fetch(
+      `${apiBase}/api/v1/classrooms/${classId}/assignments`,
+      {
+        method: "POST",
+        headers: {
+          ...authHeaders(session),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          serviceSessionId: serviceId,
+          title,
+          instructions,
+          dueDate,
+        }),
+      },
+    );
+    const b = await r.json();
+    if (!r.ok || !b.success) {
+      setError(b.error?.message || "We could not create this assignment.");
+      return;
+    }
+    done();
+  };
+  return (
+    <div className="cw-modal">
+      <section>
+        <button className="modal-close" onClick={close}>
+          ×
+        </button>
+        <p className="eyebrow">Class Assignment</p>
+        <h2>Add Assignment</h2>
+        <label>
+          Assignment Title
+          <input
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder="e.g. Memory Verse: Matthew 5:16"
+          />
+        </label>
+        <label>
+          Instructions
+          <textarea
+            value={instructions}
+            onChange={(event) => setInstructions(event.target.value)}
+            placeholder="Short instructions for the class..."
+          />
+        </label>
+        <label>
+          Due Date <small>(optional)</small>
+          <input
+            type="date"
+            value={dueDate}
+            onChange={(event) => setDueDate(event.target.value)}
+          />
+        </label>
+        {error && <p className="cw-error">{error}</p>}
+        <footer>
+          <button onClick={close}>Cancel</button>
+          <button className="primary" onClick={submit}>
+            Create Assignment
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
+const styles = `.cw-page{max-width:1260px;padding-top:16px}.cw-heading{margin-bottom:17px}.eyebrow{color:#ff5938;font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase}.cw-page h1,.cw-page h2,.cw-page h3{font-family:var(--font-display,Georgia,serif);color:#101d3b}.cw-page h1{margin:5px 0;font-size:37px;letter-spacing:-1.2px}.cw-heading>div>p:last-child,.detail-header p{margin:0;color:#617493;font-size:15px}.cw-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:19px 0}.cw-metric{min-height:104px;padding:17px;border:1px solid #f0e6df;border-radius:10px;background:#fff5f1;display:grid;grid-template-columns:51px 1fr;grid-template-rows:30px 20px 18px}.cw-metric>i{grid-row:1/4;width:43px;height:43px;border-radius:10px;background:#ffe2db;color:#ff5938;display:grid;place-items:center;font-size:22px}.cw-metric b{font:700 28px Georgia,serif}.cw-metric strong{font-size:12px}.cw-metric small{color:#70809a;font-size:10px}.cw-metric.green{background:#effbf4}.cw-metric.green>i{background:#d7f6e3;color:#009653}.cw-metric.purple{background:#f5f0ff}.cw-metric.purple>i{background:#e7dcff;color:#7440e8}.cw-metric.red{background:#fff1ee}.cw-metric.red>i{background:#ffdcd7;color:#f04d35}.cw-metric.blue{background:#edf6ff}.cw-metric.blue>i{background:#dceeff;color:#1576d2}.cw-tools,.detail-tools{display:grid;grid-template-columns:minmax(250px,1.7fr) 180px 180px auto;gap:10px;margin:18px 0}.cw-tools label,.detail-tools label{height:41px;border:1px solid #dbe1eb;border-radius:8px;background:#fff;display:flex;align-items:center;gap:9px;padding:0 12px;color:#6580a3}.cw-tools input,.detail-tools input{min-width:0;width:100%;border:0;outline:0;background:transparent;font:12px var(--font-body)}.cw-tools select,.detail-tools select,.cw-table select{height:41px;border:1px solid #dbe1eb;border-radius:8px;background:#fff;padding:0 10px;color:#1a2c4a;font:700 11px var(--font-body)}.cw-tools button,.detail-tools button{height:41px;border:1px solid #dbe1eb;border-radius:8px;background:#fff;padding:0 13px;font:800 11px var(--font-body);display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer}.cw-list-heading{display:flex;align-items:center;justify-content:space-between;margin-top:24px}.cw-list-heading h2{font-size:22px;margin:0}.cw-list-heading span{color:#5d6e89;font-size:11px}.class-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px;margin-top:15px}.class-card{min-height:270px;border:1px solid #e1e4e9;border-radius:10px;background:#fff;padding:16px;display:flex;flex-direction:column}.class-card>header{display:flex;justify-content:space-between;gap:10px}.class-card>header>div{display:grid;grid-template-columns:47px 1fr;column-gap:10px}.class-symbol{grid-row:1/3;width:45px;height:45px;border-radius:11px;display:grid;place-items:center;background:#fbe5f6;color:#d336a7;font-size:21px}.class-card h3{margin:2px 0 3px;font-size:18px}.class-card header p{margin:0;color:#6d7e99;font-size:11px}.cw-status{width:max-content;max-width:100%;display:inline-flex;align-items:center;gap:4px;border-radius:6px;padding:5px 8px;font-size:10px;font-weight:900;white-space:nowrap}.cw-status.good{background:#e6f8ec;color:#07844f}.cw-status.warn{background:#fff0e8;color:#d85332}.cw-status.quiet{background:#eff2f7;color:#5e6d85}.teacher-heading{margin:17px 0 8px;color:#1b2b49;font-size:11px;font-weight:900}.teacher-strip{display:flex;gap:9px;min-height:46px;flex-wrap:wrap}.teacher-strip>span{display:grid;grid-template-columns:31px auto;column-gap:6px;min-width:105px}.teacher-strip b{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.teacher-strip small{grid-column:2;color:#71809a;font-size:9px}.teacher-photo{width:31px;height:31px;border-radius:50%;object-fit:cover;background:#e9effa;color:#2d67a7;display:grid;place-items:center;font-size:9px;font-style:normal;font-weight:900}.no-teacher{font-size:10px;color:#d64e32;text-decoration:none;display:flex;gap:4px;align-items:center}.class-numbers{display:grid;grid-template-columns:repeat(3,1fr);margin:14px 0}.class-numbers b{font:700 21px Georgia,serif}.class-numbers small{display:block;color:#71809a;font:600 10px var(--font-body)}.attendance-progress{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;font-size:10px;font-weight:800;color:#18345e}.attendance-progress:before{content:"";grid-area:1/1;height:9px;border-radius:99px;background:#e8edf3}.attendance-progress i{grid-area:1/1;height:9px;border-radius:99px;background:#00af65;z-index:1}.attendance-progress span{grid-area:1/2}.class-card footer{display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:13px;border-top:1px solid #edf0f3}.class-card footer small{display:flex;align-items:center;gap:5px;color:#71809a;font-size:9px}.class-card footer a,.assigned header a,.class-info a{border:1px solid #dce2eb;border-radius:7px;padding:8px 10px;color:#075dd3;text-decoration:none;font-size:10px;font-weight:900;display:flex;align-items:center;gap:4px}.cw-empty{min-height:90px;display:grid;place-items:center;gap:6px;color:#74829a;font-size:12px;text-align:center}.cw-empty b{color:#1d2f4c}.cw-error{padding:13px;border-radius:8px;background:#fff0ed;color:#c6452d}.cw-back{display:inline-flex;align-items:center;gap:7px;color:#476187;text-decoration:none;font-size:11px;font-weight:800}.detail-header{display:flex;align-items:center;justify-content:space-between;margin:10px 0 14px}.detail-header h1{margin:4px 0}.detail-metrics{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}.assigned{padding:15px;border:1px solid #e1e4e9;border-radius:10px;background:#fff}.assigned header{display:flex;align-items:center;justify-content:space-between;gap:10px}.assigned h2{margin:0;font-size:19px}.teacher-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px}.teacher-cards article{min-height:78px;padding:12px;border:1px solid #e1e5eb;border-radius:8px;display:flex;align-items:flex-start;gap:9px}.teacher-cards article>div{min-width:0;flex:1;display:grid;gap:4px}.teacher-cards b{font-size:11px}.teacher-cards small{overflow:hidden;color:#70809a;font-size:9px;text-overflow:ellipsis;white-space:nowrap}.teacher-cards p{margin:0;color:#6f7f97;font-size:11px}.teacher-cards p a{color:#075dd3}.class-tabs{display:flex;gap:5px;margin-top:20px;border-bottom:1px solid #e2e6eb;overflow:auto}.class-tabs button{flex:none;border:0;border-bottom:2px solid transparent;background:transparent;padding:11px 14px;color:#64738c;font:800 11px var(--font-body);cursor:pointer}.class-tabs button.selected{border-color:#ff5938;color:#142543}.detail-tools{grid-template-columns:minmax(220px,1.5fr) repeat(3,170px) auto}.primary{border-color:#ff5938!important;background:#ff5938!important;color:#fff!important}.cw-table{overflow:auto;border:1px solid #e0e4ea;border-radius:9px;background:#fff}.cw-table table{width:100%;border-collapse:collapse;min-width:720px}.cw-table th{padding:11px;text-align:left;background:#fbfaf7;color:#73819a;font-size:9px;text-transform:uppercase;letter-spacing:.05em}.cw-table td{padding:11px;border-top:1px solid #ebedf0;color:#203451;font-size:11px}.cw-table td a{color:#153d86;text-decoration:none}.cw-table td small{display:block;color:#71809b;font-size:9px;margin-top:3px}.cw-table select{height:31px;font-size:10px}.attendance-view>header,.assignment-panel>header{display:flex;justify-content:space-between;align-items:center;padding:16px 0}.attendance-view h2,.assignment-panel h2{margin:0;font-size:21px}.attendance-view p,.assignment-panel p{color:#697a95;font-size:12px}.attendance-view input{height:38px;border:1px solid #dbe1eb;border-radius:7px;padding:0 9px;font:11px var(--font-body)}.matrix th small{display:block;margin-top:3px;font-size:8px}.notes-panel{display:grid;gap:10px;padding:16px 0}.notes-panel textarea{min-height:90px;border:1px solid #dce1e8;border-radius:8px;padding:11px;font:12px var(--font-body);resize:vertical}.notes-panel article{padding:13px;border:1px solid #e2e5ea;border-radius:8px;background:#fff}.notes-panel article small{margin-left:8px;color:#75829a;font-size:9px}.notes-panel article p{margin:7px 0 0;color:#586a85;font-size:12px;white-space:pre-wrap}.class-info{display:grid;gap:10px;padding:17px 0}.class-info p{display:grid;gap:3px;margin:0;color:#677995;font-size:12px}.class-info b{color:#182b48}.assignment-panel{padding:5px 0}.assignment-panel>header{padding-bottom:8px}.cw-modal{position:fixed;z-index:99;inset:0;background:#0a173a77;display:grid;place-items:center;padding:20px}.cw-modal>section{position:relative;width:min(100%,510px);padding:25px;border-radius:12px;background:#fffdfa;box-shadow:0 20px 60px #101c373d;display:grid;gap:12px}.cw-modal h2{margin:0;font:700 26px Georgia,serif}.cw-modal label{display:grid;gap:6px;color:#33445f;font-size:11px;font-weight:800}.cw-modal input,.cw-modal textarea{border:1px solid #dce2eb;border-radius:8px;padding:10px;font:12px var(--font-body)}.cw-modal textarea{min-height:90px;resize:vertical}.modal-close{position:absolute;top:12px;right:14px;border:0;background:none;font-size:23px;cursor:pointer}.cw-modal footer{display:flex;justify-content:flex-end;gap:9px}.cw-modal footer button{height:40px;border:1px solid #dce2eb;border-radius:8px;padding:0 14px;background:#fff;font:800 11px var(--font-body);cursor:pointer}@media(max-width:1100px){.cw-metrics{grid-template-columns:repeat(2,1fr)}.class-grid{grid-template-columns:1fr}.cw-tools,.detail-tools{grid-template-columns:1fr 1fr}.cw-tools label,.detail-tools label{grid-column:1/-1}.teacher-cards{grid-template-columns:1fr 1fr}}@media(max-width:650px){.cw-page{padding-top:0}.cw-page h1{font-size:31px}.cw-metrics,.cw-tools,.detail-tools,.teacher-cards{grid-template-columns:1fr}.cw-tools label,.detail-tools label{grid-column:auto}.cw-list-heading{align-items:flex-start;gap:7px;flex-direction:column}.class-card{min-height:285px}.detail-header{align-items:flex-start;gap:10px;flex-direction:column}.assigned header{align-items:flex-start;flex-direction:column}.class-tabs button{padding:11px 9px;font-size:10px}.cw-modal{align-items:end;padding:0}.cw-modal>section{width:100%;border-radius:14px 14px 0 0}.teacher-cards article{min-width:0}}`;

@@ -115,7 +115,7 @@ function public_registration(PDO $db): never {
             $duplicate = $db->prepare('SELECT id FROM children WHERE family_id=? AND first_name=? AND last_name=? AND date_of_birth=? LIMIT 1'); $duplicate->execute([$familyId,$first,$last,$dob]);
             if ($duplicate->fetchColumn()) public_error('DUPLICATE_CHILD', "$first $last is already registered for this family.", 409);
             $classId = public_class_for_child($db, (int)$campus['id'], $dob);
-            $db->prepare('INSERT INTO children(family_id,class_id,first_name,last_name,date_of_birth,gender,medical_notes,is_active,is_first_visit,class_assignment_required,source_system,source_record_key) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)')->execute([$familyId,$classId,$first,$last,$dob,$gender,null,1,1,$classId ? 0 : 1,'public-parent-registration',date('c') . ':child:' . $index]);
+            $db->prepare('INSERT INTO children(family_id,class_id,first_name,last_name,date_of_birth,gender,medical_notes,joined_at,is_active,is_first_visit,class_assignment_required,source_system,source_record_key) VALUES(?,?,?,?,?,?,?,CURDATE(),?,?,?,?,?)')->execute([$familyId,$classId,$first,$last,$dob,$gender,null,1,1,$classId ? 0 : 1,'public-parent-registration',date('c') . ':child:' . $index]);
             $childId = (int)$db->lastInsertId();
             $db->prepare('INSERT INTO child_guardians(child_id,guardian_id,relationship,is_primary,authorised_pickup) VALUES(?,?,?,?,?)')->execute([$childId,$guardianId,public_name($guardian['relationship']),1,1]);
             $care = trim((string)($child['careInformation'] ?? ''));
