@@ -16,6 +16,7 @@ import {
   FiX,
 } from "react-icons/fi";
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
+import { printBrandedDocument } from "@/lib/branded-print";
 import { MonthPicker } from "@/components/month-picker";
 
 type Summary = {
@@ -51,16 +52,6 @@ type Report = {
     total: number;
   }[];
   attendanceByClass: { className: string; attendance: number }[];
-};
-type MonthRow = {
-  year: number;
-  month: number;
-  monthLabel: string;
-  sundays: number;
-  available: boolean;
-  attendance: number;
-  firstTimeVisits: number;
-  followUps: number;
 };
 type Archive = {
   id: number;
@@ -106,7 +97,6 @@ export function ReportsWorkspace() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [report, setReport] = useState<Report | null>(null);
-  const [months, setMonths] = useState<MonthRow[]>([]);
   const [archive, setArchive] = useState<Archive[]>([]);
   const [archiveTotal, setArchiveTotal] = useState(0);
   const [archiveSearch, setArchiveSearch] = useState("");
@@ -133,7 +123,6 @@ export function ReportsWorkspace() {
           body.error?.message || "We could not load the monthly report.",
         );
       setReport(body.data.selected);
-      setMonths(body.data.months || []);
       setError("");
     } catch (caught) {
       setError(
@@ -189,6 +178,17 @@ export function ReportsWorkspace() {
       ["First-time visits", report.summary.firstTimeVisits],
       ["Families contacted", report.summary.followUps],
       ["Safe pickups", `${report.summary.safePickupRate}%`],
+      ["First service attendance", report.summary.firstServiceAttendance],
+      ["Second service attendance", report.summary.secondServiceAttendance],
+      ["Average Sunday attendance", report.summary.averageSundayAttendance],
+      ["New registrations", report.summary.newRegistrations],
+      ["Active children", report.summary.activeChildren],
+      ["Complete profiles", report.summary.completeProfiles],
+      ["Families needing follow-up", report.summary.familiesNeedFollowUp],
+      ["Could not reach", report.summary.couldntReach],
+      ["Resolved follow-ups", report.summary.resolved],
+      ["Escalated to leadership", report.summary.escalated],
+      ["Completed pickups", report.summary.completedPickups],
       [],
       ["Sunday", "First Service", "Second Service", "Total"],
       ...report.attendanceBySunday.map((row) => [
@@ -208,6 +208,66 @@ export function ReportsWorkspace() {
     link.download = `tpk-${report.monthLabel.toLowerCase().replaceAll(" ", "-")}-report.csv`;
     link.click();
     URL.revokeObjectURL(url);
+  };
+  const downloadPdf = () => {
+    if (!report) return;
+    const s = report.summary;
+    printBrandedDocument({
+      eyebrow: "Monthly ministry report",
+      title: report.monthLabel,
+      subtitle:
+        "A detailed summary of attendance, families, follow-up and safe pickup records.",
+      stats: [
+        {
+          label: "Children attended",
+          value: s.childrenAttended,
+          note: `${s.sundays} Sunday${s.sundays === 1 ? "" : "s"}`,
+        },
+        { label: "First-time visits", value: s.firstTimeVisits },
+        { label: "Families contacted", value: s.familiesContacted },
+        { label: "Safe pickups", value: `${s.safePickupRate}%` },
+      ],
+      columns: ["Sunday", "First Service", "Second Service", "Total"],
+      rows: report.attendanceBySunday.map((row) => [
+        formatDate(row.serviceDate),
+        row.firstService,
+        row.secondService,
+        row.total,
+      ]),
+      sections: [
+        {
+          title: "Children and attendance",
+          rows: [
+            {
+              label: "Average Sunday attendance",
+              value: s.averageSundayAttendance,
+            },
+            { label: "New registrations", value: s.newRegistrations },
+            { label: "Active children", value: s.activeChildren },
+            { label: "Complete child profiles", value: s.completeProfiles },
+          ],
+        },
+        {
+          title: "Follow-up and pickups",
+          rows: [
+            {
+              label: "Families needing follow-up",
+              value: s.familiesNeedFollowUp,
+            },
+            { label: "Couldn't reach", value: s.couldntReach },
+            { label: "Resolved", value: s.resolved },
+            { label: "Completed pickups", value: s.completedPickups },
+          ],
+        },
+        {
+          title: "Attendance by class",
+          rows: report.attendanceByClass.map((row) => ({
+            label: row.className,
+            value: row.attendance,
+          })),
+        },
+      ],
+    });
   };
   const downloadArchive = async (record: Archive) => {
     if (!session) return;
@@ -259,7 +319,6 @@ export function ReportsWorkspace() {
       {tab === "reports" ? (
         <ReportsView
           report={report}
-          months={months}
           year={year}
           month={month}
           setSelectedMonth={setSelectedMonth}
@@ -268,6 +327,7 @@ export function ReportsWorkspace() {
             setDrawer(true);
           }}
           downloadCsv={downloadCsv}
+          downloadPdf={downloadPdf}
         />
       ) : (
         <ArchiveView
@@ -291,6 +351,7 @@ export function ReportsWorkspace() {
           setTab={setDrawerTab}
           close={() => setDrawer(false)}
           downloadCsv={downloadCsv}
+          downloadPdf={downloadPdf}
         />
       )}{" "}
       {uploadOpen && (
@@ -311,20 +372,20 @@ export function ReportsWorkspace() {
 
 function ReportsView({
   report,
-  months,
   year,
   month,
   setSelectedMonth,
   openDrawer,
   downloadCsv,
+  downloadPdf,
 }: {
   report: Report | null;
-  months: MonthRow[];
   year: number;
   month: number;
   setSelectedMonth: (value: Date) => void;
   openDrawer: () => void;
   downloadCsv: () => void;
+  downloadPdf: () => void;
 }) {
   const summary = report?.summary;
   return (
@@ -388,6 +449,10 @@ function ReportsView({
           </button>
         </div>
         <div className="report-toolbar">
+          <button onClick={downloadPdf} disabled={!report}>
+            <FiFileText />
+            Detailed PDF
+          </button>
           <button onClick={downloadCsv}>
             <FiDownload />
             Export CSV / Excel
@@ -407,39 +472,39 @@ function ReportsView({
               </tr>
             </thead>
             <tbody>
-              {months.map((row) => (
-                <tr key={row.month}>
+              {report ? (
+                <tr>
                   <td>
-                    <b>{row.monthLabel}</b>
+                    <b>{report.monthLabel}</b>
                   </td>
-                  <td>{row.available ? row.sundays : "—"}</td>
-                  <td>{row.available ? row.attendance : "—"}</td>
-                  <td>{row.available ? row.firstTimeVisits : "—"}</td>
-                  <td>{row.available ? row.followUps : "—"}</td>
+                  <td>{report.summary.sundays}</td>
+                  <td>{report.summary.childrenAttended}</td>
+                  <td>{report.summary.firstTimeVisits}</td>
+                  <td>{report.summary.followUps}</td>
                   <td>
                     <span
                       className={
-                        row.available ? "status in-progress" : "status empty"
+                        report.status === "IN_PROGRESS"
+                          ? "status in-progress"
+                          : "status complete"
                       }
                     >
-                      {row.available
-                        ? row.month === month
-                          ? "In Progress"
-                          : "Complete"
-                        : "No Data"}
+                      {report.status === "IN_PROGRESS"
+                        ? "In Progress"
+                        : "Complete"}
                     </span>
                   </td>
                   <td>
-                    {row.available && row.month === month ? (
-                      <button className="row-action" onClick={openDrawer}>
-                        <FiChevronRight />
-                      </button>
-                    ) : (
-                      "—"
-                    )}
+                    <button className="row-action" onClick={openDrawer}>
+                      <FiChevronRight />
+                    </button>
                   </td>
                 </tr>
-              ))}
+              ) : (
+                <tr>
+                  <td colSpan={7}>Loading selected month…</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -475,6 +540,7 @@ function ReportDrawer({
   setTab,
   close,
   downloadCsv,
+  downloadPdf,
 }: {
   report: Report;
   tab: "overview" | "attendance" | "children" | "followup" | "pickup";
@@ -483,6 +549,7 @@ function ReportDrawer({
   ) => void;
   close: () => void;
   downloadCsv: () => void;
+  downloadPdf: () => void;
 }) {
   const s = report.summary;
   return (
@@ -602,7 +669,7 @@ function ReportDrawer({
           </section>
         )}
         <footer>
-          <button onClick={() => window.print()}>Download as PDF</button>
+          <button onClick={downloadPdf}>Download detailed PDF</button>
           <button className="export" onClick={downloadCsv}>
             Download as CSV / Excel <FiChevronDown />
           </button>

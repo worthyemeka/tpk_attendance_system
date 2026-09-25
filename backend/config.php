@@ -99,7 +99,7 @@ function tpk_whatsapp_env(string $name): string {
     return (string)(getenv('WHATSAPP_' . $name) ?: getenv($legacy) ?: '');
 }
 
-function tpk_send_meta_whatsapp_template(string $number, string $template, string $language, array $bodyParameters): void {
+function tpk_send_meta_whatsapp_template(string $number, string $template, string $language, array $bodyParameters): string {
     $token = tpk_whatsapp_env('ACCESS_TOKEN');
     $phoneNumberId = tpk_whatsapp_env('PHONE_NUMBER_ID');
     if (!$token || !$phoneNumberId) throw new RuntimeException('WhatsApp verification is not configured.');
@@ -114,6 +114,8 @@ function tpk_send_meta_whatsapp_template(string $number, string $template, strin
         $detail = json_decode((string)$response, true)['error']['message'] ?? 'The WhatsApp message could not be sent.';
         throw new RuntimeException($detail);
     }
+    $decoded = json_decode((string)$response, true);
+    return (string)($decoded['messages'][0]['id'] ?? 'accepted');
 }
 
 function tpk_whatsapp_is_configured(): bool {
@@ -122,6 +124,28 @@ function tpk_whatsapp_is_configured(): bool {
 
 function tpk_send_whatsapp_verification(string $number, string $name, string $code): void {
     tpk_send_meta_whatsapp_template($number, getenv('WHATSAPP_VERIFICATION_TEMPLATE') ?: 'teacher_verification_code', getenv('WHATSAPP_VERIFICATION_LANGUAGE') ?: 'en_US', [$name, $code]);
+}
+
+/**
+ * Monthly roster notifications are sent as an approved WhatsApp template.
+ * The template body must contain these four variables in order:
+ * teacher name, month label, concise assignment summary, roster URL.
+ */
+function tpk_roster_whatsapp_template_configured(): bool {
+    return tpk_whatsapp_is_configured() && trim((string)getenv('WHATSAPP_ROSTER_PUBLISHED_TEMPLATE')) !== '';
+}
+
+function tpk_send_roster_whatsapp(string $number, string $teacherName, string $monthLabel, string $assignmentSummary, string $rosterUrl): string {
+    $template = trim((string)getenv('WHATSAPP_ROSTER_PUBLISHED_TEMPLATE'));
+    if (!tpk_roster_whatsapp_template_configured()) {
+        throw new RuntimeException('The WhatsApp roster-published template is not configured.');
+    }
+    return tpk_send_meta_whatsapp_template(
+        $number,
+        $template,
+        trim((string)getenv('WHATSAPP_ROSTER_PUBLISHED_LANGUAGE')) ?: 'en_US',
+        [$teacherName, $monthLabel, $assignmentSummary, $rosterUrl],
+    );
 }
 
 /**

@@ -2,27 +2,524 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { FiCheckCircle, FiChevronRight, FiClock, FiUsers } from "react-icons/fi";
+import {
+  FiCheckCircle,
+  FiChevronRight,
+  FiClock,
+  FiUsers,
+} from "react-icons/fi";
 import { QuickActions } from "@/components/quick-actions";
 import { UserGreeting } from "@/components/user-greeting";
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
 import { subscribeToActiveService } from "@/lib/active-service";
+import "./overview-team.css";
 
-type DashboardClass = { id: number; name: string; ageLabel: string; checkedIn: number; total: number };
-type Attention = { type: string; severity: string; message: string; actionLabel: string; actionDestination: string };
-type Dashboard = { serviceSession: { serviceType?: string; name?: string } | null; metrics: { checkedIn: number; pickedUp: number; stillPresent: number; activeClasses: number }; classes: DashboardClass[]; personalAssignment: { assignmentDate: string; dutyName: string; className?: string; serviceName?: string } | null; todayTeam: { serviceType: string; assigned: number; present: number; notConfirmed: number }[]; needsAttention: Attention[]; childrenRelations: { total: number; contacted: number; pending: number }; upcomingRoster: { assignmentDate: string; serviceSessionId: number; duties: number; filled: number }[] };
-const empty: Dashboard = { serviceSession: null, metrics: { checkedIn: 0, pickedUp: 0, stillPresent: 0, activeClasses: 0 }, classes: [], personalAssignment: null, todayTeam: [], needsAttention: [], childrenRelations: { total: 0, contacted: 0, pending: 0 }, upcomingRoster: [] };
-export default function AccountOverview() {
-  const session = readTeacherSession(); const [dashboard, setDashboard] = useState<Dashboard>(empty); const [live, setLive] = useState(false); const [today, setToday] = useState(""); const [serviceSessionId, setServiceSessionId] = useState<number | undefined>();
-  useEffect(() => { setToday(new Date().toISOString().slice(0, 10)); }, []);
-  useEffect(() => subscribeToActiveService(service => setServiceSessionId(service?.id)), []);
-  useEffect(() => { if (!session || !serviceSessionId) return; setLive(false); fetch(`${apiBase}/api/v1/dashboard/overview?serviceSessionId=${serviceSessionId}`, { headers: authHeaders(session) }).then((response) => response.ok ? response.json() : Promise.reject()).then((response) => { if (response.success) { setDashboard(response.data); setLive(true); } }).catch(() => setLive(false)); }, [serviceSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
-  const superAdmin = session?.accessLevel === "TPK_SUPER_ADMIN"; const { metrics, classes } = dashboard;
-  return <div className="overview"><header className="overview-header"><div><p className="eyebrow">Petra Wuse {live && <span className="live-status">Live</span>}</p><UserGreeting /><p className="intro">{superAdmin ? "Here’s what’s happening across TribePetra Kids." : "Here’s what you’re responsible for at TribePetra Kids."}</p></div></header>
-    {dashboard.personalAssignment && <section className="panel assignment-card"><div><p className="eyebrow">{today && dashboard.personalAssignment.assignmentDate === today ? "You’re Serving Today" : "Your Next Assignment"}</p><h2>{dashboard.personalAssignment.dutyName}</h2><p>{[dashboard.personalAssignment.serviceName, dashboard.personalAssignment.className].filter(Boolean).join(" · ")}</p></div><Link className="outline-button" href="/account/roster">View My Roster <FiChevronRight /></Link></section>}
-    <section className="metrics"><Metric icon={<FiUsers />} value={String(metrics.checkedIn)} title="Checked In" sub={dashboard.serviceSession ? "Children checked in this service" : "No service is currently open"} tone="orange" /><Metric icon={<FiCheckCircle />} value={String(metrics.pickedUp)} title="Picked Up" sub="Children safely collected" tone="green" /><Metric icon={<FiClock />} value={String(metrics.stillPresent)} title="Still Present" sub={dashboard.serviceSession ? "Children currently in class" : "Shown when a service is open"} tone="yellow" /><Metric icon={<FiUsers />} value={String(metrics.activeClasses)} title="Active Classes" sub="Configured classes" tone="dark" /></section>
-    <section className="dashboard-grid"><div className="left-column"><section className="panel attendance-panel"><div className="panel-heading"><div><h2>Attendance by Class</h2><p>{dashboard.serviceSession ? "Children checked in for the current service." : "Registered children by class."}</p></div><Link href="/account/classrooms" className="outline-button">View All Classrooms <FiChevronRight /></Link></div><div className="attendance-list">{classes.length ? classes.map((item) => <div className="attendance-row" key={item.id}><div><b>{item.name}</b><span>{item.ageLabel}</span></div><div className="progress"><i style={{ width: `${item.total ? item.checkedIn / item.total * 100 : 0}%` }} /></div><strong>{item.checkedIn}/{item.total}</strong></div>) : <p className="account-empty">No classes are available for your current assignment.</p>}</div></section>
-      {superAdmin && <><section className="panel team-summary"><div className="panel-heading"><div><h2>Today’s Team</h2><p>See who is assigned and available for service.</p></div><Link href="/account/roster" className="outline-button">Manage Roster <FiChevronRight /></Link></div>{dashboard.todayTeam.length ? <div className="summary-list">{dashboard.todayTeam.map((item) => <div key={item.serviceType}><b>{item.serviceType.replace("_", " ")}</b><span>{item.assigned} assigned · {item.present} present · {item.notConfirmed} not confirmed</span></div>)}</div> : <p className="account-empty">No roster assignments are scheduled for the current service date.</p>}</section><section className="panel roster-summary"><div className="panel-heading"><div><h2>Upcoming Sunday</h2><p>Staffing for the next scheduled roster.</p></div><Link href="/account/roster" className="outline-button">Manage Roster <FiChevronRight /></Link></div>{dashboard.upcomingRoster.length ? <div className="summary-list">{dashboard.upcomingRoster.map((item, index) => <div key={`${item.assignmentDate}-${item.serviceSessionId}`}><b>{index === 0 ? new Intl.DateTimeFormat("en-NG", { dateStyle: "medium" }).format(new Date(item.assignmentDate)) : item.assignmentDate}</b><span>{item.duties} duties · {item.filled} filled</span></div>)}</div> : <p className="account-empty">No upcoming roster entries are available yet.</p>}</section></>}</div>
-      <aside className="right-column"><QuickActions /><section className="panel attention-panel"><div className="panel-heading"><div><h2>Needs Attention</h2><p>Items requiring a next step.</p></div></div>{dashboard.needsAttention.length ? <div className="attention-list">{dashboard.needsAttention.map((item) => <Link key={`${item.type}-${item.message}`} className="attention-item" href={item.actionDestination}><i className={item.severity === "URGENT" ? "red" : "amber"}><FiClock /></i><span>{item.message}<small>{item.actionLabel}</small></span><FiChevronRight /></Link>)}</div> : <div className="all-good"><FiCheckCircle /><span><b>Nothing needs attention now</b><small>New ministry items will appear here.</small></span></div>}</section>{superAdmin && <section className="panel relations-summary"><div className="panel-heading"><div><h2>Children Relations</h2><p>Follow-up care across the ministry.</p></div><Link href="/account/relations" className="outline-button">View Follow-Ups <FiChevronRight /></Link></div><div className="relation-numbers"><b>{dashboard.childrenRelations.total || 0}<small>need follow-up</small></b><b>{dashboard.childrenRelations.contacted || 0}<small>contacted</small></b><b>{dashboard.childrenRelations.pending || 0}<small>pending</small></b></div></section>}</aside></section><style jsx global>{`.assignment-card{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}.assignment-card h2{font:700 25px Georgia,serif;margin:0}.assignment-card p:not(.eyebrow){margin:5px 0 0;color:#687184;font-size:12px}.summary-list{display:grid;gap:10px}.summary-list>div{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--line);font-size:12px}.summary-list span{color:var(--muted);text-align:right}.attention-item{color:inherit;text-decoration:none}.attention-item span{display:grid;gap:3px}.attention-item small{color:var(--orange);font-size:10px;font-weight:800}.relation-numbers{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.relation-numbers b{display:grid;gap:3px;font:700 25px Georgia,serif}.relation-numbers small{font:600 10px var(--font-body);color:var(--muted)}.account-empty{padding:20px 0 4px;color:#687184;font-size:12px}.overview-header{padding-top:0}.live-status{display:inline-block;margin-left:8px;border-radius:999px;padding:3px 7px;background:#e4f7ed;color:#08734e;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em}@media(max-width:590px){.assignment-card{align-items:flex-start;gap:12px;flex-direction:column}.summary-list>div{display:grid}.summary-list span{text-align:left}}`}</style></div>;
+type DashboardClass = {
+  id: number;
+  name: string;
+  ageLabel: string;
+  checkedIn: number;
+  total: number;
+};
+type Attention = {
+  type: string;
+  severity: string;
+  message: string;
+  actionLabel: string;
+  actionDestination: string;
+};
+type Dashboard = {
+  serviceSession: { serviceType?: string; name?: string } | null;
+  metrics: {
+    checkedIn: number;
+    pickedUp: number;
+    stillPresent: number;
+    activeClasses: number;
+  };
+  classes: DashboardClass[];
+  personalAssignment: {
+    assignmentDate: string;
+    dutyName: string;
+    className?: string;
+    serviceName?: string;
+  } | null;
+  todayTeam: {
+    assignmentId: number;
+    userId: number;
+    serviceType: string;
+    status: string;
+    dutyName: string;
+    teacherName: string;
+    profileImageUrl?: string | null;
+  }[];
+  needsAttention: Attention[];
+  childrenRelations: { total: number; contacted: number; pending: number };
+  upcomingRoster: {
+    assignmentDate: string;
+    serviceSessionId: number;
+    duties: number;
+    filled: number;
+  }[];
+};
+const empty: Dashboard = {
+  serviceSession: null,
+  metrics: { checkedIn: 0, pickedUp: 0, stillPresent: 0, activeClasses: 0 },
+  classes: [],
+  personalAssignment: null,
+  todayTeam: [],
+  needsAttention: [],
+  childrenRelations: { total: 0, contacted: 0, pending: 0 },
+  upcomingRoster: [],
+};
+const teacherInitials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase() || "TP";
+const teacherImage = (src?: string | null) =>
+  !src
+    ? ""
+    : /^https?:\/\//.test(src)
+      ? src
+      : `${apiBase}${src.startsWith("/") ? src : `/${src}`}`;
+function TeacherPhoto({ name, src }: { name: string; src?: string | null }) {
+  return src ? (
+    <img src={teacherImage(src)} alt="" />
+  ) : (
+    <i aria-hidden>{teacherInitials(name)}</i>
+  );
 }
-function Metric({ icon, value, title, sub, tone }: { icon: React.ReactNode; value: string; title: string; sub: string; tone: "orange" | "green" | "yellow" | "dark" }) { return <article className={`metric-card ${tone}`}><span className="metric-icon">{icon}</span><div><strong>{value}</strong><h3>{title}</h3><p>{sub}</p></div></article>; }
+export default function AccountOverview() {
+  const session = readTeacherSession();
+  const [dashboard, setDashboard] = useState<Dashboard>(empty);
+  const [live, setLive] = useState(false);
+  const [today, setToday] = useState("");
+  const [serviceSessionId, setServiceSessionId] = useState<
+    number | undefined
+  >();
+  useEffect(() => {
+    setToday(new Date().toISOString().slice(0, 10));
+  }, []);
+  useEffect(
+    () =>
+      subscribeToActiveService((service) => setServiceSessionId(service?.id)),
+    [],
+  );
+  useEffect(() => {
+    if (!session || !serviceSessionId) return;
+    setLive(false);
+    fetch(
+      `${apiBase}/api/v1/dashboard/overview?serviceSessionId=${serviceSessionId}`,
+      { headers: authHeaders(session) },
+    )
+      .then((response) => (response.ok ? response.json() : Promise.reject()))
+      .then((response) => {
+        if (response.success) {
+          setDashboard(response.data);
+          setLive(true);
+        }
+      })
+      .catch(() => setLive(false));
+  }, [serviceSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const superAdmin = session?.accessLevel === "TPK_SUPER_ADMIN";
+  const { metrics, classes } = dashboard;
+  return (
+    <div className="overview">
+      <header className="overview-header">
+        <div>
+          <p className="eyebrow">
+            Petra Wuse {live && <span className="live-status">Live</span>}
+          </p>
+          <UserGreeting />
+          <p className="intro">
+            {superAdmin
+              ? "Here’s what’s happening across TribePetra Kids."
+              : "Here’s what you’re responsible for at TribePetra Kids."}
+          </p>
+        </div>
+      </header>
+      {dashboard.personalAssignment && (
+        <section className="panel assignment-card">
+          <div>
+            <p className="eyebrow">
+              {today && dashboard.personalAssignment.assignmentDate === today
+                ? "You’re Serving Today"
+                : "Your Next Assignment"}
+            </p>
+            <h2>{dashboard.personalAssignment.dutyName}</h2>
+            <p>
+              {[
+                dashboard.personalAssignment.serviceName,
+                dashboard.personalAssignment.className,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          </div>
+          <Link className="outline-button" href="/account/roster">
+            View My Roster <FiChevronRight />
+          </Link>
+        </section>
+      )}
+      <section className="metrics">
+        <Metric
+          icon={<FiUsers />}
+          value={String(metrics.checkedIn)}
+          title="Checked In"
+          sub={
+            dashboard.serviceSession
+              ? "Children checked in this service"
+              : "No service is currently open"
+          }
+          tone="orange"
+        />
+        <Metric
+          icon={<FiCheckCircle />}
+          value={String(metrics.pickedUp)}
+          title="Picked Up"
+          sub="Children safely collected"
+          tone="green"
+        />
+        <Metric
+          icon={<FiClock />}
+          value={String(metrics.stillPresent)}
+          title="Still Present"
+          sub={
+            dashboard.serviceSession
+              ? "Children currently in class"
+              : "Shown when a service is open"
+          }
+          tone="yellow"
+        />
+        <Metric
+          icon={<FiUsers />}
+          value={String(metrics.activeClasses)}
+          title="Active Classes"
+          sub="Configured classes"
+          tone="dark"
+        />
+      </section>
+      <section className="dashboard-grid">
+        <div className="left-column">
+          <section className="panel attendance-panel">
+            <div className="panel-heading">
+              <div>
+                <h2>Attendance by Class</h2>
+                <p>
+                  {dashboard.serviceSession
+                    ? "Children checked in for the current service."
+                    : "Registered children by class."}
+                </p>
+              </div>
+              <Link href="/account/classrooms" className="outline-button">
+                View All Classrooms <FiChevronRight />
+              </Link>
+            </div>
+            <div className="attendance-list">
+              {classes.length ? (
+                classes.map((item) => (
+                  <div className="attendance-row" key={item.id}>
+                    <div>
+                      <b>{item.name}</b>
+                      <span>{item.ageLabel}</span>
+                    </div>
+                    <div className="progress">
+                      <i
+                        style={{
+                          width: `${item.total ? (item.checkedIn / item.total) * 100 : 0}%`,
+                        }}
+                      />
+                    </div>
+                    <strong>
+                      {item.checkedIn}/{item.total}
+                    </strong>
+                  </div>
+                ))
+              ) : (
+                <p className="account-empty">
+                  No classes are available for your current assignment.
+                </p>
+              )}
+            </div>
+          </section>
+          {superAdmin && (
+            <>
+              <section className="panel team-summary">
+                <div className="panel-heading">
+                  <div>
+                    <h2>Today’s Team</h2>
+                    <p>See who is assigned and available for service.</p>
+                  </div>
+                  <Link href="/account/roster" className="outline-button">
+                    Manage Roster <FiChevronRight />
+                  </Link>
+                </div>
+                {dashboard.todayTeam.length ? (
+                  <div className="team-people-list">
+                    {dashboard.todayTeam.map((item) => (
+                      <Link
+                        key={item.assignmentId}
+                        href={`/account/team?member=${item.userId}`}
+                        className="team-person"
+                      >
+                        <TeacherPhoto
+                          name={item.teacherName}
+                          src={item.profileImageUrl}
+                        />
+                        <span>
+                          <b>{item.teacherName}</b>
+                          <small>
+                            {item.dutyName} ·{" "}
+                            {item.serviceType.replaceAll("_", " ")}
+                          </small>
+                        </span>
+                        <em
+                          className={
+                            item.status === "PRESENT" ? "present" : "assigned"
+                          }
+                        >
+                          {item.status === "PRESENT" ? "Present" : "Assigned"}
+                        </em>
+                        <FiChevronRight />
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="account-empty">
+                    No roster assignments are scheduled for the current service
+                    date.
+                  </p>
+                )}
+              </section>
+              <section className="panel roster-summary">
+                <div className="panel-heading">
+                  <div>
+                    <h2>Upcoming Sunday</h2>
+                    <p>Staffing for the next scheduled roster.</p>
+                  </div>
+                  <Link href="/account/roster" className="outline-button">
+                    Manage Roster <FiChevronRight />
+                  </Link>
+                </div>
+                {dashboard.upcomingRoster.length ? (
+                  <div className="summary-list">
+                    {dashboard.upcomingRoster.map((item, index) => (
+                      <div
+                        key={`${item.assignmentDate}-${item.serviceSessionId}`}
+                      >
+                        <b>
+                          {index === 0
+                            ? new Intl.DateTimeFormat("en-NG", {
+                                dateStyle: "medium",
+                              }).format(new Date(item.assignmentDate))
+                            : item.assignmentDate}
+                        </b>
+                        <span>
+                          {item.duties} duties · {item.filled} filled
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="account-empty">
+                    No upcoming roster entries are available yet.
+                  </p>
+                )}
+              </section>
+            </>
+          )}
+        </div>
+        <aside className="right-column">
+          <QuickActions />
+          <section className="panel attention-panel">
+            <div className="panel-heading">
+              <div>
+                <h2>Needs Attention</h2>
+                <p>Items requiring a next step.</p>
+              </div>
+            </div>
+            {dashboard.needsAttention.length ? (
+              <div className="attention-list">
+                {dashboard.needsAttention.map((item) => (
+                  <Link
+                    key={`${item.type}-${item.message}`}
+                    className="attention-item"
+                    href={item.actionDestination}
+                  >
+                    <i className={item.severity === "URGENT" ? "red" : "amber"}>
+                      <FiClock />
+                    </i>
+                    <span>
+                      {item.message}
+                      <small>{item.actionLabel}</small>
+                    </span>
+                    <FiChevronRight />
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="all-good">
+                <FiCheckCircle />
+                <span>
+                  <b>Nothing needs attention now</b>
+                  <small>New ministry items will appear here.</small>
+                </span>
+              </div>
+            )}
+          </section>
+          {superAdmin && (
+            <section className="panel relations-summary">
+              <div className="panel-heading">
+                <div>
+                  <h2>Children Relations</h2>
+                  <p>Follow-up care across the ministry.</p>
+                </div>
+                <Link href="/account/relations" className="outline-button">
+                  View Follow-Ups <FiChevronRight />
+                </Link>
+              </div>
+              <div className="relation-numbers">
+                <b>
+                  {dashboard.childrenRelations.total || 0}
+                  <small>need follow-up</small>
+                </b>
+                <b>
+                  {dashboard.childrenRelations.contacted || 0}
+                  <small>contacted</small>
+                </b>
+                <b>
+                  {dashboard.childrenRelations.pending || 0}
+                  <small>pending</small>
+                </b>
+              </div>
+            </section>
+          )}
+        </aside>
+      </section>
+      <style jsx global>{`
+        .assignment-card {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 18px;
+        }
+        .assignment-card h2 {
+          font:
+            700 25px Georgia,
+            serif;
+          margin: 0;
+        }
+        .assignment-card p:not(.eyebrow) {
+          margin: 5px 0 0;
+          color: #687184;
+          font-size: 12px;
+        }
+        .summary-list {
+          display: grid;
+          gap: 10px;
+        }
+        .summary-list > div {
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 10px 0;
+          border-top: 1px solid var(--line);
+          font-size: 12px;
+        }
+        .summary-list span {
+          color: var(--muted);
+          text-align: right;
+        }
+        .attention-item {
+          color: inherit;
+          text-decoration: none;
+        }
+        .attention-item span {
+          display: grid;
+          gap: 3px;
+        }
+        .attention-item small {
+          color: var(--orange);
+          font-size: 10px;
+          font-weight: 800;
+        }
+        .relation-numbers {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 7px;
+        }
+        .relation-numbers b {
+          display: grid;
+          gap: 3px;
+          font:
+            700 25px Georgia,
+            serif;
+        }
+        .relation-numbers small {
+          font: 600 10px var(--font-body);
+          color: var(--muted);
+        }
+        .account-empty {
+          padding: 20px 0 4px;
+          color: #687184;
+          font-size: 12px;
+        }
+        .overview-header {
+          padding-top: 0;
+        }
+        .live-status {
+          display: inline-block;
+          margin-left: 8px;
+          border-radius: 999px;
+          padding: 3px 7px;
+          background: #e4f7ed;
+          color: #08734e;
+          font-size: 10px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+        }
+        @media (max-width: 590px) {
+          .assignment-card {
+            align-items: flex-start;
+            gap: 12px;
+            flex-direction: column;
+          }
+          .summary-list > div {
+            display: grid;
+          }
+          .summary-list span {
+            text-align: left;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+function Metric({
+  icon,
+  value,
+  title,
+  sub,
+  tone,
+}: {
+  icon: React.ReactNode;
+  value: string;
+  title: string;
+  sub: string;
+  tone: "orange" | "green" | "yellow" | "dark";
+}) {
+  return (
+    <article className={`metric-card ${tone}`}>
+      <span className="metric-icon">{icon}</span>
+      <div>
+        <strong>{value}</strong>
+        <h3>{title}</h3>
+        <p>{sub}</p>
+      </div>
+    </article>
+  );
+}

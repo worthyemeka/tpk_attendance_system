@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { FiCheck, FiChevronDown, FiClock, FiCopy, FiGrid, FiX } from "react-icons/fi";
 import { NotificationBell } from "@/components/notification-bell";
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
 import { type ActiveService, readActiveService, setActiveService } from "@/lib/active-service";
 
-type ServiceChoice = { id:number; name:string; serviceType?:string; startsAt?:string|null };
+type ServiceChoice = { id:number; name:string; serviceType?:string; serviceDate?:string; startsAt?:string|null };
 
 function lagosParts(now: Date) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -23,6 +23,24 @@ function lagosParts(now: Date) {
 
 function serviceLabel(service:ServiceChoice) { return service.startsAt ? `${service.name} · ${new Intl.DateTimeFormat("en-NG", { hour:"numeric", minute:"2-digit", hour12:true, timeZone:"Africa/Lagos" }).format(new Date(service.startsAt))}` : service.name; }
 
+function currentLagosDate() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+
+function currentSundaySessions(items: ServiceChoice[], requestedId?: number, savedId?: number) {
+  const eligible = items.filter((item) => item.serviceType === "FIRST_SERVICE" || item.serviceType === "SECOND_SERVICE");
+  const requested = eligible.find((item) => item.id === requestedId);
+  const saved = eligible.find((item) => item.id === savedId);
+  const dates = [...new Set(eligible.map((item) => item.serviceDate).filter(Boolean))] as string[];
+  const today = currentLagosDate();
+  const relevantDate = requested?.serviceDate || saved?.serviceDate || dates.find((date) => date >= today) || dates[0];
+  const byType = new Map<string, ServiceChoice>();
+  eligible.filter((item) => item.serviceDate === relevantDate).forEach((item) => {
+    if (!byType.has(item.serviceType || "")) byType.set(item.serviceType || "", item);
+  });
+  return [...byType.values()].sort((left, right) => (left.serviceType === "FIRST_SERVICE" ? -1 : 1) - (right.serviceType === "FIRST_SERVICE" ? -1 : 1));
+}
+
 function dateTime(now: Date) {
   return new Intl.DateTimeFormat("en-NG", {
     timeZone: "Africa/Lagos", weekday: "long", day: "numeric", month: "long", year: "numeric",
@@ -32,6 +50,8 @@ function dateTime(now: Date) {
 
 export function AdminTopbar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const requestedServiceId = Number(searchParams.get("serviceSessionId")) || undefined;
   const [now, setNow] = useState<Date | null>(null);
   const [services, setServices] = useState<ServiceChoice[]>([]);
   const [service, setService] = useState<ActiveService | null>(null);
@@ -49,14 +69,22 @@ export function AdminTopbar() {
 
   useEffect(() => { if (!session) return; void fetch(`${apiBase}/api/v1/service-sessions`, { headers:authHeaders(session) }).then(r => r.json()).then(result => {
     if (!result.success) return;
-    const choices:ServiceChoice[] = (result.data || []).filter((item:ServiceChoice) => item.serviceType === "FIRST_SERVICE" || item.serviceType === "SECOND_SERVICE");
-    setServices(choices);
     const saved = readActiveService();
-    const selected = choices.find(item => item.id === saved?.id) || choices[0];
-    if (selected) { const next={ id:selected.id, label:serviceLabel(selected), serviceType:selected.serviceType }; setService(next); setActiveService(next); }
-  }).catch(() => undefined); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    const choices = currentSundaySessions(result.data || [], requestedServiceId, saved?.id);
+    setServices(choices);
+    const selected = choices.find(item => item.id === requestedServiceId) || choices.find(item => item.id === saved?.id) || choices[0];
+    if (selected) { const next={ id:selected.id, label:serviceLabel(selected), serviceType:selected.serviceType, serviceDate:selected.serviceDate }; setService(next); setActiveService(next); }
+  }).catch(() => undefined); }, [requestedServiceId, session]);
 
-  const chooseService = (choice:ServiceChoice) => { const next={ id:choice.id, label:serviceLabel(choice), serviceType:choice.serviceType }; setService(next); setActiveService(next); setMenu(false); };
+  const chooseService = (choice:ServiceChoice) => {
+    const next={ id:choice.id, label:serviceLabel(choice), serviceType:choice.serviceType, serviceDate:choice.serviceDate };
+    setService(next); setActiveService(next); setMenu(false);
+    if (typeof window !== "undefined" && /^\/account\/(overview|check-in|pick-up|classrooms)/.test(pathname)) {
+      const params = new URLSearchParams(window.location.search);
+      params.set("serviceSessionId", String(choice.id));
+      window.history.replaceState(null, "", `${pathname}?${params.toString()}`);
+    }
+  };
 
   const serviceOpen = now ? lagosParts(now).day === "Sun" && lagosParts(now).hour >= 6 : false;
   const link = typeof window === "undefined" ? "/check-in/parent" : `${window.location.origin}/check-in/parent`;

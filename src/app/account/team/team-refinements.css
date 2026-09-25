@@ -1,0 +1,133 @@
+.team-page .status {
+  border: 1px solid transparent;
+  box-shadow: 0 2px 7px rgba(24, 43, 75, 0.06);
+}
+
+.team-page .status.onboarded {
+  border-color: #c9ecd6;
+  background: linear-gradient(135deg, #e8faee, #f4fff8);
+}
+
+.team-page .status.probation {
+  border-color: #f7d59a;
+  background: linear-gradient(135deg, #fff0d2, #fff8e9);
+}
+
+.team-page .gender-badge {
+  display: inline-flex;
+  align-items: center;
+  min-width: 56px;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 5px 8px;
+  color: #61708a;
+  background: #f1f4f8;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.team-page .gender-badge.male {
+  color: #1468c5;
+  background: #eaf4ff;
+}
+
+.team-page .gender-badge.female {
+  color: #c52d68;
+  background: #fff0f5;
+}
+
+.team-page .probation-extension,
+.team-page .teacher-management {
+  border: 1px solid #f4debb;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #fff8e9, #fffdf8);
+}
+
+.team-page .probation-extension p {
+  margin: -3px 0 2px;
+  color: #746d61;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.team-page .action-kicker {
+  display: block;
+  color: #e65132;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.team-page .teacher-management {
+  gap: 11px;
+  padding: 15px;
+}
+
+.team-page .teacher-management > div b {
+  display: block;
+  margin-top: 3px;
+  color: #1e3150;
+  font-size: 14px;
+}
+
+.team-page .inactive-reason,
+.team-page .access-control {
+  display: grid;
+  gap: 6px;
+  color: #51617a;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.team-page .inactive-reason textarea,
+.team-page .access-control select {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid #d8dee8;
+  border-radius: 7px;
+  background: #fff;
+  padding: 8px;
+  color: #253650;
+  font: 11px var(--font-body);
+}
+
+.team-page .inactive-reason textarea {
+  min-height: 58px;
+  resize: vertical;
+}
+
+.team-page .inactive-reason small {
+  color: #708099;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.team-page .danger-action {
+  height: 36px;
+  border: 0;
+  border-radius: 7px;
+  background: #c84735;
+  color: white;
+  font: 800 11px var(--font-body);
+  cursor: pointer;
+}
+
+.team-page .danger-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.team-page .probation-log {
+  margin-top: 10px;
+  padding: 14px;
+  border: 1px solid #e6e1d9;
+  border-radius: 12px;
+  background: #fffdfa;
+}
+
+.team-page .probation-week {
+  border-radius: 10px;
+  box-shadow: 0 4px 11px rgba(24, 43, 75, 0.035);
+}

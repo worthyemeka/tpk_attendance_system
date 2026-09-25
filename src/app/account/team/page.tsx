@@ -23,6 +23,8 @@ import {
   FiX,
 } from "react-icons/fi";
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
+import { printBrandedDocument } from "@/lib/branded-print";
+import "./team-refinements.css";
 
 type Onboarding = "PROBATION" | "ONBOARDED";
 type Member = {
@@ -34,6 +36,9 @@ type Member = {
   email?: string;
   accessLevel?: "TPK_SUPER_ADMIN" | "TPK_ADMIN";
   accountActive?: boolean;
+  inactiveReason?: string | null;
+  inactiveAt?: string | null;
+  gender?: "MALE" | "FEMALE" | string | null;
   joinedAt?: string | null;
   profileImageUrl?: string | null;
   whatsappNumber?: string | null;
@@ -47,9 +52,6 @@ type Member = {
   probationExtensionReason?: string | null;
   assignedClasses?: string | null;
   currentAssignment?: string | null;
-  assignedServices?: number;
-  presentServices?: number;
-  attendanceRate?: number | null;
 };
 type TeamResponse = {
   members: Member[];
@@ -71,6 +73,8 @@ const personName = (member: Member) =>
   [member.title, member.firstName, member.lastName].filter(Boolean).join(" ");
 const initials = (member: Member) =>
   `${member.firstName?.[0] || member.name?.[0] || "T"}${member.lastName?.[0] || ""}`.toUpperCase();
+const genderLabel = (gender?: string | null) =>
+  gender === "MALE" ? "Male" : gender === "FEMALE" ? "Female" : "Not recorded";
 
 export default function TeamPage() {
   const session = useMemo(() => readTeacherSession(), []);
@@ -91,7 +95,7 @@ export default function TeamPage() {
   const [exportOpen, setExportOpen] = useState(false);
   const [selected, setSelected] = useState<Member | null>(null);
   const [drawerTab, setDrawerTab] = useState<
-    "OVERVIEW" | "ROSTER" | "ATTENDANCE" | "ONBOARDING"
+    "OVERVIEW" | "ROSTER" | "ONBOARDING"
   >("OVERVIEW");
   const [actionOpen, setActionOpen] = useState(false);
   const [extendWeeks, setExtendWeeks] = useState("1");
@@ -240,7 +244,7 @@ export default function TeamPage() {
           : "Onboarded",
       "Account Status": item.accountActive === false ? "Inactive" : "Active",
       "Current Assignment": item.currentAssignment || "—",
-      Attendance: item.attendanceRate == null ? "—" : `${item.attendanceRate}%`,
+      Gender: genderLabel(item.gender),
       "Access Level":
         item.accessLevel === "TPK_SUPER_ADMIN"
           ? "TPK Super Admin"
@@ -263,12 +267,41 @@ export default function TeamPage() {
       URL.revokeObjectURL(url);
       return;
     }
-    const page = window.open("", "_blank", "noopener,noreferrer");
-    if (!page) return;
-    page.document.write(
-      `<!doctype html><title>TPK Team</title><style>body{font-family:Arial;color:#142440;margin:36px}h1{font-family:Georgia;font-size:27px}table{width:100%;border-collapse:collapse;margin-top:20px}th,td{padding:9px;border:1px solid #dde3e8;text-align:left;font-size:11px}th{background:#f7f5f0}</style><h1>TribePetra Kids · Team Directory</h1><table><thead><tr><th>Teacher</th><th>WhatsApp</th><th>Joined</th><th>Onboarding</th><th>Account</th><th>Assignment</th><th>Attendance</th><th>Access</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${row.Teacher}</td><td>${row.WhatsApp}</td><td>${row.Joined}</td><td>${row["Onboarding Status"]}</td><td>${row["Account Status"]}</td><td>${row["Current Assignment"]}</td><td>${row.Attendance}</td><td>${row["Access Level"]}</td></tr>`).join("")}</tbody></table><script>window.print()</script>`,
-    );
-    page.document.close();
+    printBrandedDocument({
+      eyebrow: "Team directory",
+      title: "TPK Team",
+      subtitle: "Teachers serving with TribePetra Kids, Wuse Campus.",
+      stats: [
+        { label: "Team members", value: rows.length, note: "Directory total" },
+        { label: "Onboarded", value: counts.onboarded },
+        { label: "On probation", value: counts.probation },
+        {
+          label: "Active accounts",
+          value: rows.filter((row) => row["Account Status"] === "Active")
+            .length,
+        },
+      ],
+      columns: [
+        "Teacher",
+        "WhatsApp",
+        "Joined",
+        "Status",
+        "Gender",
+        "Assignment",
+        "Account",
+        "Access",
+      ],
+      rows: rows.map((row) => [
+        row.Teacher,
+        row.WhatsApp,
+        row.Joined,
+        row["Onboarding Status"],
+        row.Gender,
+        row["Current Assignment"],
+        row["Account Status"],
+        row["Access Level"],
+      ]),
+    });
   }
   return (
     <section className="team-page">
@@ -441,7 +474,7 @@ export default function TeamPage() {
                 <th>Team Status</th>
                 <th>Current Assignment</th>
                 <th>Joined</th>
-                {isSuper && <th>Attendance</th>}
+                <th>Gender</th>
                 <th aria-label="Open profile" />
               </tr>
             </thead>
@@ -473,13 +506,13 @@ export default function TeamPage() {
                       "No upcoming assignment"}
                   </td>
                   <td>{niceDate(member.joinedAt)}</td>
-                  {isSuper && (
-                    <td>
-                      {member.attendanceRate == null
-                        ? "—"
-                        : `${member.attendanceRate}%`}
-                    </td>
-                  )}
+                  <td>
+                    <span
+                      className={`gender-badge ${String(member.gender || "").toLowerCase()}`}
+                    >
+                      {genderLabel(member.gender)}
+                    </span>
+                  </td>
                   <td>
                     <FiChevronRight />
                   </td>
@@ -487,7 +520,7 @@ export default function TeamPage() {
               ))}
               {!shown.length && (
                 <tr>
-                  <td className="empty" colSpan={isSuper ? 7 : 6}>
+                  <td className="empty" colSpan={7}>
                     {loading
                       ? "Loading registered teachers…"
                       : "No team members match these filters."}
@@ -542,13 +575,11 @@ export default function TeamPage() {
               `${personName(selected)}’s probation has been extended.`,
             )
           }
-          toggleAccount={() =>
+          restoreAccount={() =>
             void apiAction(
               `/api/v1/staff/${selected.id}/account-activity`,
-              { active: selected.accountActive === false },
-              selected.accountActive === false
-                ? `${personName(selected)} is active again.`
-                : `${personName(selected)} is now inactive.`,
+              { active: true },
+              `${personName(selected)} is active again.`,
             )
           }
           manageAccess={(level) =>
@@ -629,14 +660,14 @@ function TeacherDrawer({
   onboard,
   startProbation,
   extend,
-  toggleAccount,
+  restoreAccount,
   manageAccess,
 }: {
   member: Member;
   isSuper: boolean;
   ownProfile: boolean;
-  tab: "OVERVIEW" | "ROSTER" | "ATTENDANCE" | "ONBOARDING";
-  setTab: (value: "OVERVIEW" | "ROSTER" | "ATTENDANCE" | "ONBOARDING") => void;
+  tab: "OVERVIEW" | "ROSTER" | "ONBOARDING";
+  setTab: (value: "OVERVIEW" | "ROSTER" | "ONBOARDING") => void;
   closing: () => void;
   actionOpen: boolean;
   setActionOpen: (value: boolean) => void;
@@ -648,7 +679,7 @@ function TeacherDrawer({
   onboard: () => void;
   startProbation: () => void;
   extend: () => void;
-  toggleAccount: () => void;
+  restoreAccount: () => void;
   manageAccess: (level: "TPK_ADMIN" | "TPK_SUPER_ADMIN") => void;
 }) {
   const progress =
@@ -663,7 +694,6 @@ function TeacherDrawer({
   const tabs: [typeof tab, string][] = [
     ["OVERVIEW", "Overview"],
     ["ROSTER", "Roster"],
-    ["ATTENDANCE", "Attendance"],
     ["ONBOARDING", "Onboarding"],
   ];
   return (
@@ -751,6 +781,11 @@ function TeacherDrawer({
                       : "Onboarded"
                   }
                 />
+                <Info
+                  icon={<FiUsers />}
+                  label="Gender"
+                  value={genderLabel(member.gender)}
+                />
                 {isSuper && (
                   <Info
                     icon={<FiUserCheck />}
@@ -791,37 +826,6 @@ function TeacherDrawer({
               </Link>
             </>
           )}
-          {isSuper && tab === "ATTENDANCE" && (
-            <>
-              <div className="attendance-grid">
-                <Metric
-                  value={member.assignedServices || 0}
-                  label="Assigned Services"
-                />
-                <Metric value={member.presentServices || 0} label="Present" />
-                <Metric
-                  value={Math.max(
-                    0,
-                    (member.assignedServices || 0) -
-                      (member.presentServices || 0),
-                  )}
-                  label="Missed"
-                />
-                <Metric
-                  value={
-                    member.attendanceRate == null
-                      ? "—"
-                      : `${member.attendanceRate}%`
-                  }
-                  label="Attendance Rate"
-                />
-              </div>
-              <p className="quiet">
-                This reflects confirmed TPK duty attendance, not children&apos;s
-                attendance.
-              </p>
-            </>
-          )}
           {tab === "ONBOARDING" && (
             <>
               <Section title="Onboarding progress">
@@ -854,8 +858,13 @@ function TeacherDrawer({
                 <ProbationLog member={member} />
               )}
               {isSuper && member.onboardingStatus === "PROBATION" && (
-                <section className="extend">
+                <section className="extend probation-extension">
+                  <span className="action-kicker">Review period</span>
                   <b>Extend probation</b>
+                  <p>
+                    Give this teacher more time to complete their supported
+                    service review.
+                  </p>
                   <label>
                     Extend by
                     <select
@@ -876,7 +885,7 @@ function TeacherDrawer({
                     />
                   </label>
                   <button
-                    className="outline"
+                    className="primary"
                     disabled={saving || !extendReason.trim()}
                     onClick={extend}
                   >
@@ -894,7 +903,7 @@ function TeacherDrawer({
               onClick={() => setActionOpen(!actionOpen)}
             >
               <FiMoreHorizontal />
-              More <FiChevronDown />
+              Manage teacher <FiChevronDown />
             </button>
             {member.onboardingStatus === "PROBATION" && (
               <button className="primary" disabled={saving} onClick={onboard}>
@@ -911,15 +920,27 @@ function TeacherDrawer({
               </button>
             )}
             {actionOpen && (
-              <div className="action-menu">
-                <b>Leadership actions</b>
-                <button disabled={saving} onClick={toggleAccount}>
-                  {member.accountActive === false
-                    ? "Mark Active"
-                    : "Mark Inactive"}
-                </button>
-                <label>
-                  Manage access
+              <div className="action-menu teacher-management">
+                <div>
+                  <span className="action-kicker">Leadership controls</span>
+                  <b>Manage teacher</b>
+                </div>
+                {member.accountActive === false ? (
+                  <button
+                    className="primary"
+                    disabled={saving}
+                    onClick={restoreAccount}
+                  >
+                    Restore active account
+                  </button>
+                ) : (
+                  <p className="account-always-active">
+                    TPK accounts remain active. Remove a teacher from a roster
+                    when their assignment changes.
+                  </p>
+                )}
+                <label className="access-control">
+                  Access level
                   <select
                     value={member.accessLevel || "TPK_ADMIN"}
                     disabled={saving || member.id === undefined}
@@ -985,6 +1006,7 @@ function ProbationLog({ member }: { member: Member }) {
           },
           body: JSON.stringify({
             serviceDate: week.serviceDate,
+            serviceType: week.serviceType,
             tribeAgeGroup: week.tribeAgeGroup,
             lessonTopicActivity: week.lessonTopicActivity,
             timeIn: week.timeIn,
@@ -1022,6 +1044,7 @@ function ProbationLog({ member }: { member: Member }) {
     }));
   return (
     <section className="probation-log">
+      <span className="action-kicker">Supported service review</span>
       <h3>Volunteer probation log</h3>
       <p>
         The four-week record is completed by the teacher serving alongside this
@@ -1058,6 +1081,20 @@ function ProbationLog({ member }: { member: Member }) {
                 update(week.weekNumber, "serviceDate", event.target.value)
               }
             />
+          </label>
+          <label>
+            Service taught
+            <select
+              value={week.serviceType || ""}
+              disabled={!week.canStaffSign}
+              onChange={(event) =>
+                update(week.weekNumber, "serviceType", event.target.value)
+              }
+            >
+              <option value="">Select service</option>
+              <option value="FIRST_SERVICE">First Service · 8:30 AM</option>
+              <option value="SECOND_SERVICE">Second Service · 10:30 AM</option>
+            </select>
           </label>
           <label>
             Tribe / age group
@@ -1178,6 +1215,7 @@ function ProbationLog({ member }: { member: Member }) {
           font-weight: 800;
         }
         .probation-week input,
+        .probation-week select,
         .probation-week textarea {
           box-sizing: border-box;
           width: 100%;
@@ -1192,7 +1230,7 @@ function ProbationLog({ member }: { member: Member }) {
           resize: vertical;
         }
         .probation-week textarea,
-        .probation-week label:nth-of-type(3),
+        .probation-week label:nth-of-type(4),
         .signatures {
           grid-column: 1/-1;
         }

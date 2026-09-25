@@ -1,4 +1,4 @@
-export type ActiveService = { id:number; label:string; serviceType?:string };
+export type ActiveService = { id:number; label:string; serviceType?:string; serviceDate?:string };
 
 export function readActiveService(): ActiveService | null {
   if (typeof window === "undefined") return null;
