@@ -3,30 +3,738 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { FiAlertTriangle, FiCheckCircle, FiChevronDown, FiChevronRight, FiDownload, FiFilter, FiMapPin, FiMessageCircle, FiMoreHorizontal, FiPhone, FiSearch, FiShield, FiUsers, FiX } from "react-icons/fi";
+import {
+  FiChevronDown,
+  FiChevronRight,
+  FiDownload,
+  FiFilter,
+  FiMapPin,
+  FiMessageCircle,
+  FiMoreHorizontal,
+  FiPhone,
+  FiSearch,
+  FiShield,
+  FiUsers,
+  FiX,
+} from "react-icons/fi";
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
 import { GUARDIAN_RELATIONSHIPS } from "@/lib/guardian-relationships";
+import { StatCard, type StatCardTone } from "@/components/stat-card";
 
-type Guardian={id:number;firstName:string;lastName:string;relationship:string;primaryPhone:string;secondaryPhone?:string|null;email?:string|null;active:boolean;homeAddress?:string|null;joinedAt?:string|null;childrenCount:number;childrenNames:string;additionalPickupCount:number;primaryGuardian:boolean;authorisedPickup:boolean;profileStatus:"COMPLETE"|"NEEDS_INFO"};
-type Detail=Guardian&{children:{id:number;firstName:string;lastName:string;className?:string|null;age?:number|null;active:boolean}[];additionalPickupPeople:{id:number;firstName:string;lastName:string;phone?:string|null;relationship?:string|null}[]};
-type Summary={guardians:number;linkedChildren:number;authorisedPickupPeople:number;needsInformation:number};
-const name=(x:{firstName:string;lastName:string})=>`${x.firstName} ${x.lastName}`.trim();
-const initials=(x:{firstName:string;lastName:string})=>`${x.firstName[0]||""}${x.lastName[0]||""}`.toUpperCase()||"TP";
+type Guardian = {
+  id: number;
+  firstName: string;
+  lastName: string;
+  relationship: string;
+  primaryPhone: string;
+  secondaryPhone?: string | null;
+  email?: string | null;
+  active: boolean;
+  homeAddress?: string | null;
+  joinedAt?: string | null;
+  childrenCount: number;
+  childrenNames: string;
+  additionalPickupCount: number;
+  primaryGuardian: boolean;
+  authorisedPickup: boolean;
+};
+type Detail = Guardian & {
+  children: {
+    id: number;
+    firstName: string;
+    lastName: string;
+    className?: string | null;
+    age?: number | null;
+    active: boolean;
+  }[];
+  additionalPickupPeople: {
+    id: number;
+    firstName: string;
+    lastName: string;
+    phone?: string | null;
+    relationship?: string | null;
+  }[];
+};
+type Summary = {
+  guardians: number;
+  linkedChildren: number;
+  authorisedPickupPeople: number;
+};
+const name = (x: { firstName: string; lastName: string }) =>
+  `${x.firstName} ${x.lastName}`.trim();
+const initials = (x: { firstName: string; lastName: string }) =>
+  `${x.firstName[0] || ""}${x.lastName[0] || ""}`.toUpperCase() || "TP";
 
-export function GuardianDirectory(){
- const session=useMemo(()=>readTeacherSession(),[]);const searchParams=useSearchParams();const openedGuardianId=useRef<number|null>(null);const [rows,setRows]=useState<Guardian[]>([]);const [summary,setSummary]=useState<Summary>({guardians:0,linkedChildren:0,authorisedPickupPeople:0,needsInformation:0});const relationships=GUARDIAN_RELATIONSHIPS;const [search,setSearch]=useState("");const [relationship,setRelationship]=useState("");const [profile,setProfile]=useState("");const [active,setActive]=useState("");const [childCount,setChildCount]=useState("");const [hasPickup,setHasPickup]=useState("");const [order,setOrder]=useState("asc");const [page,setPage]=useState(1);const [total,setTotal]=useState(0);const [loading,setLoading]=useState(true);const [error,setError]=useState("");const [filterOpen,setFilterOpen]=useState(false);const [exportOpen,setExportOpen]=useState(false);const [selected,setSelected]=useState<Detail|null>(null);const [tab,setTab]=useState<"overview"|"children"|"pickup">("overview");
- const load=useCallback(async()=>{if(!session)return;setLoading(true);setError("");try{const p=new URLSearchParams({page:String(page),limit:"25",order});if(search)p.set("search",search);if(relationship)p.set("relationship",relationship);if(profile)p.set("profile",profile);if(active)p.set("active",active);if(childCount)p.set("childrenCount",childCount);if(hasPickup)p.set("hasAdditionalPickup",hasPickup);const r=await fetch(`${apiBase}/api/v1/guardians?${p}`,{headers:authHeaders(session)});const b=await r.json();if(!r.ok||!b.success)throw new Error(b.error?.message||"We could not load guardians.");setRows(b.data||[]);setTotal(Number(b.meta?.total||0));}catch(e){setError(e instanceof Error?e.message:"We could not load guardians.")}finally{setLoading(false)}},[active,childCount,hasPickup,order,page,profile,relationship,search,session]);
- useEffect(()=>{const id=window.setTimeout(()=>void load(),search?180:0);return()=>window.clearTimeout(id)},[load,search]);
- useEffect(()=>{if(!session)return;void fetch(`${apiBase}/api/v1/guardians/summary`,{headers:authHeaders(session)}).then(async(response)=>{const summaryData=await response.json();if(summaryData.success)setSummary(summaryData.data)}).catch(()=>undefined)},[session]);
- const open=useCallback(async(id:number)=>{if(!session)return;setSelected(null);setTab("overview");try{const r=await fetch(`${apiBase}/api/v1/guardians/${id}`,{headers:authHeaders(session)});const b=await r.json();if(!r.ok||!b.success)throw new Error(b.error?.message||"We could not load this guardian.");setSelected(b.data)}catch(e){setError(e instanceof Error?e.message:"We could not load this guardian.")}},[session]);
- useEffect(()=>{const id=Number(searchParams.get("guardianId"));if(id&&openedGuardianId.current!==id){openedGuardianId.current=id;void open(id)}},[open,searchParams]);
- const reset=(action:()=>void)=>{action();setPage(1)};const children=(r:Guardian)=>r.childrenNames?r.childrenNames.split(" | ").filter(Boolean):[];const pages=Math.max(1,Math.ceil(total/25));
- const csv=()=>{const lines=[["Guardian","Relationship","Primary phone","Email","Children","Pickup access","Profile"].join(","),...rows.map(r=>[name(r),r.relationship,r.primaryPhone,r.email||"",r.childrenNames,r.primaryGuardian?`Guardian${r.additionalPickupCount?` +${r.additionalPickupCount}`:""}`:"Authorised",r.profileStatus==="COMPLETE"?"Complete":"Needs Info"].map(x=>`"${String(x).replaceAll('"','""')}"`).join(","))];const url=URL.createObjectURL(new Blob([lines.join("\n")],{type:"text/csv;charset=utf-8"}));const link=document.createElement("a");link.href=url;link.download="tpk-guardians.csv";link.click();URL.revokeObjectURL(url);setExportOpen(false)};
- return <><section className="guardian-directory"><header className="guardian-header"><p className="eyebrow">People</p><h1>Guardians</h1><p>View parent and guardian details, linked children and pickup permissions.</p></header><section className="guardian-summary"><Card icon={<FiUsers/>} value={summary.guardians} title="Guardians" text="Total registered"/><Card icon={<FiUsers/>} value={summary.linkedChildren} title="Linked Children" text="Across all guardians" tone="blue"/><Card icon={<FiShield/>} value={summary.authorisedPickupPeople} title="Authorised Pickup People" text="In addition to guardians" tone="amber"/><Card icon={<FiAlertTriangle/>} value={summary.needsInformation} title="Need Information" text="Missing key details" tone="red" click={()=>reset(()=>setProfile("needs_info"))}/></section><section className="guardian-tools"><label className="guardian-search"><FiSearch/><input value={search} onChange={e=>reset(()=>setSearch(e.target.value))} placeholder="Search guardian, child or phone number…"/></label><span className="app-dropdown-host"><select value={relationship} onChange={e=>reset(()=>setRelationship(e.target.value))}><option value="">All Relationships</option>{relationships.map(x=><option key={x}>{x}</option>)}</select></span><span className="app-dropdown-host"><select value={profile} onChange={e=>reset(()=>setProfile(e.target.value))}><option value="">All Profiles</option><option value="complete">Complete</option><option value="needs_info">Needs Information</option></select></span><div className="more-filter"><button onClick={()=>setFilterOpen(x=>!x)}><FiFilter/>More Filters<FiChevronDown/></button>{filterOpen&&<div className="more-filter-menu"><span className="app-dropdown-host"><select value={active} onChange={e=>reset(()=>setActive(e.target.value))}><option value="">Active / Inactive</option><option value="1">Active</option><option value="0">Inactive</option></select></span><span className="app-dropdown-host"><select value={childCount} onChange={e=>reset(()=>setChildCount(e.target.value))}><option value="">Linked children</option><option value="2">2+ linked children</option><option value="3">3+ linked children</option></select></span><label className="more-check"><input type="checkbox" checked={hasPickup==="1"} onChange={e=>reset(()=>setHasPickup(e.target.checked?"1":""))}/>Has additional pickup person</label><span className="app-dropdown-host"><select value={order} onChange={e=>setOrder(e.target.value)}><option value="asc">Name A–Z</option><option value="desc">Name Z–A</option></select></span></div>}</div><div className="guardian-export"><button onClick={()=>setExportOpen(x=>!x)}><FiDownload/>Export<FiChevronDown/></button>{exportOpen&&<div><button onClick={()=>{setExportOpen(false);window.print()}}>PDF</button><button onClick={csv}>CSV</button></div>}</div></section><p className="guardian-count">{loading?"Loading guardians…":`${total} guardian${total===1?"":"s"}`}</p>{error?<p className="guardian-error">{error}</p>:<><div className="guardian-table-wrap"><table className="guardian-table"><thead><tr><th>#</th><th>Guardian</th><th>Relationship</th><th>Contact</th><th>Children</th><th>Pickup Access</th><th>Profile</th><th/></tr></thead><tbody>{rows.map((r,i)=><tr key={r.id} onClick={()=>void open(r.id)}><td>{(page-1)*25+i+1}</td><td><span className="guardian-identity"><i>{initials(r)}</i><b>{name(r)}</b></span></td><td>{r.relationship||"—"}</td><td>{r.primaryPhone||"—"}</td><td><span className="child-pills">{children(r).slice(0,2).map(x=><span key={x}>{x}</span>)}{children(r).length>2&&<span>+{children(r).length-2}</span>}</span></td><td><button className={`pickup-chip ${r.primaryGuardian?"guardian":"authorised"}`} onClick={e=>{e.stopPropagation();void open(r.id)}}>{r.primaryGuardian?"Guardian":"Authorised"}{r.additionalPickupCount?` · +${r.additionalPickupCount}`:""}</button></td><td><span className={`profile-chip ${r.profileStatus==="COMPLETE"?"complete":"needs"}`}>{r.profileStatus==="COMPLETE"?<FiCheckCircle/>:<FiAlertTriangle/>}{r.profileStatus==="COMPLETE"?"Complete":"Needs Info"}</span></td><td><button className="guardian-row-action" aria-label={`Open ${name(r)}`} onClick={e=>{e.stopPropagation();void open(r.id)}}><FiChevronRight/></button></td></tr>)}{!loading&&!rows.length&&<tr><td className="guardian-empty" colSpan={8}>{search||relationship||profile?<><b>No guardians found</b><br/><small>Try changing your search or filters.</small></>:<><b>No guardian records yet</b><br/><small>Guardian records will appear as children are registered.</small></>}</td></tr>}</tbody></table></div><footer className="guardian-pagination"><p>Showing {rows.length?(page-1)*25+1:0}–{(page-1)*25+rows.length} of {total} guardians</p><div><button disabled={page===1} onClick={()=>setPage(x=>x-1)}>‹</button>{Array.from({length:Math.min(pages,5)},(_,i)=>i+1).map(n=><button className={n===page?"selected":""} key={n} onClick={()=>setPage(n)}>{n}</button>)}<button disabled={page===pages} onClick={()=>setPage(x=>x+1)}>›</button></div></footer></>}</section>{selected&&<Drawer guardian={selected} tab={tab} setTab={setTab} close={()=>setSelected(null)}/>}<style jsx>{styles}</style></>;
+export function GuardianDirectory() {
+  const session = useMemo(() => readTeacherSession(), []);
+  const searchParams = useSearchParams();
+  const openedGuardianId = useRef<number | null>(null);
+  const [rows, setRows] = useState<Guardian[]>([]);
+  const [summary, setSummary] = useState<Summary>({
+    guardians: 0,
+    linkedChildren: 0,
+    authorisedPickupPeople: 0,
+  });
+  const relationships = GUARDIAN_RELATIONSHIPS;
+  const [search, setSearch] = useState("");
+  const [relationship, setRelationship] = useState("");
+  const [active, setActive] = useState("");
+  const [childCount, setChildCount] = useState("");
+  const [hasPickup, setHasPickup] = useState("");
+  const [order, setOrder] = useState("asc");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [selected, setSelected] = useState<Detail | null>(null);
+  const [tab, setTab] = useState<"overview" | "children" | "pickup">(
+    "overview",
+  );
+  const load = useCallback(async () => {
+    if (!session) return;
+    setLoading(true);
+    setError("");
+    try {
+      const p = new URLSearchParams({ page: String(page), limit: "25", order });
+      if (search) p.set("search", search);
+      if (relationship) p.set("relationship", relationship);
+      if (active) p.set("active", active);
+      if (childCount) p.set("childrenCount", childCount);
+      if (hasPickup) p.set("hasAdditionalPickup", hasPickup);
+      const r = await fetch(`${apiBase}/api/v1/guardians?${p}`, {
+        headers: authHeaders(session),
+      });
+      const b = await r.json();
+      if (!r.ok || !b.success)
+        throw new Error(b.error?.message || "We could not load guardians.");
+      setRows(b.data || []);
+      setTotal(Number(b.meta?.total || 0));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "We could not load guardians.");
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    active,
+    childCount,
+    hasPickup,
+    order,
+    page,
+    relationship,
+    search,
+    session,
+  ]);
+  useEffect(() => {
+    const id = window.setTimeout(() => void load(), search ? 180 : 0);
+    return () => window.clearTimeout(id);
+  }, [load, search]);
+  useEffect(() => {
+    if (!session) return;
+    void fetch(`${apiBase}/api/v1/guardians/summary`, {
+      headers: authHeaders(session),
+    })
+      .then(async (response) => {
+        const summaryData = await response.json();
+        if (summaryData.success) setSummary(summaryData.data);
+      })
+      .catch(() => undefined);
+  }, [session]);
+  const open = useCallback(
+    async (id: number) => {
+      if (!session) return;
+      setSelected(null);
+      setTab("overview");
+      try {
+        const r = await fetch(`${apiBase}/api/v1/guardians/${id}`, {
+          headers: authHeaders(session),
+        });
+        const b = await r.json();
+        if (!r.ok || !b.success)
+          throw new Error(
+            b.error?.message || "We could not load this guardian.",
+          );
+        setSelected(b.data);
+      } catch (e) {
+        setError(
+          e instanceof Error ? e.message : "We could not load this guardian.",
+        );
+      }
+    },
+    [session],
+  );
+  useEffect(() => {
+    const id = Number(searchParams.get("guardianId"));
+    if (id && openedGuardianId.current !== id) {
+      openedGuardianId.current = id;
+      void open(id);
+    }
+  }, [open, searchParams]);
+  const reset = (action: () => void) => {
+    action();
+    setPage(1);
+  };
+  const children = (r: Guardian) =>
+    r.childrenNames ? r.childrenNames.split(" | ").filter(Boolean) : [];
+  const pages = Math.max(1, Math.ceil(total / 25));
+  const csv = () => {
+    const lines = [
+      [
+        "Guardian",
+        "Relationship",
+        "Primary phone",
+        "Email",
+        "Children",
+        "Pickup access",
+      ].join(","),
+      ...rows.map((r) =>
+        [
+          name(r),
+          r.relationship,
+          r.primaryPhone,
+          r.email || "",
+          r.childrenNames,
+          r.primaryGuardian
+            ? `Guardian${r.additionalPickupCount ? ` +${r.additionalPickupCount}` : ""}`
+            : "Authorised",
+        ]
+          .map((x) => `"${String(x).replaceAll('"', '""')}"`)
+          .join(","),
+      ),
+    ];
+    const url = URL.createObjectURL(
+      new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" }),
+    );
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "tpk-guardians.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+    setExportOpen(false);
+  };
+  return (
+    <>
+      <section className="guardian-directory">
+        <header className="guardian-header">
+          <p className="eyebrow">People</p>
+          <h1>Guardians</h1>
+          <p>
+            View parent and guardian details, linked children and pickup
+            permissions.
+          </p>
+        </header>
+        <section className="guardian-summary">
+          <Card
+            icon={<FiUsers />}
+            value={summary.guardians}
+            title="Guardians"
+            text="Total registered"
+          />
+          <Card
+            icon={<FiUsers />}
+            value={summary.linkedChildren}
+            title="Linked Children"
+            text="Across all guardians"
+            tone="blue"
+          />
+          <Card
+            icon={<FiShield />}
+            value={summary.authorisedPickupPeople}
+            title="Authorised Pickup People"
+            text="In addition to guardians"
+            tone="amber"
+          />
+        </section>
+        <section className="guardian-tools">
+          <label className="guardian-search">
+            <FiSearch />
+            <input
+              value={search}
+              onChange={(e) => reset(() => setSearch(e.target.value))}
+              placeholder="Search guardian, child or phone number…"
+            />
+          </label>
+          <span className="app-dropdown-host">
+            <select
+              value={relationship}
+              onChange={(e) => reset(() => setRelationship(e.target.value))}
+            >
+              <option value="">All Relationships</option>
+              {relationships.map((x) => (
+                <option key={x}>{x}</option>
+              ))}
+            </select>
+          </span>
+          <div className="more-filter">
+            <button onClick={() => setFilterOpen((x) => !x)}>
+              <FiFilter />
+              More Filters
+              <FiChevronDown />
+            </button>
+            {filterOpen && (
+              <div className="more-filter-menu">
+                <span className="app-dropdown-host">
+                  <select
+                    value={active}
+                    onChange={(e) => reset(() => setActive(e.target.value))}
+                  >
+                    <option value="">Active / Inactive</option>
+                    <option value="1">Active</option>
+                    <option value="0">Inactive</option>
+                  </select>
+                </span>
+                <span className="app-dropdown-host">
+                  <select
+                    value={childCount}
+                    onChange={(e) => reset(() => setChildCount(e.target.value))}
+                  >
+                    <option value="">Linked children</option>
+                    <option value="2">2+ linked children</option>
+                    <option value="3">3+ linked children</option>
+                  </select>
+                </span>
+                <label className="more-check">
+                  <input
+                    type="checkbox"
+                    checked={hasPickup === "1"}
+                    onChange={(e) =>
+                      reset(() => setHasPickup(e.target.checked ? "1" : ""))
+                    }
+                  />
+                  Has additional pickup person
+                </label>
+                <span className="app-dropdown-host">
+                  <select
+                    value={order}
+                    onChange={(e) => setOrder(e.target.value)}
+                  >
+                    <option value="asc">Name A–Z</option>
+                    <option value="desc">Name Z–A</option>
+                  </select>
+                </span>
+              </div>
+            )}
+          </div>
+          <div className="guardian-export">
+            <button onClick={() => setExportOpen((x) => !x)}>
+              <FiDownload />
+              Export
+              <FiChevronDown />
+            </button>
+            {exportOpen && (
+              <div>
+                <button
+                  onClick={() => {
+                    setExportOpen(false);
+                    window.print();
+                  }}
+                >
+                  PDF
+                </button>
+                <button onClick={csv}>CSV</button>
+              </div>
+            )}
+          </div>
+        </section>
+        <p className="guardian-count">
+          {loading
+            ? "Loading guardians…"
+            : `${total} guardian${total === 1 ? "" : "s"}`}
+        </p>
+        {error ? (
+          <p className="guardian-error">{error}</p>
+        ) : (
+          <>
+            <div className="guardian-table-wrap">
+              <table className="guardian-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Guardian</th>
+                    <th>Relationship</th>
+                    <th>Contact</th>
+                    <th>Children</th>
+                    <th>Pickup Access</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r, i) => (
+                    <tr key={r.id} onClick={() => void open(r.id)}>
+                      <td>{(page - 1) * 25 + i + 1}</td>
+                      <td>
+                        <span className="guardian-identity">
+                          <i>{initials(r)}</i>
+                          <b>{name(r)}</b>
+                        </span>
+                      </td>
+                      <td>{r.relationship || "—"}</td>
+                      <td>{r.primaryPhone || "—"}</td>
+                      <td>
+                        <span className="child-pills">
+                          {children(r)
+                            .slice(0, 2)
+                            .map((x) => (
+                              <span key={x}>{x}</span>
+                            ))}
+                          {children(r).length > 2 && (
+                            <span>+{children(r).length - 2}</span>
+                          )}
+                        </span>
+                      </td>
+                      <td>
+                        <button
+                          className={`pickup-chip ${r.primaryGuardian ? "guardian" : "authorised"}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void open(r.id);
+                          }}
+                        >
+                          {r.primaryGuardian ? "Guardian" : "Authorised"}
+                          {r.additionalPickupCount
+                            ? ` · +${r.additionalPickupCount}`
+                            : ""}
+                        </button>
+                      </td>
+                      <td>
+                        <button
+                          className="guardian-row-action"
+                          aria-label={`Open ${name(r)}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void open(r.id);
+                          }}
+                        >
+                          <FiChevronRight />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {!loading && !rows.length && (
+                    <tr>
+                      <td className="guardian-empty" colSpan={7}>
+                        {search || relationship ? (
+                          <>
+                            <b>No guardians found</b>
+                            <br />
+                            <small>Try changing your search or filters.</small>
+                          </>
+                        ) : (
+                          <>
+                            <b>No guardian records yet</b>
+                            <br />
+                            <small>
+                              Guardian records will appear as children are
+                              registered.
+                            </small>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <footer className="guardian-pagination">
+              <p>
+                Showing {rows.length ? (page - 1) * 25 + 1 : 0}–
+                {(page - 1) * 25 + rows.length} of {total} guardians
+              </p>
+              <div>
+                <button
+                  disabled={page === 1}
+                  onClick={() => setPage((x) => x - 1)}
+                >
+                  ‹
+                </button>
+                {Array.from(
+                  { length: Math.min(pages, 5) },
+                  (_, i) => i + 1,
+                ).map((n) => (
+                  <button
+                    className={n === page ? "selected" : ""}
+                    key={n}
+                    onClick={() => setPage(n)}
+                  >
+                    {n}
+                  </button>
+                ))}
+                <button
+                  disabled={page === pages}
+                  onClick={() => setPage((x) => x + 1)}
+                >
+                  ›
+                </button>
+              </div>
+            </footer>
+          </>
+        )}
+      </section>
+      {selected && (
+        <Drawer
+          guardian={selected}
+          tab={tab}
+          setTab={setTab}
+          close={() => setSelected(null)}
+        />
+      )}
+      <style jsx>{styles}</style>
+    </>
+  );
 }
-function Card({icon,value,title,text,tone="green",click}:{icon:React.ReactNode;value:number;title:string;text:string;tone?:string;click?:()=>void}){const body=<><i>{icon}</i><strong>{value}</strong><b>{title}</b><small>{text}</small></>;return <article className={`guardian-card ${tone}`}>{click?<button onClick={click}>{body}</button>:body}</article>}
-function Drawer({guardian,tab,setTab,close}:{guardian:Detail;tab:"overview"|"children"|"pickup";setTab:(x:"overview"|"children"|"pickup")=>void;close:()=>void}){const date=guardian.joinedAt?new Intl.DateTimeFormat("en-NG",{day:"numeric",month:"short",year:"numeric"}).format(new Date(guardian.joinedAt)):"—";return <div className="guardian-drawer-backdrop" onMouseDown={close}><aside className="guardian-drawer" onMouseDown={e=>e.stopPropagation()}><button className="drawer-close" onClick={close}><FiX/></button><header><i>{initials(guardian)}</i><div><h2>{name(guardian)}</h2><p>{guardian.relationship||"Guardian"}</p></div><b className={guardian.active?"active":"inactive"}>{guardian.active?"Active Guardian":"Inactive"}</b></header><nav>{(["overview","children","pickup"]as const).map(x=><button className={tab===x?"selected":""} key={x} onClick={()=>setTab(x)}>{x==="overview"?"Overview":x==="children"?`Children (${guardian.children.length})`:`Pickup Access (${guardian.additionalPickupPeople.length})`}</button>)}</nav>{tab==="overview"&&<section className="drawer-section"><h3>Contact Information</h3><Info icon={<FiPhone/>} label="WhatsApp Number" value={guardian.primaryPhone||"Not recorded"}/><Info icon={<FiPhone/>} label="Mobile Number" value={guardian.secondaryPhone&&guardian.secondaryPhone!==guardian.primaryPhone?guardian.secondaryPhone:"Same as WhatsApp number"}/><Info label="Email" value={guardian.email||"Not recorded"}/><Info icon={<FiMapPin/>} label="Address" value={guardian.homeAddress||"Not recorded"}/><hr/><h3>Guardian Details</h3><Info label="Relationship" value={guardian.relationship||"Not recorded"}/><Info label="Joined" value={date}/></section>}{tab==="children"&&<section className="drawer-section"><h3>Children ({guardian.children.length})</h3>{guardian.children.map(c=><article className="drawer-child" key={c.id}><i>{initials(c)}</i><span><b>{name(c)}</b><small>{c.className||"Class pending"} · Age {c.age??"—"}</small></span><em>{c.active?"Active":"Inactive"}</em><Link href="/account/children"><FiChevronRight/></Link></article>)}{!guardian.children.length&&<p className="drawer-muted">No children are linked to this guardian yet.</p>}</section>}{tab==="pickup"&&<section className="drawer-section"><h3>Pickup Access</h3><article className="drawer-own"><b>{name(guardian)}</b><span>{guardian.relationship}</span><em>{guardian.authorisedPickup?"Authorised Guardian":"Not authorised"}</em></article><h3>Additional authorised people ({guardian.additionalPickupPeople.length})</h3>{guardian.additionalPickupPeople.map(p=><article className="drawer-pickup" key={p.id}><i>{initials(p)}</i><span><b>{name(p)}</b><small>{p.relationship||"Authorised person"}<br/>{p.phone?.replace(/(\d{4})\d+(\d{4})/,"$1 •••• $2")||"Phone not recorded"}</small></span><em>Authorised</em></article>)}{!guardian.additionalPickupPeople.length&&<p className="drawer-muted">No additional authorised pickup people recorded.</p>}<button className="drawer-manage">Manage Pickup Access <FiChevronRight/></button></section>}<footer><button className="drawer-edit">Edit Guardian</button><button className="drawer-more">More <FiMoreHorizontal/></button></footer></aside></div>}
-function phoneForLink(value:string){const digits=value.replace(/\D/g,"");if(!digits||/not recorded|same as/i.test(value))return null;return digits.startsWith("0")?`234${digits.slice(1)}`:digits}
-function ContactActions({phone}:{phone:string}){const linked=phoneForLink(phone);if(!linked)return null;return <p style={{display:"flex",gap:8,margin:"-4px 0 15px 29px"}}><a href={`tel:${phone}`} style={{display:"inline-flex",alignItems:"center",gap:5,border:"1px solid #dbe0e9",borderRadius:7,padding:"7px 9px",color:"#243653",fontSize:10,fontWeight:800,textDecoration:"none"}}><FiPhone/>Call</a><a href={`https://wa.me/${linked}`} rel="noreferrer" target="_blank" style={{display:"inline-flex",alignItems:"center",gap:5,border:"1px solid #ccebdd",borderRadius:7,padding:"7px 9px",background:"#effaf4",color:"#087a4b",fontSize:10,fontWeight:800,textDecoration:"none"}}><FiMessageCircle/>WhatsApp</a></p>}
-function Info({icon,label,value}:{icon?:React.ReactNode;label:string;value:string}){return <>{<p className="drawer-detail">{icon||<span/>}<span><small>{label}</small>{value}</span></p>}{label==="WhatsApp Number"&&<ContactActions phone={value}/>}</>}
-const styles=`.guardian-directory{max-width:1540px}.guardian-directory h1,.guardian-directory h2,.guardian-directory h3{font-family:var(--font-display),Georgia,serif}.guardian-header{margin:4px 0 18px}.guardian-header h1{margin:7px 0 4px;font-size:40px;letter-spacing:-1.3px}.guardian-header p:last-child{margin:0;color:#647088;font-size:17px}.guardian-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px}.guardian-card{min-height:120px;border:1px solid #eee8e0;border-radius:10px;padding:16px 20px;background:linear-gradient(135deg,#effaf4,#fff);display:grid;align-content:center;gap:4px;text-align:left}.guardian-card button{all:unset;display:grid;gap:4px;cursor:pointer}.guardian-card i{display:grid;place-items:center;width:37px;height:37px;border-radius:11px;background:#dff6e8;color:#138754;font-style:normal;font-size:21px}.guardian-card strong{font:800 30px/1 var(--font-body);letter-spacing:-1.5px}.guardian-card b{font-size:13px}.guardian-card small{color:#62718a;font-size:11px}.guardian-card.blue{background:linear-gradient(135deg,#eef6ff,#fff)}.guardian-card.blue i{background:#e1f0ff;color:#1978cf}.guardian-card.amber{background:linear-gradient(135deg,#fff6e6,#fff)}.guardian-card.amber i{background:#fff0ce;color:#d68108}.guardian-card.red{background:linear-gradient(135deg,#fff0ed,#fff)}.guardian-card.red i{background:#fee1da;color:#e54c2b}.guardian-tools{display:grid;grid-template-columns:minmax(255px,1.65fr) minmax(140px,.7fr) minmax(130px,.65fr) auto auto;gap:11px;align-items:start}.guardian-search{height:44px;display:flex;align-items:center;gap:9px;border:1px solid #dbe0e9;border-radius:8px;padding:0 13px;color:#71809a;background:#fff}.guardian-search input{width:100%;min-width:0;border:0;outline:0;background:transparent;color:#162a4d;font:600 12px var(--font-body)}.guardian-tools :global(.app-dropdown-host){height:44px;min-width:0}.guardian-tools :global(select){width:100%;height:100%;border:1px solid #dbe0e9;border-radius:8px;padding:0 11px;background:#fff;color:#233650;font:800 11px var(--font-body)}.more-filter,.guardian-export{position:relative}.more-filter>button,.guardian-export>button{height:44px;border:1px solid #dbe0e9;border-radius:8px;padding:0 13px;background:#fff;color:#26354d;display:flex;align-items:center;gap:8px;font:800 11px var(--font-body);cursor:pointer;white-space:nowrap}.more-filter-menu,.guardian-export>div{position:absolute;z-index:20;right:0;top:50px;width:235px;display:grid;gap:10px;border:1px solid #dbe0e9;border-radius:10px;padding:12px;background:#fffdfa;box-shadow:0 14px 28px #11213b18}.more-filter-menu :global(.app-dropdown-host){height:39px}.more-check{display:flex;align-items:center;gap:7px;color:#46536a;font-size:11px;font-weight:700}.guardian-export>div{width:115px;padding:5px}.guardian-export>div button{height:35px;border:0;border-radius:6px;background:transparent;text-align:left;color:#26354d;font:700 11px var(--font-body);cursor:pointer}.guardian-export>div button:hover{background:#fff0eb;color:#e64d2c}.guardian-count{margin:19px 0 10px;color:#34435d;font-size:13px;font-weight:800}.guardian-error{border:1px solid #ffd6cb;border-radius:8px;padding:12px;color:#b33c22;background:#fff2ee}.guardian-table-wrap{overflow:auto;border:1px solid #ebe5de;border-radius:10px;background:#fff}.guardian-table{width:100%;min-width:940px;border-collapse:collapse}.guardian-table th{padding:12px;text-align:left;background:#faf9f6;color:#707b91;font-size:9px;letter-spacing:.05em;text-transform:uppercase}.guardian-table td{padding:10px 12px;border-top:1px solid #eee8e1;color:#41506a;font-size:12px;white-space:nowrap}.guardian-table tbody tr{cursor:pointer}.guardian-table tbody tr:hover td{background:#fffaf7}.guardian-identity{display:flex;align-items:center;gap:9px;color:#14223b}.guardian-identity i{width:33px;height:33px;display:grid;place-items:center;border-radius:50%;background:#e7f0ff;color:#2566a8;font-style:normal;font-size:10px;font-weight:900}.child-pills{display:flex;gap:5px}.child-pills span{max-width:135px;overflow:hidden;text-overflow:ellipsis;border-radius:7px;padding:7px 9px;background:#f2f5fa;color:#314969;font-size:10px;font-weight:800}.pickup-chip,.profile-chip{display:inline-flex;align-items:center;gap:5px;border:0;border-radius:7px;padding:7px 9px;font:800 10px var(--font-body);white-space:nowrap}.pickup-chip.guardian{background:#eaf8ef;color:#087a4b}.pickup-chip.authorised{background:#eaf2ff;color:#166bc4}.profile-chip.complete{background:#eaf8ef;color:#087a4b}.profile-chip.needs{background:#fff2dd;color:#b86a00}.guardian-row-action{border:0;background:transparent;color:#526884;font-size:18px;cursor:pointer}.guardian-empty{text-align:center;color:#65738b!important;padding:34px!important}.guardian-empty small{font-size:11px}.guardian-pagination{display:flex;justify-content:space-between;align-items:center;margin-top:14px;color:#64728b;font-size:11px}.guardian-pagination p{margin:0}.guardian-pagination div{display:flex;gap:5px}.guardian-pagination button{width:32px;height:32px;border:0;border-radius:7px;background:transparent;color:#44516a;font:800 11px var(--font-body);cursor:pointer}.guardian-pagination button.selected{background:#fff0eb;color:#e54a2a}.guardian-pagination button:disabled{opacity:.35;cursor:not-allowed}.guardian-drawer-backdrop{position:fixed;z-index:85;inset:0;background:#0717301c}.guardian-drawer{position:absolute;top:0;right:0;width:min(100%,430px);height:100%;overflow:auto;background:#fffdfa;box-shadow:-14px 0 35px #0717301c}.guardian-drawer header{display:flex;align-items:center;gap:12px;padding:36px 26px 20px;border-bottom:1px solid #ece7e0}.guardian-drawer header>i{width:58px;height:58px;display:grid;place-items:center;border-radius:50%;background:#e7f0ff;color:#2465a5;font-style:normal;font-size:18px;font-weight:900}.guardian-drawer h2{margin:0;font-size:25px}.guardian-drawer h3{margin:0 0 14px;font-size:18px}.guardian-drawer header p{margin:4px 0 0;color:#61718b;font-size:12px}.guardian-drawer header>b{margin-left:auto;border-radius:99px;padding:6px 8px;font-size:9px}.guardian-drawer .active{background:#eaf8ef;color:#087a4b}.guardian-drawer .inactive{background:#f4f1ec;color:#776c5d}.drawer-close{position:absolute;right:16px;top:17px;border:0;background:transparent;color:#62718a;font-size:19px;cursor:pointer}.guardian-drawer nav{display:flex;border-bottom:1px solid #ece7e0;padding:0 16px}.guardian-drawer nav button{flex:1;height:49px;border:0;border-bottom:2px solid transparent;background:transparent;color:#61718b;font:700 11px var(--font-body);cursor:pointer}.guardian-drawer nav button.selected{border-color:#ff5634;color:#15243c}.drawer-section{padding:22px 26px}.drawer-section h3:not(:first-child){margin-top:24px}.drawer-section hr{margin:20px 0;border:0;border-top:1px solid #eee8e0}.drawer-detail{display:grid;grid-template-columns:19px 1fr;gap:10px;margin:13px 0;color:#25354f;font-size:12px}.drawer-detail svg{color:#58708e;font-size:16px}.drawer-detail span{display:grid;gap:3px}.drawer-detail small{color:#71809a}.drawer-child,.drawer-pickup{display:flex;align-items:center;gap:10px;margin:9px 0;border:1px solid #ebe5de;border-radius:9px;padding:12px;background:#fff}.drawer-child i,.drawer-pickup i{width:36px;height:36px;display:grid;place-items:center;border-radius:50%;background:#ebf1fc;color:#2465a5;font-style:normal;font-size:10px;font-weight:900}.drawer-child span,.drawer-pickup span{display:grid;gap:3px;flex:1}.drawer-child b,.drawer-pickup b{font-size:12px}.drawer-child small,.drawer-pickup small{color:#687993;font-size:10px}.drawer-child em,.drawer-pickup em,.drawer-own em{border-radius:99px;padding:5px 7px;background:#eaf8ef;color:#087a4b;font-size:9px;font-style:normal;font-weight:800}.drawer-child a{color:#536b8a}.drawer-own{display:grid;gap:4px;border-radius:9px;padding:13px;background:#f5f7fa;font-size:12px}.drawer-own span{color:#687993;font-size:11px}.drawer-own em{justify-self:start}.drawer-manage{display:flex;align-items:center;justify-content:space-between;width:100%;height:42px;margin-top:16px;border:1px solid #dbe0e9;border-radius:8px;background:#fff;color:#e54b2b;padding:0 12px;font:800 11px var(--font-body);cursor:pointer}.drawer-muted{color:#71809a;font-size:12px}.guardian-drawer footer{display:flex;gap:10px;padding:18px 26px;border-top:1px solid #ece7e0}.guardian-drawer footer button{height:42px;border-radius:8px;font:800 11px var(--font-body);cursor:pointer}.drawer-edit{flex:1;border:1px solid #dbe0e9;background:#fff;color:#20314d}.drawer-more{width:100px;border:1px solid #dbe0e9;background:#fff;color:#20314d}@media(max-width:1050px){.guardian-tools{grid-template-columns:1fr 1fr 1fr}.guardian-search{grid-column:1/-1}.guardian-summary{grid-template-columns:repeat(2,1fr)}}@media(max-width:650px){.guardian-header h1{font-size:35px}.guardian-header p:last-child{font-size:14px}.guardian-summary{gap:10px}.guardian-card{min-height:100px;padding:13px}.guardian-card strong{font-size:26px}.guardian-card b{font-size:11px}.guardian-card small{font-size:10px}.guardian-tools{grid-template-columns:1fr}.guardian-tools :global(.app-dropdown-host){width:100%}.more-filter>button,.guardian-export>button{width:100%;justify-content:center}.more-filter-menu,.guardian-export>div{left:0;right:auto;width:calc(100% - 24px)}.guardian-pagination{align-items:flex-start;gap:12px;flex-direction:column}.guardian-table-wrap{margin:0 -2px}.guardian-table{min-width:760px}.guardian-drawer{width:100%;top:auto;bottom:0;height:min(92vh,760px);border-radius:18px 18px 0 0}.guardian-drawer header{padding-top:40px}.guardian-drawer nav{overflow:auto}.guardian-drawer nav button{min-width:110px}.guardian-drawer footer{position:sticky;bottom:0;background:#fffdfa}}`;
+function Card({
+  icon,
+  value,
+  title,
+  text,
+  tone = "green",
+  click,
+}: {
+  icon: React.ReactNode;
+  value: number;
+  title: string;
+  text: string;
+  tone?: StatCardTone | "amber";
+  click?: () => void;
+}) {
+  return <StatCard icon={icon} value={value} title={title} description={text} tone={tone === "amber" ? "yellow" : tone === "green" ? "green" : "blue"} onClick={click} />;
+}
+function Drawer({
+  guardian,
+  tab,
+  setTab,
+  close,
+}: {
+  guardian: Detail;
+  tab: "overview" | "children" | "pickup";
+  setTab: (x: "overview" | "children" | "pickup") => void;
+  close: () => void;
+}) {
+  const date = guardian.joinedAt
+    ? new Intl.DateTimeFormat("en-NG", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      }).format(new Date(guardian.joinedAt))
+    : "—";
+  return (
+    <div className="guardian-drawer-backdrop" onMouseDown={close}>
+      <aside
+        className="guardian-drawer"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <button className="drawer-close" onClick={close}>
+          <FiX />
+        </button>
+        <header>
+          <i>{initials(guardian)}</i>
+          <div>
+            <h2>{name(guardian)}</h2>
+            <p>{guardian.relationship || "Guardian"}</p>
+          </div>
+          <b className={guardian.active ? "active" : "inactive"}>
+            {guardian.active ? "Active Guardian" : "Inactive"}
+          </b>
+        </header>
+        <nav>
+          {(["overview", "children", "pickup"] as const).map((x) => (
+            <button
+              className={tab === x ? "selected" : ""}
+              key={x}
+              onClick={() => setTab(x)}
+            >
+              {x === "overview"
+                ? "Overview"
+                : x === "children"
+                  ? `Children (${guardian.children.length})`
+                  : `Pickup Access (${guardian.additionalPickupPeople.length})`}
+            </button>
+          ))}
+        </nav>
+        {tab === "overview" && (
+          <section className="drawer-section">
+            <h3>Contact Information</h3>
+            <Info
+              icon={<FiPhone />}
+              label="WhatsApp Number"
+              value={guardian.primaryPhone || "Not recorded"}
+            />
+            <Info
+              icon={<FiPhone />}
+              label="Mobile Number"
+              value={
+                guardian.secondaryPhone &&
+                guardian.secondaryPhone !== guardian.primaryPhone
+                  ? guardian.secondaryPhone
+                  : "Same as WhatsApp number"
+              }
+            />
+            <Info label="Email" value={guardian.email || "Not recorded"} />
+            <Info
+              icon={<FiMapPin />}
+              label="Address"
+              value={guardian.homeAddress || "Not recorded"}
+            />
+            <hr />
+            <h3>Guardian Details</h3>
+            <Info
+              label="Relationship"
+              value={guardian.relationship || "Not recorded"}
+            />
+            <Info label="Joined" value={date} />
+          </section>
+        )}
+        {tab === "children" && (
+          <section className="drawer-section">
+            <h3>Children ({guardian.children.length})</h3>
+            {guardian.children.map((c) => (
+              <article className="drawer-child" key={c.id}>
+                <i>{initials(c)}</i>
+                <span>
+                  <b>{name(c)}</b>
+                  <small>
+                    {c.className || "Class pending"} · Age {c.age ?? "—"}
+                  </small>
+                </span>
+                <em>{c.active ? "Active" : "Inactive"}</em>
+                <Link href="/account/children">
+                  <FiChevronRight />
+                </Link>
+              </article>
+            ))}
+            {!guardian.children.length && (
+              <p className="drawer-muted">
+                No children are linked to this guardian yet.
+              </p>
+            )}
+          </section>
+        )}
+        {tab === "pickup" && (
+          <section className="drawer-section">
+            <h3>Pickup Access</h3>
+            <article className="drawer-own">
+              <b>{name(guardian)}</b>
+              <span>{guardian.relationship}</span>
+              <em>
+                {guardian.authorisedPickup
+                  ? "Authorised Guardian"
+                  : "Not authorised"}
+              </em>
+            </article>
+            <h3>
+              Additional authorised people (
+              {guardian.additionalPickupPeople.length})
+            </h3>
+            {guardian.additionalPickupPeople.map((p) => (
+              <article className="drawer-pickup" key={p.id}>
+                <i>{initials(p)}</i>
+                <span>
+                  <b>{name(p)}</b>
+                  <small>
+                    {p.relationship || "Authorised person"}
+                    <br />
+                    {p.phone?.replace(/(\d{4})\d+(\d{4})/, "$1 •••• $2") ||
+                      "Phone not recorded"}
+                  </small>
+                </span>
+                <em>Authorised</em>
+              </article>
+            ))}
+            {!guardian.additionalPickupPeople.length && (
+              <p className="drawer-muted">
+                No additional authorised pickup people recorded.
+              </p>
+            )}
+            <button className="drawer-manage">
+              Manage Pickup Access <FiChevronRight />
+            </button>
+          </section>
+        )}
+        <footer>
+          <button className="drawer-edit">Edit Guardian</button>
+          <button className="drawer-more">
+            More <FiMoreHorizontal />
+          </button>
+        </footer>
+      </aside>
+    </div>
+  );
+}
+function phoneForLink(value: string) {
+  const digits = value.replace(/\D/g, "");
+  if (!digits || /not recorded|same as/i.test(value)) return null;
+  return digits.startsWith("0") ? `234${digits.slice(1)}` : digits;
+}
+function ContactActions({ phone }: { phone: string }) {
+  const linked = phoneForLink(phone);
+  if (!linked) return null;
+  return (
+    <p style={{ display: "flex", gap: 8, margin: "-4px 0 15px 29px" }}>
+      <a
+        href={`tel:${phone}`}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 5,
+          border: "1px solid #dbe0e9",
+          borderRadius: 7,
+          padding: "7px 9px",
+          color: "#243653",
+          fontSize: 10,
+          fontWeight: 800,
+          textDecoration: "none",
+        }}
+      >
+        <FiPhone />
+        Call
+      </a>
+      <a
+        href={`https://wa.me/${linked}`}
+        rel="noreferrer"
+        target="_blank"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 5,
+          border: "1px solid #ccebdd",
+          borderRadius: 7,
+          padding: "7px 9px",
+          background: "#effaf4",
+          color: "#087a4b",
+          fontSize: 10,
+          fontWeight: 800,
+          textDecoration: "none",
+        }}
+      >
+        <FiMessageCircle />
+        WhatsApp
+      </a>
+    </p>
+  );
+}
+function Info({
+  icon,
+  label,
+  value,
+}: {
+  icon?: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <>
+      {
+        <p className="drawer-detail">
+          {icon || <span />}
+          <span>
+            <small>{label}</small>
+            {value}
+          </span>
+        </p>
+      }
+      {label === "WhatsApp Number" && <ContactActions phone={value} />}
+    </>
+  );
+}
+const styles = `.guardian-directory{max-width:1540px}.guardian-directory h1,.guardian-directory h2,.guardian-directory h3{font-family:var(--font-display),Georgia,serif}.guardian-header{margin:4px 0 18px}.guardian-header h1{margin:7px 0 4px;font-size:40px;letter-spacing:-1.3px}.guardian-header p:last-child{margin:0;color:#647088;font-size:17px}.guardian-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px}.guardian-card{min-height:120px;border:1px solid #eee8e0;border-radius:10px;padding:16px 20px;background:linear-gradient(135deg,#effaf4,#fff);display:grid;align-content:center;gap:4px;text-align:left}.guardian-card button{all:unset;display:grid;gap:4px;cursor:pointer}.guardian-card i{display:grid;place-items:center;width:37px;height:37px;border-radius:11px;background:#dff6e8;color:#138754;font-style:normal;font-size:21px}.guardian-card strong{font:800 30px/1 var(--font-body);letter-spacing:-1.5px}.guardian-card b{font-size:13px}.guardian-card small{color:#62718a;font-size:11px}.guardian-card.blue{background:linear-gradient(135deg,#eef6ff,#fff)}.guardian-card.blue i{background:#e1f0ff;color:#1978cf}.guardian-card.amber{background:linear-gradient(135deg,#fff6e6,#fff)}.guardian-card.amber i{background:#fff0ce;color:#d68108}.guardian-card.red{background:linear-gradient(135deg,#fff0ed,#fff)}.guardian-card.red i{background:#fee1da;color:#e54c2b}.guardian-tools{display:grid;grid-template-columns:minmax(255px,1.65fr) minmax(140px,.7fr) minmax(130px,.65fr) auto auto;gap:11px;align-items:start}.guardian-search{height:44px;display:flex;align-items:center;gap:9px;border:1px solid #dbe0e9;border-radius:8px;padding:0 13px;color:#71809a;background:#fff}.guardian-search input{width:100%;min-width:0;border:0;outline:0;background:transparent;color:#162a4d;font:600 12px var(--font-body)}.guardian-tools :global(.app-dropdown-host){height:44px;min-width:0}.guardian-tools :global(select){width:100%;height:100%;border:1px solid #dbe0e9;border-radius:8px;padding:0 11px;background:#fff;color:#233650;font:800 11px var(--font-body)}.more-filter,.guardian-export{position:relative}.more-filter>button,.guardian-export>button{height:44px;border:1px solid #dbe0e9;border-radius:8px;padding:0 13px;background:#fff;color:#26354d;display:flex;align-items:center;gap:8px;font:800 11px var(--font-body);cursor:pointer;white-space:nowrap}.more-filter-menu,.guardian-export>div{position:absolute;z-index:20;right:0;top:50px;width:235px;display:grid;gap:10px;border:1px solid #dbe0e9;border-radius:10px;padding:12px;background:#fffdfa;box-shadow:0 14px 28px #11213b18}.more-filter-menu :global(.app-dropdown-host){height:39px}.more-check{display:flex;align-items:center;gap:7px;color:#46536a;font-size:11px;font-weight:700}.guardian-export>div{width:115px;padding:5px}.guardian-export>div button{height:35px;border:0;border-radius:6px;background:transparent;text-align:left;color:#26354d;font:700 11px var(--font-body);cursor:pointer}.guardian-export>div button:hover{background:#fff0eb;color:#e64d2c}.guardian-count{margin:19px 0 10px;color:#34435d;font-size:13px;font-weight:800}.guardian-error{border:1px solid #ffd6cb;border-radius:8px;padding:12px;color:#b33c22;background:#fff2ee}.guardian-table-wrap{overflow:auto;border:1px solid #ebe5de;border-radius:10px;background:#fff}.guardian-table{width:100%;min-width:940px;border-collapse:collapse}.guardian-table th{padding:12px;text-align:left;background:#faf9f6;color:#707b91;font-size:9px;letter-spacing:.05em;text-transform:uppercase}.guardian-table td{padding:10px 12px;border-top:1px solid #eee8e1;color:#41506a;font-size:12px;white-space:nowrap}.guardian-table tbody tr{cursor:pointer}.guardian-table tbody tr:hover td{background:#fffaf7}.guardian-identity{display:flex;align-items:center;gap:9px;color:#14223b}.guardian-identity i{width:33px;height:33px;display:grid;place-items:center;border-radius:50%;background:#e7f0ff;color:#2566a8;font-style:normal;font-size:10px;font-weight:900}.child-pills{display:flex;gap:5px}.child-pills span{max-width:135px;overflow:hidden;text-overflow:ellipsis;border-radius:7px;padding:7px 9px;background:#f2f5fa;color:#314969;font-size:10px;font-weight:800}.pickup-chip,.profile-chip{display:inline-flex;align-items:center;gap:5px;border:0;border-radius:7px;padding:7px 9px;font:800 10px var(--font-body);white-space:nowrap}.pickup-chip.guardian{background:#eaf8ef;color:#087a4b}.pickup-chip.authorised{background:#eaf2ff;color:#166bc4}.profile-chip.complete{background:#eaf8ef;color:#087a4b}.profile-chip.needs{background:#fff2dd;color:#b86a00}.guardian-row-action{border:0;background:transparent;color:#526884;font-size:18px;cursor:pointer}.guardian-empty{text-align:center;color:#65738b!important;padding:34px!important}.guardian-empty small{font-size:11px}.guardian-pagination{display:flex;justify-content:space-between;align-items:center;margin-top:14px;color:#64728b;font-size:11px}.guardian-pagination p{margin:0}.guardian-pagination div{display:flex;gap:5px}.guardian-pagination button{width:32px;height:32px;border:0;border-radius:7px;background:transparent;color:#44516a;font:800 11px var(--font-body);cursor:pointer}.guardian-pagination button.selected{background:#fff0eb;color:#e54a2a}.guardian-pagination button:disabled{opacity:.35;cursor:not-allowed}.guardian-drawer-backdrop{position:fixed;z-index:85;inset:0;background:#0717301c}.guardian-drawer{position:absolute;top:0;right:0;width:min(100%,430px);height:100%;overflow:auto;background:#fffdfa;box-shadow:-14px 0 35px #0717301c}.guardian-drawer header{display:flex;align-items:center;gap:12px;padding:36px 26px 20px;border-bottom:1px solid #ece7e0}.guardian-drawer header>i{width:58px;height:58px;display:grid;place-items:center;border-radius:50%;background:#e7f0ff;color:#2465a5;font-style:normal;font-size:18px;font-weight:900}.guardian-drawer h2{margin:0;font-size:25px}.guardian-drawer h3{margin:0 0 14px;font-size:18px}.guardian-drawer header p{margin:4px 0 0;color:#61718b;font-size:12px}.guardian-drawer header>b{margin-left:auto;border-radius:99px;padding:6px 8px;font-size:9px}.guardian-drawer .active{background:#eaf8ef;color:#087a4b}.guardian-drawer .inactive{background:#f4f1ec;color:#776c5d}.drawer-close{position:absolute;right:16px;top:17px;border:0;background:transparent;color:#62718a;font-size:19px;cursor:pointer}.guardian-drawer nav{display:flex;border-bottom:1px solid #ece7e0;padding:0 16px}.guardian-drawer nav button{flex:1;height:49px;border:0;border-bottom:2px solid transparent;background:transparent;color:#61718b;font:700 11px var(--font-body);cursor:pointer}.guardian-drawer nav button.selected{border-color:#ff5634;color:#15243c}.drawer-section{padding:22px 26px}.drawer-section h3:not(:first-child){margin-top:24px}.drawer-section hr{margin:20px 0;border:0;border-top:1px solid #eee8e0}.drawer-detail{display:grid;grid-template-columns:19px 1fr;gap:10px;margin:13px 0;color:#25354f;font-size:12px}.drawer-detail svg{color:#58708e;font-size:16px}.drawer-detail span{display:grid;gap:3px}.drawer-detail small{color:#71809a}.drawer-child,.drawer-pickup{display:flex;align-items:center;gap:10px;margin:9px 0;border:1px solid #ebe5de;border-radius:9px;padding:12px;background:#fff}.drawer-child i,.drawer-pickup i{width:36px;height:36px;display:grid;place-items:center;border-radius:50%;background:#ebf1fc;color:#2465a5;font-style:normal;font-size:10px;font-weight:900}.drawer-child span,.drawer-pickup span{display:grid;gap:3px;flex:1}.drawer-child b,.drawer-pickup b{font-size:12px}.drawer-child small,.drawer-pickup small{color:#687993;font-size:10px}.drawer-child em,.drawer-pickup em,.drawer-own em{border-radius:99px;padding:5px 7px;background:#eaf8ef;color:#087a4b;font-size:9px;font-style:normal;font-weight:800}.drawer-child a{color:#536b8a}.drawer-own{display:grid;gap:4px;border-radius:9px;padding:13px;background:#f5f7fa;font-size:12px}.drawer-own span{color:#687993;font-size:11px}.drawer-own em{justify-self:start}.drawer-manage{display:flex;align-items:center;justify-content:space-between;width:100%;height:42px;margin-top:16px;border:1px solid #dbe0e9;border-radius:8px;background:#fff;color:#e54b2b;padding:0 12px;font:800 11px var(--font-body);cursor:pointer}.drawer-muted{color:#71809a;font-size:12px}.guardian-drawer footer{display:flex;gap:10px;padding:18px 26px;border-top:1px solid #ece7e0}.guardian-drawer footer button{height:42px;border-radius:8px;font:800 11px var(--font-body);cursor:pointer}.drawer-edit{flex:1;border:1px solid #dbe0e9;background:#fff;color:#20314d}.drawer-more{width:100px;border:1px solid #dbe0e9;background:#fff;color:#20314d}@media(max-width:1050px){.guardian-tools{grid-template-columns:1fr 1fr 1fr}.guardian-search{grid-column:1/-1}.guardian-summary{grid-template-columns:repeat(2,1fr)}}@media(max-width:650px){.guardian-header h1{font-size:35px}.guardian-header p:last-child{font-size:14px}.guardian-summary{gap:10px}.guardian-card{min-height:100px;padding:13px}.guardian-card strong{font-size:26px}.guardian-card b{font-size:11px}.guardian-card small{font-size:10px}.guardian-tools{grid-template-columns:1fr}.guardian-tools :global(.app-dropdown-host){width:100%}.more-filter>button,.guardian-export>button{width:100%;justify-content:center}.more-filter-menu,.guardian-export>div{left:0;right:auto;width:calc(100% - 24px)}.guardian-pagination{align-items:flex-start;gap:12px;flex-direction:column}.guardian-table-wrap{margin:0 -2px}.guardian-table{min-width:760px}.guardian-drawer{width:100%;top:auto;bottom:0;height:min(92vh,760px);border-radius:18px 18px 0 0}.guardian-drawer header{padding-top:40px}.guardian-drawer nav{overflow:auto}.guardian-drawer nav button{min-width:110px}.guardian-drawer footer{position:sticky;bottom:0;background:#fffdfa}}`;

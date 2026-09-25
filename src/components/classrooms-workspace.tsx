@@ -16,6 +16,8 @@ import {
   FiUsers,
 } from "react-icons/fi";
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
+import { StatCard, type StatCardTone } from "@/components/stat-card";
+import "./classroom-refinements.css";
 import {
   readActiveService,
   subscribeToActiveService,
@@ -66,7 +68,6 @@ type Child = {
   guardianPhone?: string;
   todayStatus: string;
   assignmentStatus: string;
-  profileStatus: string;
   joinedAt?: string;
 };
 type Detail = {
@@ -437,16 +438,9 @@ function Metric({
   value: number;
   title: string;
   text: string;
-  tone?: string;
+  tone?: StatCardTone | "red";
 }) {
-  return (
-    <article className={`cw-metric ${tone}`}>
-      <i>{icon}</i>
-      <b>{value}</b>
-      <strong>{title}</strong>
-      <small>{text}</small>
-    </article>
-  );
+  return <StatCard icon={icon} value={value} title={title} description={text} tone={tone === "red" ? "orange" : tone} />;
 }
 
 export function ClassroomDetail({ classId }: { classId: number }) {
@@ -457,7 +451,6 @@ export function ClassroomDetail({ classId }: { classId: number }) {
   const [query, setQuery] = useState("");
   const [attendanceFilter, setAttendanceFilter] = useState("");
   const [assignmentFilter, setAssignmentFilter] = useState("");
-  const [profileFilter, setProfileFilter] = useState("");
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   const [error, setError] = useState("");
   const [assignmentOpen, setAssignmentOpen] = useState(false);
@@ -556,8 +549,7 @@ export function ClassroomDetail({ classId }: { classId: number }) {
         .toLowerCase()
         .includes(query.toLowerCase()) &&
       (!attendanceFilter || child.todayStatus === attendanceFilter) &&
-      (!assignmentFilter || child.assignmentStatus === assignmentFilter) &&
-      (!profileFilter || child.profileStatus === profileFilter),
+      (!assignmentFilter || child.assignmentStatus === assignmentFilter),
   );
   return (
     <section className="cw-page class-detail">
@@ -574,11 +566,6 @@ export function ClassroomDetail({ classId }: { classId: number }) {
             {data.serviceSession?.name || "No service selected"}
           </p>
         </div>
-        <Status
-          value={
-            data.teachers.length ? "RUNNING_SMOOTHLY" : "NO_TEACHER_ASSIGNED"
-          }
-        />
       </header>
       <section className="cw-metrics detail-metrics">
         <Metric
@@ -631,7 +618,7 @@ export function ClassroomDetail({ classId }: { classId: number }) {
         </header>
         <div className="teacher-cards">
           {data.teachers.map((teacher) => (
-            <article key={teacher.userId}>
+            <article key={teacher.userId} className="teacher-card">
               <Link
                 href={`/account/team?member=${teacher.userId}`}
                 aria-label={`View ${teacher.name}'s profile`}
@@ -650,11 +637,6 @@ export function ClassroomDetail({ classId }: { classId: number }) {
                   <small>{teacher.whatsappNumber}</small>
                 )}
               </div>
-              <Status
-                value={
-                  teacher.status === "PRESENT" ? "PRESENT" : "NOT_CONFIRMED"
-                }
-              />
             </article>
           ))}
           {!data.teachers.length && (
@@ -710,14 +692,6 @@ export function ClassroomDetail({ classId }: { classId: number }) {
               <option value="NOT_SUBMITTED">Not Submitted</option>
               <option value="EXCUSED">Excused</option>
               <option value="NOT_IN_CLASS">Not in class</option>
-            </select>
-            <select
-              value={profileFilter}
-              onChange={(event) => setProfileFilter(event.target.value)}
-            >
-              <option value="">All Profile Status</option>
-              <option value="COMPLETE">Complete</option>
-              <option value="NEEDS_INFO">Needs Info</option>
             </select>
             {data.canManage && (
               <button
@@ -952,7 +926,6 @@ function ChildrenTable({
             <th>Guardian</th>
             <th>Today</th>
             <th>Assignment</th>
-            <th>Profile</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -985,9 +958,6 @@ function ChildrenTable({
               <td data-label="Assignment">
                 {assignment ? <Status value={child.assignmentStatus} /> : "—"}
               </td>
-              <td data-label="Profile">
-                <Status value={child.profileStatus} />
-              </td>
               <td data-label="Actions">
                 {assignment && child.todayStatus === "PRESENT" ? (
                   <select
@@ -1010,7 +980,7 @@ function ChildrenTable({
           ))}
           {!rows.length && (
             <tr>
-              <td colSpan={7} className="cw-empty">
+              <td colSpan={6} className="cw-empty">
                 No children match this filter.
               </td>
             </tr>

@@ -23,6 +23,7 @@ import {
   FiX,
 } from "react-icons/fi";
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
+import { printBrandedDocument } from "@/lib/branded-print";
 import { MonthPicker } from "@/components/month-picker";
 import "./roster-popup.css";
 
@@ -215,19 +216,15 @@ export default function RosterPage() {
     });
   }, [data, dutyFilter, query, statusFilter]);
   const datesForNonTeaching = useMemo(() => {
-    const existing =
-      data?.assignments
-        .filter((item) => item.dutyCategory === "NON_TEACHING")
-        .map((item) => item.assignmentDate) || [];
     const defaultDates: Array<string> = [];
     const cursor = new Date(monthDate);
     while (cursor.getUTCMonth() === monthDate.getUTCMonth()) {
-      if (cursor.getUTCDay() === 3)
+      if ([4, 6].includes(cursor.getUTCDay()))
         defaultDates.push(cursor.toISOString().slice(0, 10));
       cursor.setUTCDate(cursor.getUTCDate() + 1);
     }
-    return [...new Set([...existing, ...defaultDates])].sort();
-  }, [data, monthDate]);
+    return defaultDates;
+  }, [monthDate]);
   const openAssign = (preset?: Partial<ModalState>) => {
     if (readOnly) return;
     const fresh = stateFor(monthDate);
@@ -270,6 +267,15 @@ export default function RosterPage() {
   async function saveAssignment(event: FormEvent) {
     event.preventDefault();
     if (!session || !modal || !modal.dutyId || !modal.teacherIds.length) return;
+    if (
+      modal.type === "NON_TEACHING" &&
+      ![4, 6].includes(new Date(`${modal.date}T12:00:00Z`).getUTCDay())
+    ) {
+      setError(
+        "Non-teaching duties can only be scheduled on Thursdays or Saturdays.",
+      );
+      return;
+    }
     if (
       replacingAssignment &&
       modal.teacherIds.includes(replacingAssignment.userId)
@@ -431,12 +437,28 @@ export default function RosterPage() {
       URL.revokeObjectURL(url);
       return;
     }
-    const print = window.open("", "_blank", "noopener,noreferrer");
-    if (!print) return;
-    print.document.write(
-      `<!doctype html><title>TPK ${formatMonth(monthDate)} roster</title><style>body{font-family:Arial;color:#10213d;margin:36px}h1{font-family:Georgia;font-size:28px}p{color:#53627b}table{border-collapse:collapse;width:100%;margin-top:24px}th,td{border:1px solid #d9dfe8;padding:9px;text-align:left;font-size:12px}th{background:#f7f4ef}</style><h1>TribePetra Kids · ${formatMonth(monthDate)}</h1><p>${tab === "SUNDAY" ? "Sunday Duties" : "Non-Teaching Duties"}</p><table><thead><tr><th>Date</th><th>Duty</th><th>Teacher(s)</th><th>Status</th></tr></thead><tbody>${rows.map((row) => `<tr><td>${row.Date}</td><td>${row.Duty}</td><td>${row.Teachers}</td><td>${row.Status}</td></tr>`).join("")}</tbody></table><script>window.print()</script>`,
-    );
-    print.document.close();
+    printBrandedDocument({
+      eyebrow: tab === "SUNDAY" ? "Sunday duties" : "Non-teaching duties",
+      title: `${formatMonth(monthDate)} Roster`,
+      subtitle: "TPK teaching and ministry assignments for Petra Wuse.",
+      stats: [
+        {
+          label: "Scheduled days",
+          value:
+            tab === "SUNDAY" ? data.sundays.length : datesForNonTeaching.length,
+        },
+        {
+          label: "Assignments",
+          value: rows.filter((row) => row.Status !== "UNFILLED").length,
+        },
+        {
+          label: "Unfilled roles",
+          value: rows.filter((row) => row.Status === "UNFILLED").length,
+        },
+      ],
+      columns: ["Date", "Duty", "Teacher(s)", "Status"],
+      rows: rows.map((row) => [row.Date, row.Duty, row.Teachers, row.Status]),
+    });
   }
   return (
     <section className="roster-page">
@@ -896,7 +918,7 @@ function NonTeachingGrid({
     <div className="grid-wrap">
       <div className="grid-title">
         <h2>Non-Teaching Duties</h2>
-        <p>Prayers and lesson plan review for the selected month</p>
+        <p>Prayers and lesson plan review every Thursday and Saturday</p>
       </div>
       <table className="monthly-grid non-teaching">
         <thead>
@@ -1049,7 +1071,7 @@ function AssignModal({
               </button>
             </div>
             <label>
-              {modal.type === "SUNDAY" ? "Sunday Date" : "Date / period"}
+              {modal.type === "SUNDAY" ? "Sunday Date" : "Thursday or Saturday"}
               <input
                 required
                 type="date"
@@ -1058,6 +1080,12 @@ function AssignModal({
                   setModal({ ...modal, date: event.target.value })
                 }
               />
+              {modal.type === "NON_TEACHING" && (
+                <small>
+                  Non-teaching duties can only be scheduled on Thursdays and
+                  Saturdays.
+                </small>
+              )}
             </label>
             {modal.type === "SUNDAY" && (
               <div className="pair">

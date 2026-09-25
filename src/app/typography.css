@@ -1,0 +1,9 @@
+@import url('https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap');
+
+:root { --font-display: "Satoshi", "Helvetica Neue", Arial, sans-serif; --font-body: "Satoshi", "Helvetica Neue", Arial, sans-serif; }
+
+/* The same loaded family is used for a consistent product voice. */
+body { font-family: var(--font-body); font-weight: 400; }
+
+/* Satoshi is used for headings and supporting copy. */
+h1, h2, h3, h4, h5, h6 { font-family: var(--font-display) !important; }

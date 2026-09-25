@@ -1,0 +1,38 @@
+.guardian-summary{grid-template-columns:repeat(3,minmax(0,1fr))!important}.metrics,.child-summary,.guardian-summary,.cards,.team-cards,.cw-metrics{align-items:stretch}.tpk-stat-card{height:100%}
+
+@media (max-width: 1100px) {
+  .metrics,.child-summary,.guardian-summary,.cards,.team-cards,.cw-metrics{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .content{padding-right:24px;padding-left:24px}
+}
+
+@media (max-width: 700px) {
+  .content{padding-right:16px!important;padding-left:16px!important}
+  .metrics,.child-summary,.guardian-summary,.cards,.team-cards,.cw-metrics{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important}
+  .child-summary .tpk-stat-card,.guardian-summary .tpk-stat-card,.cards .tpk-stat-card,.team-cards .tpk-stat-card{min-height:108px}
+
+  .children-table,.guardian-table-wrap,.team-directory .table-wrap,.followup .table{overflow:visible!important;border:0!important;background:transparent!important}
+  .children-table table,.children-table tbody,.children-table tr,.children-table td,.guardian-table,.guardian-table tbody,.guardian-table tr,.guardian-table td{display:block;width:100%;min-width:0!important;box-sizing:border-box}
+  .children-table thead,.guardian-table thead{display:none}
+  .children-table tr,.guardian-table tr{overflow:hidden;margin-bottom:10px;border:1px solid #e7e1d9;border-radius:12px;background:#fffdfa;box-shadow:0 2px 8px rgb(30 28 24 / 3%)}
+  .children-table td,.guardian-table td{display:grid;grid-template-columns:minmax(100px,.7fr) minmax(0,1.3fr);align-items:center;gap:10px;padding:10px 12px!important;border-top:1px solid #f0ece6!important;white-space:normal!important;text-align:right}
+  .children-table td:first-child,.guardian-table td:first-child{border-top:0!important}
+  .children-table td::before,.guardian-table td::before{color:#748097;font-size:9px;font-weight:900;letter-spacing:.06em;text-align:left;text-transform:uppercase;content:""}
+  .children-table td:nth-child(1)::before{content:"#"}.children-table td:nth-child(2)::before{content:"Child"}.children-table td:nth-child(3)::before{content:"Class"}.children-table td:nth-child(4)::before{content:"Age"}.children-table td:nth-child(5)::before{content:"Sex"}.children-table td:nth-child(6)::before{content:"Guardian"}.children-table td:nth-child(7)::before{content:"Open"}
+  .guardian-table td:nth-child(1)::before{content:"#"}.guardian-table td:nth-child(2)::before{content:"Guardian"}.guardian-table td:nth-child(3)::before{content:"Relationship"}.guardian-table td:nth-child(4)::before{content:"Phone"}.guardian-table td:nth-child(5)::before{content:"Children"}.guardian-table td:nth-child(6)::before{content:"Pickup"}.guardian-table td:nth-child(7)::before{content:"Open"}
+  .children-table .empty,.guardian-table .guardian-empty{display:block!important;text-align:center!important}.children-table .empty::before,.guardian-table .guardian-empty::before{display:none}
+  .children-table .child-person,.guardian-table .guardian-identity{justify-content:flex-end}.children-table .guardian-cell{justify-items:end}.guardian-table .child-pills{justify-content:flex-end;flex-wrap:wrap}
+  .team-directory .table-wrap{overflow:visible!important;border:0!important}.team-directory table,.team-directory tbody,.team-directory tr,.team-directory td{display:block;width:100%;min-width:0!important;box-sizing:border-box}.team-directory thead{display:none}.team-directory tr{overflow:hidden;margin-bottom:10px;border:1px solid #e7e1d9;border-radius:12px;background:#fffdfa}.team-directory td{display:grid;grid-template-columns:minmax(105px,.72fr) minmax(0,1.28fr);align-items:center;gap:10px;padding:10px 12px!important;border-top:1px solid #f0ece6!important;text-align:right}.team-directory td:first-child{border-top:0!important}.team-directory td::before{color:#748097;font-size:9px;font-weight:900;letter-spacing:.06em;text-align:left;text-transform:uppercase;content:""}.team-directory td:nth-child(1)::before{content:"#"}.team-directory td:nth-child(2)::before{content:"Teacher"}.team-directory td:nth-child(3)::before{content:"Team status"}.team-directory td:nth-child(4)::before{content:"Assignment"}.team-directory td:nth-child(5)::before{content:"Joined"}.team-directory td:nth-child(6)::before{content:"Gender"}.team-directory td:nth-child(7)::before{content:"Open"}.team-directory .teacher{justify-content:flex-end;text-align:left}.team-directory .empty{display:block!important;text-align:center!important}.team-directory .empty::before{display:none}
+  .followup .table{overflow:visible!important;border:0!important}.followup .table table,.followup .table tbody,.followup .table tr,.followup .table td{display:block;width:100%;min-width:0!important;box-sizing:border-box}.followup .table thead{display:none}.followup .table tr{overflow:hidden;margin-bottom:10px;border:1px solid #e7e1d9;border-radius:12px;background:#fffdfa}.followup .table td{display:grid;grid-template-columns:minmax(105px,.72fr) minmax(0,1.28fr);align-items:center;gap:10px;padding:10px 12px!important;border-top:1px solid #f0ece6!important;text-align:right}.followup .table td:first-child{border-top:0!important}.followup .table td::before{color:#748097;font-size:9px;font-weight:900;letter-spacing:.06em;text-align:left;text-transform:uppercase;content:""}.followup .table td:nth-child(1)::before{content:"Family / children"}.followup .table td:nth-child(2)::before{content:"Classes"}.followup .table td:nth-child(3)::before{content:"Last attended"}.followup .table td:nth-child(4)::before{content:"Missed"}.followup .table td:nth-child(5)::before{content:"Contact"}.followup .table td:nth-child(6)::before{content:"Sent by"}.followup .table td:nth-child(7)::before{content:"Status"}.followup .table td:nth-child(8)::before{content:"Open"}.followup .table .empty{display:block!important;text-align:center!important}.followup .table .empty::before{display:none}
+
+  .child-drawer-backdrop,.guardian-drawer-backdrop,.drawer-backdrop,.backdrop{display:flex!important;align-items:flex-end!important;justify-content:stretch!important;background:#0b172f72!important}
+  .child-drawer,.guardian-drawer,.teacher-drawer,.drawer-backdrop .teacher-drawer,.backdrop aside{position:relative!important;top:auto!important;right:auto!important;bottom:auto!important;width:100%!important;max-width:none!important;height:min(86dvh,780px)!important;max-height:86dvh!important;border-radius:20px 20px 0 0!important;box-shadow:0 -18px 46px rgb(10 20 36 / 20%)!important;overscroll-behavior:contain}
+  .child-drawer header,.guardian-drawer header,.teacher-drawer>header{padding:28px 20px 16px!important}.child-drawer section,.guardian-drawer .drawer-section,.teacher-drawer .drawer-content{padding-right:20px!important;padding-left:20px!important}.child-drawer footer,.guardian-drawer footer,.teacher-drawer .drawer-actions{padding-right:20px!important;padding-left:20px!important;padding-bottom:max(16px,env(safe-area-inset-bottom))!important}
+  .child-drawer nav,.guardian-drawer nav,.teacher-drawer nav{padding-right:12px!important;padding-left:12px!important;overflow-x:auto!important;scroll-snap-type:x proximity}.child-drawer nav button,.guardian-drawer nav button,.teacher-drawer nav button{flex:0 0 auto!important;min-width:94px!important;scroll-snap-align:start}
+}
+
+@media (max-width: 430px) {
+  .metrics,.child-summary,.guardian-summary,.cards,.team-cards,.cw-metrics{grid-template-columns:1fr!important}
+  .tpk-stat-card{min-height:102px!important}
+  .overview-header,.child-header,.guardian-header{margin-bottom:16px!important}
+  .content{padding-right:14px!important;padding-left:14px!important}
+}

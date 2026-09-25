@@ -10,6 +10,7 @@ import {
 } from "react-icons/fi";
 import { QuickActions } from "@/components/quick-actions";
 import { UserGreeting } from "@/components/user-greeting";
+import { StatCard } from "@/components/stat-card";
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
 import { subscribeToActiveService } from "@/lib/active-service";
 import "./overview-team.css";
@@ -245,8 +246,7 @@ export default function AccountOverview() {
               )}
             </div>
           </section>
-          {superAdmin && (
-            <>
+          <>
               <section className="panel team-summary">
                 <div className="panel-heading">
                   <div>
@@ -254,7 +254,7 @@ export default function AccountOverview() {
                     <p>See who is assigned and available for service.</p>
                   </div>
                   <Link href="/account/roster" className="outline-button">
-                    Manage Roster <FiChevronRight />
+                    {superAdmin ? "Manage Roster" : "View My Roster"} <FiChevronRight />
                   </Link>
                 </div>
                 {dashboard.todayTeam.length ? (
@@ -294,7 +294,7 @@ export default function AccountOverview() {
                   </p>
                 )}
               </section>
-              <section className="panel roster-summary">
+              {superAdmin && <section className="panel roster-summary">
                 <div className="panel-heading">
                   <div>
                     <h2>Upcoming Sunday</h2>
@@ -328,9 +328,8 @@ export default function AccountOverview() {
                     No upcoming roster entries are available yet.
                   </p>
                 )}
-              </section>
-            </>
-          )}
+              </section>}
+          </>
         </div>
         <aside className="right-column">
           <QuickActions />
@@ -512,14 +511,5 @@ function Metric({
   sub: string;
   tone: "orange" | "green" | "yellow" | "dark";
 }) {
-  return (
-    <article className={`metric-card ${tone}`}>
-      <span className="metric-icon">{icon}</span>
-      <div>
-        <strong>{value}</strong>
-        <h3>{title}</h3>
-        <p>{sub}</p>
-      </div>
-    </article>
-  );
+  return <StatCard icon={icon} value={value} title={title} description={sub} tone={tone} />;
 }

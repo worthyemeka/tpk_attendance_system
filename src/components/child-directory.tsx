@@ -4,9 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
-  FiAlertTriangle,
   FiCalendar,
-  FiCheckCircle,
   FiChevronDown,
   FiChevronRight,
   FiDownload,
@@ -19,6 +17,7 @@ import {
   FiX,
 } from "react-icons/fi";
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
+import { StatCard, type StatCardTone } from "@/components/stat-card";
 import "./child-directory-refinement.css";
 
 type Session = ReturnType<typeof readTeacherSession>;
@@ -37,13 +36,7 @@ type Child = {
   guardianName?: string;
   guardianPhone?: string;
   lastAttended?: string;
-  profileStatus: "COMPLETE" | "NEEDS_INFO";
-  missingFields?: string[];
   joinedAt?: string;
-  isFirstVisit?: boolean;
-  visitType?: "FIRST_TIMER" | "RETURNING";
-  currentSundayDate?: string;
-  currentSundayStatus?: "PRESENT" | "ABSENT" | "NOT_EXPECTED";
 };
 type Guardian = {
   id: number;
@@ -122,7 +115,6 @@ export function ChildDirectory() {
   const [query, setQuery] = useState(""),
     [classId, setClassId] = useState(""),
     [gender, setGender] = useState(""),
-    [visit, setVisit] = useState(""),
     [sort, setSort] = useState("name"),
     [order, setOrder] = useState("asc"),
     [exports, setExports] = useState(false);
@@ -159,7 +151,6 @@ export function ChildDirectory() {
       if (query) p.set("search", query);
       if (classId) p.set("classId", classId);
       if (gender) p.set("gender", gender);
-      if (visit) p.set("visitType", visit);
       const r = await fetch(`${apiBase}/api/v1/children?${p}`, {
           headers: authHeaders(session),
         }),
@@ -176,7 +167,7 @@ export function ChildDirectory() {
     } finally {
       setLoading(false);
     }
-  }, [classId, gender, order, page, query, session, sort, visit]);
+  }, [classId, gender, order, page, query, session, sort]);
   const loadSummary = useCallback(async () => {
     if (!session) return;
     try {
@@ -274,7 +265,7 @@ export function ChildDirectory() {
   }, [month, selected, session, tab]);
   const exportCsv = () => {
     const lines = [
-      "Child,Date of birth,Age,Gender,Class,Primary guardian,Guardian phone,Profile,Visit type,This Sunday",
+      "Child,Date of birth,Age,Gender,Class,Primary guardian,Guardian phone",
       ...rows.map((r) =>
         [
           `${r.firstName} ${r.lastName}`,
@@ -284,13 +275,6 @@ export function ChildDirectory() {
           r.className || "",
           r.guardianName || "",
           r.guardianPhone || "",
-          r.profileStatus,
-          r.visitType === "RETURNING" ? "Returning" : "First Timer",
-          r.currentSundayStatus === "PRESENT"
-            ? "Present"
-            : r.currentSundayStatus === "ABSENT"
-              ? "Absent"
-              : "—",
         ]
           .map((v) => `\"${String(v).replaceAll('"', '""')}\"`)
           .join(","),
@@ -311,7 +295,6 @@ export function ChildDirectory() {
     setQuery("");
     setClassId("");
     setGender("");
-    setVisit("");
     setSort("name");
     setOrder("asc");
     setPage(1);
@@ -407,17 +390,6 @@ export function ChildDirectory() {
               <option value="FEMALE">Female</option>
             </select>
           </span>
-          <span className="app-dropdown-host">
-            <select
-              aria-label="All visit types"
-              value={visit}
-              onChange={(e) => reset(() => setVisit(e.target.value))}
-            >
-              <option value="">All Visit Types</option>
-              <option value="FIRST_TIMER">First Timer</option>
-              <option value="RETURNING">Returning</option>
-            </select>
-          </span>
           <div className="child-export">
             <button onClick={() => setExports((v) => !v)}>
               <FiDownload />
@@ -492,15 +464,6 @@ export function ChildDirectory() {
                       order={order}
                       onSort={toggleSort}
                     />
-                    <SortHeader
-                      label="Last Attended"
-                      field="lastAttended"
-                      sort={sort}
-                      order={order}
-                      onSort={toggleSort}
-                    />
-                    <th>Status</th>
-                    <th>This Sunday</th>
                     <th />
                   </tr>
                 </thead>
@@ -537,19 +500,6 @@ export function ChildDirectory() {
                           </small>
                         </Link>
                       </td>
-                      <td>{date(row.lastAttended)}</td>
-                      <td>
-                        <span
-                          className={`chip visit-badge visit-${row.visitType === "RETURNING" ? "returning" : "first"}`}
-                        >
-                          {row.visitType === "RETURNING"
-                            ? "Returning"
-                            : "First Timer"}
-                        </span>
-                      </td>
-                      <td>
-                        <SundayStatus status={row.currentSundayStatus} />
-                      </td>
                       <td>
                         <button
                           aria-label={`Open ${row.firstName} ${row.lastName}`}
@@ -565,8 +515,8 @@ export function ChildDirectory() {
                   ))}
                   {!loading && !rows.length && (
                     <tr>
-                      <td className="empty" colSpan={10}>
-                        {query || classId || gender || visit ? (
+                      <td className="empty" colSpan={7}>
+                        {query || classId || gender ? (
                           <>
                             <b>No children found</b>
                             <small>Try changing your search or filters.</small>
@@ -659,19 +609,10 @@ function Card({
   value: number;
   label: string;
   text: string;
-  tone?: string;
+  tone?: StatCardTone | "amber";
   click: () => void;
 }) {
-  return (
-    <article className={`child-card ${tone}`}>
-      <button onClick={click}>
-        <i>{icon}</i>
-        <strong>{value}</strong>
-        <b>{label}</b>
-        <small>{text}</small>
-      </button>
-    </article>
-  );
+  return <StatCard icon={icon} value={value} title={label} description={text} tone={tone === "amber" ? "yellow" : tone} onClick={click} />;
 }
 function SortHeader({
   label,
@@ -699,27 +640,6 @@ function SortHeader({
       </button>
     </th>
   );
-}
-function SundayStatus({
-  status,
-}: {
-  status?: "PRESENT" | "ABSENT" | "NOT_EXPECTED";
-}) {
-  if (status === "PRESENT")
-    return (
-      <span className="chip complete">
-        <FiCheckCircle />
-        Present
-      </span>
-    );
-  if (status === "ABSENT")
-    return (
-      <span className="chip absent">
-        <FiAlertTriangle />
-        Absent
-      </span>
-    );
-  return <span className="chip neutral">—</span>;
 }
 function Drawer({
   child,
@@ -784,9 +704,6 @@ function Drawer({
                   {child.className || "Class pending"} · Age {child.age ?? "—"}
                 </p>
               </div>
-              <b className="visit-header">
-                {child.visitType === "RETURNING" ? "Returning" : "First Timer"}
-              </b>
             </header>
             <nav>
               {(
@@ -822,68 +739,6 @@ function Drawer({
                 <Info label="Gender" value={pretty(child.gender)} />
                 <Info label="Class" value={safe(child.className)} />
                 <Info label="School Grade" value={safe(child.schoolGrade)} />
-                <Info label="Joined TPK" value={date(child.joinedAt)} />
-                <Info
-                  label="Visit Type"
-                  value={
-                    child.visitType === "RETURNING"
-                      ? "Returning"
-                      : "First Timer"
-                  }
-                />
-                <Info
-                  label={
-                    child.currentSundayDate
-                      ? `This Sunday · ${date(child.currentSundayDate)}`
-                      : "This Sunday"
-                  }
-                  value={
-                    child.currentSundayStatus === "PRESENT"
-                      ? "Present"
-                      : child.currentSundayStatus === "ABSENT"
-                        ? "Absent"
-                        : "—"
-                  }
-                />
-                <hr />
-                <h3>Profile Status</h3>
-                <span
-                  className={`chip ${child.profileStatus === "COMPLETE" ? "complete" : "needs"}`}
-                >
-                  {child.profileStatus === "COMPLETE" ? (
-                    <FiCheckCircle />
-                  ) : (
-                    <FiAlertTriangle />
-                  )}
-                  {child.profileStatus === "COMPLETE"
-                    ? "Complete"
-                    : "Needs Information"}
-                </span>
-                {child.missingFields?.length ? (
-                  <p className="drawer-note">
-                    <b>Profile incomplete</b>Missing:{" "}
-                    {child.missingFields.join(", ")}
-                  </p>
-                ) : (
-                  <p className="muted">
-                    All required information has been provided.
-                  </p>
-                )}
-                <hr />
-                <h3>Last Attended</h3>
-                <Info
-                  icon={<FiCalendar />}
-                  label={
-                    child.lastAttended
-                      ? date(child.lastAttended)
-                      : "Not yet attended"
-                  }
-                  value={
-                    child.lastAttended
-                      ? ""
-                      : "This child has not been checked in yet."
-                  }
-                />
               </section>
             )}
             {tab === "guardians" && (

@@ -1,4 +1,4 @@
-export type AccessLevel = "TPK_SUPER_ADMIN" | "TPK_ADMIN";
+export type AccessLevel = "TPK_SUPER_ADMIN" | "TPK_FOLLOW_UP_ADMIN" | "TPK_ADMIN";
 export type TeamStatus = "ACTIVE" | "PROBATION" | "INACTIVE";
 export type TeacherSession = {
   staffUserId: number;
@@ -30,3 +30,4 @@ export function saveTeacherSession(session: TeacherSession) { window.localStorag
 export function clearTeacherSession() { window.localStorage.removeItem("tpk-teacher"); }
 export function authHeaders(session = readTeacherSession()): HeadersInit { return session ? { Authorization: `Bearer ${session.sessionToken}` } : {}; }
 export function isSuperAdmin(session = readTeacherSession()) { return session?.accessLevel === "TPK_SUPER_ADMIN"; }
+export function isFollowUpLead(session = readTeacherSession()) { return session?.accessLevel === "TPK_FOLLOW_UP_ADMIN"; }

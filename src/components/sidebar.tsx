@@ -59,6 +59,11 @@ const adminMinistry: readonly Item[] = [
   ["My Follow-Ups", "/account/relations", FiUserCheck],
   ["Classes & Curriculum", "/account/classes", FiBookOpen],
 ];
+const followUpLeadMinistry: readonly Item[] = [
+  ["My Roster", "/account/roster", FiClock],
+  ["Relations & Follow-Up", "/account/relations", FiUserCheck],
+  ["Classes & Curriculum", "/account/classes", FiBookOpen],
+];
 function initials(session: TeacherSession) {
   return (
     `${session.firstName?.[0] || ""}${session.lastName?.[0] || ""}`.toUpperCase() ||
@@ -108,6 +113,7 @@ export function Sidebar() {
   }, [pathname]);
   if (!session) return null;
   const superAdmin = session.accessLevel === "TPK_SUPER_ADMIN";
+  const followUpLead = session.accessLevel === "TPK_FOLLOW_UP_ADMIN";
   async function signOut() {
     try {
       await fetch(`${apiBase}/api/teachers/logout`, {
@@ -204,7 +210,7 @@ export function Sidebar() {
                 />
                 <Group
                   title="My Ministry"
-                  items={adminMinistry}
+                  items={followUpLead ? followUpLeadMinistry : adminMinistry}
                   onNavigate={closeMobileNav}
                 />
               </>
