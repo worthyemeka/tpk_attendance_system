@@ -143,9 +143,10 @@ export function Sidebar() {
         onClick={() => setMobileNavOpen((value) => !value)}
         aria-expanded={mobileNavOpen}
         aria-controls="dashboard-navigation"
+        aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
+        title={mobileNavOpen ? "Close navigation" : "Open navigation"}
       >
         {mobileNavOpen ? <FiX /> : <FiMenu />}
-        <span>{mobileNavOpen ? "Close" : "Menu"}</span>
       </button>
       {mobileNavOpen && (
         <button
@@ -401,14 +402,14 @@ export function Sidebar() {
               height: 40px;
               display: inline-flex;
               align-items: center;
-              gap: 7px;
               border: 1px solid #e0d9cf;
-              border-radius: 10px;
-              background: #fffdf9;
+              border-radius: 8px;
+              background: transparent;
               color: #172641;
-              padding: 0 12px;
-              box-shadow: 0 7px 18px #18243d1a;
-              font: 800 11px var(--font-body);
+              width: 40px;
+              justify-content: center;
+              padding: 0;
+              box-shadow: none;
               cursor: pointer;
             }
             .mobile-nav-toggle svg {

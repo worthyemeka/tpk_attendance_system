@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FiAlertTriangle,
   FiArrowLeft,
@@ -45,7 +45,6 @@ type Classroom = {
   attendancePercentage: number;
   teachers: Teacher[];
   teacherCount: number;
-  attentionCount: number;
   status: string;
 };
 type Overview = {
@@ -54,10 +53,10 @@ type Overview = {
     activeClasses: number;
     checkedIn: number;
     teachersAssigned: number;
-    needsAttention: number;
   };
   items: Classroom[];
 };
+type ServiceWeek = { id: number; name: string; serviceType: string; serviceDate: string };
 type Child = {
   id: number;
   firstName: string;
@@ -150,25 +149,25 @@ function Avatar({ teacher }: { teacher: Teacher }) {
 }
 function Status({ value }: { value: string }) {
   const tone =
+    value === "ASSIGNED" ||
     value === "RUNNING_SMOOTHLY" ||
     value === "PRESENT" ||
     value === "SUBMITTED" ||
     value === "COMPLETE"
       ? "good"
       : value === "ABSENT" ||
-          value === "NEEDS_ATTENTION" ||
           value === "NOT_SUBMITTED"
         ? "warn"
         : "quiet";
   return (
     <span className={`cw-status ${tone}`}>
-      {value === "RUNNING_SMOOTHLY" ||
+      {value === "ASSIGNED" ||
+      value === "RUNNING_SMOOTHLY" ||
       value === "PRESENT" ||
       value === "SUBMITTED" ||
       value === "COMPLETE" ? (
         <FiCheckCircle />
       ) : value === "ABSENT" ||
-        value === "NEEDS_ATTENTION" ||
         value === "NOT_SUBMITTED" ? (
         <FiAlertTriangle />
       ) : null}
@@ -185,22 +184,64 @@ export function ClassroomsOverview() {
       activeClasses: 0,
       checkedIn: 0,
       teachersAssigned: 0,
-      needsAttention: 0,
     },
     items: [],
   });
+  const [weeks, setWeeks] = useState<ServiceWeek[]>([]);
+  const [weekServiceSessionId, setWeekServiceSessionId] = useState("");
+  const [weekScope, setWeekScope] = useState("");
   const [query, setQuery] = useState("");
   const [classId, setClassId] = useState("");
   const [status, setStatus] = useState("");
   const [moreFilters, setMoreFilters] = useState(false);
   const [sort, setSort] = useState("name");
   const [loading, setLoading] = useState(true);
+  const requestVersion = useRef(0);
+  const serviceScope =
+    service?.serviceDate && service?.serviceType
+      ? `${service.serviceType}:${service.serviceDate.slice(0, 7)}`
+      : "";
+  const selectedServiceSessionId =
+    weekScope === serviceScope && weekServiceSessionId
+      ? Number(weekServiceSessionId)
+      : Number(service?.id || 0);
+  useEffect(() => {
+    if (!session || !service?.serviceDate || !service.serviceType) {
+      setWeeks([]);
+      setWeekServiceSessionId("");
+      setWeekScope("");
+      return;
+    }
+    let cancelled = false;
+    const scope = `${service.serviceType}:${service.serviceDate.slice(0, 7)}`;
+    setWeeks([]);
+    setWeekServiceSessionId(String(service.id));
+    setWeekScope("");
+    void fetch(`${apiBase}/api/v1/service-sessions`, { headers: authHeaders(session) })
+      .then((response) => response.json())
+      .then((result) => {
+        if (cancelled || !result.success) return;
+        const month = service.serviceDate!.slice(0, 7);
+        const bySunday = new Map<string, ServiceWeek>();
+        (result.data as ServiceWeek[])
+          .filter((item) => item.serviceType === service.serviceType && item.serviceDate?.startsWith(month))
+          .sort((left, right) => left.serviceDate.localeCompare(right.serviceDate))
+          .forEach((item) => { if (!bySunday.has(item.serviceDate)) bySunday.set(item.serviceDate, item); });
+        const choices = [...bySunday.values()];
+        setWeeks(choices);
+        setWeekServiceSessionId(String(choices.find((item) => item.id === service.id)?.id || choices.at(-1)?.id || service.id));
+        setWeekScope(scope);
+      })
+      .catch(() => { if (!cancelled) setWeeks([]); });
+    return () => { cancelled = true; };
+  }, [service?.id, service?.serviceDate, service?.serviceType, session]);
   const load = useCallback(async () => {
     if (!session) return;
+    const version = ++requestVersion.current;
     setLoading(true);
     try {
       const p = new URLSearchParams();
-      if (service?.id) p.set("serviceSessionId", String(service.id));
+      if (selectedServiceSessionId) p.set("serviceSessionId", String(selectedServiceSessionId));
       if (query) p.set("search", query);
       if (classId) p.set("classId", classId);
       if (status) p.set("status", status);
@@ -210,11 +251,11 @@ export function ClassroomsOverview() {
       const b = await r.json();
       if (!r.ok || !b.success)
         throw new Error(b.error?.message || "We could not load classrooms.");
-      setData(b.data);
+      if (version === requestVersion.current) setData(b.data);
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
-  }, [classId, query, service?.id, session, status]);
+  }, [classId, query, selectedServiceSessionId, session, status]);
   useEffect(() => {
     const id = window.setTimeout(() => void load(), query ? 180 : 0);
     return () => window.clearTimeout(id);
@@ -230,6 +271,16 @@ export function ClassroomsOverview() {
   );
   return (
     <section className="cw-page">
+      <style>{`
+        .cw-page .cw-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .cw-page .cw-tools { grid-template-columns: minmax(250px, 1.7fr) 180px 180px 180px auto; }
+        @media (max-width: 1100px) {
+          .cw-page .cw-tools { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 650px) {
+          .cw-page .cw-metrics, .cw-page .cw-tools { grid-template-columns: 1fr; }
+        }
+      `}</style>
       <header className="cw-heading">
         <div>
           <p className="eyebrow">Petra Wuse</p>
@@ -258,13 +309,6 @@ export function ClassroomsOverview() {
           text="Across all classes"
           tone="purple"
         />
-        <Metric
-          icon={<FiAlertTriangle />}
-          value={data.summary.needsAttention}
-          title="Need Attention"
-          text="Operational items to review"
-          tone="red"
-        />
       </section>
       <section className="cw-tools">
         <label>
@@ -275,6 +319,19 @@ export function ClassroomsOverview() {
             placeholder="Search classroom, child or teacher..."
           />
         </label>
+        <select
+          aria-label="Sunday in selected month"
+          value={weekServiceSessionId}
+          onChange={(event) => setWeekServiceSessionId(event.target.value)}
+          disabled={!weeks.length}
+        >
+          {weeks.map((item, index) => (
+            <option key={item.id} value={item.id}>
+              Week {index + 1} · {formatDate(item.serviceDate)}
+            </option>
+          ))}
+          {!weeks.length && <option value="">Selected Sunday</option>}
+        </select>
         <select
           value={classId}
           onChange={(event) => setClassId(event.target.value)}
@@ -291,8 +348,7 @@ export function ClassroomsOverview() {
           onChange={(event) => setStatus(event.target.value)}
         >
           <option value="">All Statuses</option>
-          <option value="RUNNING_SMOOTHLY">Running Smoothly</option>
-          <option value="NEEDS_ATTENTION">Needs Attention</option>
+          <option value="ASSIGNED">Teacher Assigned</option>
           <option value="NO_TEACHER_ASSIGNED">No Teacher Assigned</option>
         </select>
         <button
@@ -340,7 +396,7 @@ export function ClassroomsOverview() {
       )}
       <div className="cw-list-heading">
         <h2>Classrooms ({classes.length})</h2>
-        <span>{service?.label || "Choose a service"}</span>
+        <span>{data.serviceSession ? `${data.serviceSession.name} · ${formatDate(data.serviceSession.serviceDate)}` : "Choose a service"}</span>
       </div>
       {loading ? (
         <p className="cw-empty">Loading classrooms…</p>
@@ -359,10 +415,7 @@ export function ClassroomsOverview() {
                 <Status value={item.status} />
               </header>
               <p className="teacher-heading">
-                {data.serviceSession?.serviceDate ===
-                new Date().toISOString().slice(0, 10)
-                  ? "Today’s Teachers"
-                  : "Assigned Teachers"}
+                Teachers on duty this Sunday
               </p>
               <div className="teacher-strip">
                 {item.teachers.length ? (
@@ -409,7 +462,7 @@ export function ClassroomsOverview() {
                     : "No selected service"}
                 </small>
                 <Link
-                  href={`/account/classrooms/${item.id}${service?.id ? `?serviceSessionId=${service.id}` : ""}`}
+                  href={`/account/classrooms/${item.id}${data.serviceSession?.id ? `?serviceSessionId=${data.serviceSession.id}` : ""}`}
                 >
                   Open Class <FiChevronRight />
                 </Link>
@@ -457,8 +510,10 @@ export function ClassroomDetail({ classId }: { classId: number }) {
   const [reviewSessionId, setReviewSessionId] = useState("");
   const [workedWell, setWorkedWell] = useState("");
   const [needsImprovement, setNeedsImprovement] = useState("");
+  const detailRequestVersion = useRef(0);
   const load = useCallback(async () => {
     if (!session) return;
+    const requestVersion = ++detailRequestVersion.current;
     setData(null);
     try {
       const p = new URLSearchParams({ month });
@@ -471,6 +526,7 @@ export function ClassroomDetail({ classId }: { classId: number }) {
         throw new Error(
           b.error?.message || "We could not load this classroom.",
         );
+      if (requestVersion !== detailRequestVersion.current) return;
       setData(b.data);
       setReviewSessionId(
         (value) =>
@@ -478,6 +534,7 @@ export function ClassroomDetail({ classId }: { classId: number }) {
       );
       setError("");
     } catch (reason) {
+      if (requestVersion !== detailRequestVersion.current) return;
       setError(
         reason instanceof Error
           ? reason.message
@@ -553,7 +610,10 @@ export function ClassroomDetail({ classId }: { classId: number }) {
   );
   return (
     <section className="cw-page class-detail">
-      <Link className="cw-back" href="/account/classrooms">
+      <Link
+        className="cw-back"
+        href={`/account/classrooms${data.serviceSession?.id ? `?serviceSessionId=${data.serviceSession.id}` : ""}`}
+      >
         <FiArrowLeft />
         Classrooms
       </Link>
@@ -806,17 +866,20 @@ function WeeklyReviews({
   );
   return (
     <section className="weekly-reviews">
-      <header>
-        <div>
+      <header className="discussion-header">
+        <div className="discussion-title">
+          <i className="discussion-title-icon"><FiMessageCircle /></i>
+          <div>
           <p className="eyebrow">Class reflection</p>
           <h2>Weekly discussion</h2>
           <p>
-            Capture what worked and what the team should improve after each
-            Sunday.
+            A quick space for the team to celebrate wins and prepare for the
+            next Sunday.
           </p>
+          </div>
         </div>
-        <label>
-          Month
+        <label className="discussion-month">
+          <span>Review month</span>
           <input
             type="month"
             value={month}
@@ -827,31 +890,42 @@ function WeeklyReviews({
       {data.canManage && (
         <section className="review-form">
           <div className="review-form-heading">
-            <b>Add this Sunday’s review</b>
-            <select
-              value={reviewSessionId}
-              onChange={(event) => setReviewSessionId(event.target.value)}
-            >
-              <option value="">Choose Sunday</option>
-              {sessions.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {formatDate(item.serviceDate)} ·{" "}
-                  {item.name || data.serviceSession?.name || "Service"}
-                </option>
-              ))}
-            </select>
+            <div className="review-form-intro">
+              <i><FiClipboard /></i>
+              <div>
+                <b>Add this Sunday’s review</b>
+                <small>Keep it practical — a few helpful sentences is enough.</small>
+              </div>
+            </div>
+            <label className="review-session">
+              <span>Sunday service</span>
+              <select
+                value={reviewSessionId}
+                onChange={(event) => setReviewSessionId(event.target.value)}
+              >
+                <option value="">Choose Sunday</option>
+                {sessions.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {formatDate(item.serviceDate)} ·{" "}
+                    {item.name || data.serviceSession?.name || "Service"}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
           <div className="review-fields">
-            <label>
-              What worked well?
+            <label className="review-field worked">
+              <span><FiCheckCircle /> What worked well?</span>
+              <small>Celebrate what helped children engage, learn or settle in.</small>
               <textarea
                 value={workedWell}
                 onChange={(event) => setWorkedWell(event.target.value)}
                 placeholder="What helped the children learn, participate or settle well?"
               />
             </label>
-            <label>
-              What should we improve?
+            <label className="review-field improve">
+              <span><FiAlertTriangle /> What should we improve?</span>
+              <small>Note one thing to prepare or handle differently next time.</small>
               <textarea
                 value={needsImprovement}
                 onChange={(event) => setNeedsImprovement(event.target.value)}
@@ -859,19 +933,29 @@ function WeeklyReviews({
               />
             </label>
           </div>
-          <button
-            className="primary"
-            disabled={
-              !reviewSessionId ||
-              (!workedWell.trim() && !needsImprovement.trim())
-            }
-            onClick={onSave}
-          >
-            Save weekly review
-          </button>
+          <footer className="review-actions">
+            <p>Visible to teachers assigned to this class.</p>
+            <button
+              className="primary"
+              disabled={
+                !reviewSessionId ||
+                (!workedWell.trim() && !needsImprovement.trim())
+              }
+              onClick={onSave}
+            >
+              <FiCheckCircle /> Save discussion
+            </button>
+          </footer>
         </section>
       )}
       <div className="review-list">
+        <header className="review-history-heading">
+          <div>
+            <p className="eyebrow">Discussion history</p>
+            <h3>This month’s reflections</h3>
+          </div>
+          <span>{data.weeklyReviews.length} {data.weeklyReviews.length === 1 ? "review" : "reviews"}</span>
+        </header>
         {data.weeklyReviews.map((review) => (
           <article key={review.id}>
             <header>
@@ -898,9 +982,13 @@ function WeeklyReviews({
           </article>
         ))}
         {!data.weeklyReviews.length && (
-          <p className="cw-empty">
-            No weekly discussion has been added for this month yet.
-          </p>
+          <div className="discussion-empty">
+            <i><FiMessageCircle /></i>
+            <div>
+              <b>No discussion yet</b>
+              <p>After this Sunday, add a short reflection to help the next team serve even better.</p>
+            </div>
+          </div>
         )}
       </div>
     </section>

@@ -31,8 +31,12 @@ export function printBrandedDocument({
   sections?: PrintSection[];
   confidential?: boolean;
 }) {
-  const page = window.open("", "_blank", "noopener,noreferrer");
+  // The noopener popup flag can make Safari/Chrome return null here, leaving
+  // a PDF button that appears to do nothing. Open it during the click event,
+  // then sever the opener before writing the document.
+  const page = window.open("", "_blank", "popup,width=960,height=760");
   if (!page) return;
+  page.opener = null;
   const generated = new Intl.DateTimeFormat("en-NG", {
     dateStyle: "full",
     timeStyle: "short",
@@ -51,6 +55,6 @@ export function printBrandedDocument({
     <table><thead><tr>${columns.map((column) => `<th>${escapeHtml(column)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("") || `<tr><td colspan="${columns.length}">No records found for this export.</td></tr>`}</tbody></table>
     ${sections.length ? `<section class="details">${sections.map((section) => `<article class="detail"><h3>${escapeHtml(section.title)}</h3>${section.rows.map((row) => `<div class="detail-row"><span>${escapeHtml(row.label)}</span><b>${escapeHtml(row.value)}</b></div>`).join("")}</article>`).join("")}</section>` : ""}
     ${confidential ? `<section class="notice"><div>ⓘ</div><div><b>Confidential information</b>This document contains TPK information. Please handle responsibly and share only with authorised Petra leaders.</div></section>` : ""}
-    <footer class="footer"><div><strong>TRIBEPETRA KIDS · WUSE CAMPUS</strong>CHECK IN · BELONG · GROW</div><div>Generated from the TribePetra Kids Management System</div></footer><script>window.print()</script></body></html>`);
+    <footer class="footer"><div><strong>TRIBEPETRA KIDS · WUSE CAMPUS</strong>CHECK IN · BELONG · GROW</div><div>Generated from the TribePetra Kids Management System</div></footer><script>window.addEventListener('load',function(){window.focus();window.setTimeout(function(){window.print();},120);});</script></body></html>`);
   page.document.close();
 }

@@ -24,3 +24,38 @@
 .teacher-profile-modal footer{display:flex;justify-content:flex-end;gap:9px;padding:14px 20px;border-top:1px solid #eee9e2}.teacher-profile-modal footer button{height:38px}
 .danger-button{border:0;border-radius:7px;padding:0 12px;background:#fff0eb;color:#d8442c;font:800 11px var(--font-body);cursor:pointer}
 @media(max-width:560px){.teacher-profile-modal{width:100%}.teacher-profile-modal header,.teacher-profile-content,.teacher-roster-list{padding-left:18px;padding-right:18px}}
+
+/* Roster layouts: card grid, list, and monthly calendar are intentionally separate. */
+.roster-card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-top:15px}
+.roster-grid-card{overflow:hidden;border:1px solid #e1e5ea;border-radius:13px;background:#fff;box-shadow:0 6px 18px rgb(19 35 61 / 3%)}
+.roster-grid-card>header{display:flex;align-items:center;justify-content:space-between;padding:14px 15px;border-bottom:1px solid #ecf0f3;background:linear-gradient(115deg,#fffaf6,#fff)}
+.roster-grid-card>header span{display:block;color:#eb5635;font-size:9px;font-weight:900;letter-spacing:.1em;text-transform:uppercase}
+.roster-grid-card>header h2{margin:4px 0 0;color:#172a48;font-family:var(--font-display),Georgia,serif;font-size:21px}
+.roster-grid-card>header>i{display:grid;width:36px;height:36px;place-items:center;border-radius:11px;background:#fff0e9;color:#f05635;font-size:18px;font-style:normal}
+.roster-grid-roles{display:grid}
+.roster-grid-roles>section{display:grid;grid-template-columns:minmax(104px,.75fr) minmax(0,1.25fr);align-items:center;gap:11px;min-height:61px;padding:10px 14px;border-top:1px solid #eef1f4}
+.roster-grid-roles>section:first-child{border-top:0}
+.roster-grid-roles>section>div{display:grid;gap:3px}
+.roster-grid-roles b{color:#2c3e5d;font-size:11px}
+.roster-grid-roles small{color:#8390a5;font-size:9px}
+.roster-grid-roles em{color:#8a95a6;font-size:10px;font-style:normal;font-weight:800}
+.roster-grid-roles .teachers{gap:4px}
+.roster-grid-roles .teachers button{font-size:10px}
+.roster-grid-roles .teachers img,.roster-grid-roles .teachers i{width:24px;height:24px}
+.roster-card-grid .list-empty{grid-column:1/-1;margin:0}
+
+/* List is one polished timeline per Sunday, never an unstyled text column. */
+.roster-page .roster-duty-list{display:grid;grid-template-columns:1fr;gap:13px;margin-top:15px}
+.roster-page .roster-duty-list .roster-day-card{position:relative;overflow:hidden;border:1px solid #e2e6eb;border-radius:12px;background:#fff;box-shadow:0 5px 16px rgb(24 39 63 / 3%)}
+.roster-page .roster-duty-list .roster-day-card::before{position:absolute;inset:0 auto 0 0;width:4px;background:#ff5a39;content:""}
+.roster-page .roster-duty-list .roster-day-card>header{padding:14px 17px 14px 20px;background:#fffaf6}
+.roster-page .roster-duty-list .roster-day-card>header span{color:#e75536}
+.roster-page .roster-duty-list .roster-day-card>header h2{font-family:var(--font-display),Georgia,serif}
+.roster-page .roster-duty-list .roster-duty-items>section{grid-template-columns:minmax(160px,.7fr) minmax(0,1.3fr);min-height:63px;padding:11px 18px 11px 20px}
+.roster-page .roster-duty-list .roster-duty-items>section:nth-child(even){background:#fcfdff}
+.roster-page .roster-duty-list .roster-duty-items b{font-size:12px}
+.roster-page .roster-duty-list .roster-duty-items small{font-size:10px}
+.roster-page .roster-duty-list .roster-duty-items .teachers{gap:5px}
+.roster-page .roster-duty-list .roster-duty-items .teachers button{font-size:11px}
+
+@media(max-width:680px){.roster-card-grid{grid-template-columns:1fr}.roster-grid-roles>section,.roster-page .roster-duty-list .roster-duty-items>section{grid-template-columns:1fr;gap:7px}.roster-page .roster-duty-list .roster-day-card>header{padding:13px 14px 13px 18px}}

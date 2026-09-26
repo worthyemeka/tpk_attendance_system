@@ -77,7 +77,7 @@ export default function AssistedCheckInPage() {
     <form className="panel assisted-form" onSubmit={submit}>
       {error && <p className="error">{error}</p>}
       <label>Service<select required value={serviceId} onChange={(event) => setServiceId(event.target.value)}><option value="">Choose service</option>{services.map((service) => <option key={service.id} value={service.id}>{service.name} · {service.serviceDate}{service.isOpen ? " · Open" : ""}</option>)}</select></label>
-      {serviceId && !canOperate && <p className="readonly-notice">Read-only today — only the teacher assigned to Assembly can save a desk check-in for this service.</p>}
+      {serviceId && !canOperate && <p className="readonly-notice">Read-only today — only the Head of Service and assistants can save a desk check-in for this service.</p>}
       <h2>Parent or guardian</h2>
       <div className="grid guardian-grid">
         <label>First name<input required autoComplete="given-name" value={guardian.firstName} onChange={(event) => setGuardian({ ...guardian, firstName: event.target.value })} /></label>

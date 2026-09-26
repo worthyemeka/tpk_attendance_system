@@ -148,6 +148,45 @@ function tpk_send_roster_whatsapp(string $number, string $teacherName, string $m
     );
 }
 
+/** A roster reminder uses its own template when configured, otherwise the
+ * approved roster-published template is reused with the same safe variables. */
+function tpk_send_roster_reminder_whatsapp(string $number, string $teacherName, string $monthLabel, string $assignmentSummary, string $rosterUrl): string {
+    $template = trim((string)(getenv('WHATSAPP_ROSTER_REMINDER_TEMPLATE') ?: getenv('WHATSAPP_ROSTER_PUBLISHED_TEMPLATE')));
+    if (!tpk_whatsapp_is_configured() || $template === '') {
+        throw new RuntimeException('The WhatsApp roster reminder template is not configured.');
+    }
+    return tpk_send_meta_whatsapp_template(
+        $number,
+        $template,
+        trim((string)(getenv('WHATSAPP_ROSTER_REMINDER_LANGUAGE') ?: getenv('WHATSAPP_ROSTER_PUBLISHED_LANGUAGE'))) ?: 'en_US',
+        [$teacherName, $monthLabel, $assignmentSummary, $rosterUrl],
+    );
+}
+
+/** Email delivery is deliberately server-side. Configure TPK_EMAIL_FROM on the
+ * live PHP host; no email credentials are ever sent to the browser. */
+function tpk_send_roster_email(string $recipient, string $teacherName, string $monthLabel, string $assignmentSummary, string $rosterUrl): string {
+    $from = trim((string)getenv('TPK_EMAIL_FROM'));
+    if (!filter_var($from, FILTER_VALIDATE_EMAIL)) {
+        throw new RuntimeException('Roster email delivery has not been configured.');
+    }
+    if (!filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
+        throw new RuntimeException('This teacher does not have a valid email address.');
+    }
+    $subject = "Your TribePetra Kids {$monthLabel} roster";
+    $message = "Hi {$teacherName},\n\nYour TribePetra Kids roles and responsibilities for {$monthLabel} are ready.\n\n{$assignmentSummary}\n\nOpen your TPK board: {$rosterUrl}\n\nThank you for serving with TribePetra Kids.";
+    $headers = [
+        'From: TribePetra Kids <' . $from . '>',
+        'Reply-To: ' . $from,
+        'MIME-Version: 1.0',
+        'Content-Type: text/plain; charset=UTF-8',
+    ];
+    if (!@mail($recipient, $subject, $message, implode("\r\n", $headers))) {
+        throw new RuntimeException('The roster email could not be sent. Please try again later.');
+    }
+    return 'accepted';
+}
+
 /**
  * Sends one transactional SMS through Termii's Messaging API.  The API key is
  * intentionally read only on the PHP server; it is never available to Next.js

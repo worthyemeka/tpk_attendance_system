@@ -1,0 +1,8 @@
+.qr-modal .qr-image {
+  display: block;
+  width: 176px;
+  height: 176px;
+  object-fit: contain;
+  margin: 20px auto;
+  border: 12px solid #fff;
+}

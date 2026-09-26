@@ -259,7 +259,7 @@ export default function AccountOverview() {
                 </div>
                 {dashboard.todayTeam.length ? (
                   <div className="team-people-list">
-                    {dashboard.todayTeam.map((item) => (
+                    {dashboard.todayTeam.slice(0, 5).map((item) => (
                       <Link
                         key={item.assignmentId}
                         href={`/account/team?member=${item.userId}`}

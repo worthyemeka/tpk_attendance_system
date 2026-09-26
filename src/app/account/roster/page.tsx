@@ -14,6 +14,8 @@ import {
   FiCheck,
   FiChevronDown,
   FiDownload,
+  FiMail,
+  FiMessageCircle,
   FiMoreVertical,
   FiPhone,
   FiPlus,
@@ -25,6 +27,7 @@ import {
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
 import { printBrandedDocument } from "@/lib/branded-print";
 import { MonthPicker } from "@/components/month-picker";
+import { DataViewToggle, type DataView } from "@/components/data-view-toggle";
 import "./roster-popup.css";
 
 type Teacher = {
@@ -167,6 +170,7 @@ export default function RosterPage() {
   const [sundayFilter, setSundayFilter] = useState("");
   const [dutyFilter, setDutyFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [display, setDisplay] = useState<DataView>("GRID");
   const [exportOpen, setExportOpen] = useState(false);
   const [modal, setModal] = useState<ModalState | null>(null);
   const [teacherSearch, setTeacherSearch] = useState("");
@@ -204,6 +208,18 @@ export default function RosterPage() {
   useEffect(() => {
     void load();
   }, [load]);
+  useEffect(() => {
+    const saved = window.localStorage.getItem("tpk:roster-display");
+    if (saved === "GRID" || saved === "LIST" || saved === "CALENDAR") {
+      setDisplay(saved);
+    } else if (window.matchMedia("(max-width: 1024px)").matches) {
+      setDisplay("LIST");
+    }
+  }, []);
+  const setRosterDisplay = (value: DataView) => {
+    setDisplay(value);
+    window.localStorage.setItem("tpk:roster-display", value);
+  };
   const visibleAssignments = useMemo(() => {
     if (!data) return [];
     return data.assignments.filter((item) => {
@@ -368,11 +384,12 @@ export default function RosterPage() {
         );
       const sent = Number(result.data.notificationsSent || 0);
       const failed = Number(result.data.notificationsFailed || 0);
+      const inApp = Number(result.data.inAppNotifications || 0);
       setNotice(
         status === "PUBLISHED"
           ? result.data.notificationsSkipped
-            ? "This roster is already published, so no duplicate WhatsApp messages were sent."
-            : `Roster published. ${sent} WhatsApp notification${sent === 1 ? "" : "s"} sent.${failed ? ` ${failed} could not be sent; check the teacher's verified number and WhatsApp template setup.` : ""}`
+            ? "This roster is already published, so no duplicate team notifications were created."
+            : `Roster published. ${inApp} assigned teacher${inApp === 1 ? "" : "s"} now have an in-app roster notification.${sent ? ` ${sent} WhatsApp message${sent === 1 ? " was" : "s were"} also sent.` : ""}${failed ? ` ${failed} WhatsApp message${failed === 1 ? " could" : "s could"} not be sent.` : ""}`
           : `${formatMonth(monthDate)} saved as a draft.`,
       );
       setPublishOpen(false);
@@ -459,6 +476,87 @@ export default function RosterPage() {
       columns: ["Date", "Duty", "Teacher(s)", "Status"],
       rows: rows.map((row) => [row.Date, row.Duty, row.Teachers, row.Status]),
     });
+  }
+  function exportTeacherRoster(item: Assignment, kind: "CSV" | "PDF") {
+    const rows = (data?.assignments || [])
+      .filter((assignment) => assignment.userId === item.userId)
+      .sort((left, right) => left.assignmentDate.localeCompare(right.assignmentDate))
+      .map((assignment) => ({
+        Date: formatDate(assignment.assignmentDate),
+        Service: assignment.serviceName || "Non-teaching duty",
+        Responsibility:
+          assignment.dutyName +
+          (assignment.className ? " · " + assignment.className : ""),
+        Status: assignment.status,
+      }));
+    if (kind === "CSV") {
+      const csv = [
+        "Date,Service,Responsibility,Status",
+        ...rows.map((row) =>
+          Object.values(row)
+            .map((value) => '"' + String(value).replaceAll('"', '""') + '"')
+            .join(","),
+        ),
+      ].join("\n");
+      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download =
+        "TPK-" +
+        item.teacherName.replaceAll(/\s+/g, "-").toLowerCase() +
+        "-" +
+        monthKey +
+        "-roles.csv";
+      link.click();
+      URL.revokeObjectURL(url);
+      return;
+    }
+    printBrandedDocument({
+      eyebrow: "Teaching roster",
+      title: item.teacherName + "’s " + formatMonth(monthDate) + " Roles",
+      subtitle: "TribePetra Kids · Petra Wuse Campus",
+      stats: [
+        { label: "Responsibilities", value: rows.length },
+        {
+          label: "Sunday roles",
+          value: rows.filter((row) => row.Service !== "Non-teaching duty").length,
+        },
+      ],
+      columns: ["Date", "Service", "Responsibility", "Status"],
+      rows: rows.map((row) => [
+        row.Date,
+        row.Service,
+        row.Responsibility,
+        row.Status,
+      ]),
+    });
+  }
+  async function sendTeacherReminder(
+    teacherId: number,
+    channel: "IN_APP" | "WHATSAPP" | "EMAIL",
+  ) {
+    if (!session) throw new Error("Please sign in again.");
+    const response = await fetch(
+      apiBase + "/api/v1/roster/teacher-reminders",
+      {
+        method: "POST",
+        headers: { ...authHeaders(session), "Content-Type": "application/json" },
+        body: JSON.stringify({ teacherId, month: monthKey, channel }),
+      },
+    );
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.success)
+      throw new Error(
+        result.error?.message || "We could not send that roster reminder.",
+      );
+    const description =
+      channel === "IN_APP"
+        ? "An in-app reminder is ready on your board."
+        : "An in-app reminder was created and the " +
+          (channel === "EMAIL" ? "email" : "WhatsApp") +
+          " reminder was sent.";
+    setNotice(description);
+    return description;
   }
   return (
     <section className="roster-page">
@@ -591,6 +689,14 @@ export default function RosterPage() {
               </div>
             )}
           </div>
+          <DataViewToggle
+            value={display}
+            onChange={setRosterDisplay}
+            gridLabel="Roster card grid"
+            listLabel="Roster list"
+            calendarLabel="Monthly calendar"
+            showCalendar
+          />
         </div>
         {error && (
           <p className="roster-error">
@@ -604,7 +710,7 @@ export default function RosterPage() {
             {notice}
           </p>
         )}
-        {tab === "SUNDAY" ? (
+        {tab === "SUNDAY" && display === "GRID" ? (
           <SundayGrid
             dates={(data?.sundays || []).filter(
               (date) => !sundayFilter || date === sundayFilter,
@@ -630,9 +736,43 @@ export default function RosterPage() {
             onTeacher={setTeacherMenu}
             loading={loading}
             readOnly={readOnly}
+          />
+        ) : tab === "SUNDAY" && display === "LIST" ? (
+          <SundayList
+            dates={(data?.sundays || []).filter(
+              (date) => !sundayFilter || date === sundayFilter,
+            )}
+            assignments={cellAssignments}
+            onAssign={(date, column) => {
+              const duty = dutyByCode(column.code);
+              const classroom = "className" in column
+                ? data?.classes.find((item) => item.name === column.className)
+                : undefined;
+              openAssign({ type: "SUNDAY", date, serviceType: column.code === "FIRST_SERVICE_TEAM" ? "FIRST_SERVICE" : "SECOND_SERVICE", dutyId: duty ? String(duty.id) : "", classId: classroom ? String(classroom.id) : "" });
+            }}
+            onTeacher={setTeacherMenu}
+            loading={loading}
+            readOnly={readOnly}
+          />
+        ) : tab === "SUNDAY" ? (
+          <SundayCalendar
+            dates={(data?.sundays || []).filter(
+              (date) => !sundayFilter || date === sundayFilter,
+            )}
+            assignments={cellAssignments}
+            onAssign={(date, column) => {
+              const duty = dutyByCode(column.code);
+              const classroom = "className" in column
+                ? data?.classes.find((item) => item.name === column.className)
+                : undefined;
+              openAssign({ type: "SUNDAY", date, serviceType: column.code === "FIRST_SERVICE_TEAM" ? "FIRST_SERVICE" : "SECOND_SERVICE", dutyId: duty ? String(duty.id) : "", classId: classroom ? String(classroom.id) : "" });
+            }}
+            onTeacher={setTeacherMenu}
+            loading={loading}
+            readOnly={readOnly}
             locked={locked}
           />
-        ) : (
+        ) : display === "GRID" ? (
           <NonTeachingGrid
             dates={datesForNonTeaching}
             assignments={nonTeachingAssignments}
@@ -643,6 +783,31 @@ export default function RosterPage() {
                 date,
                 dutyId: duty ? String(duty.id) : "",
               });
+            }}
+            onTeacher={setTeacherMenu}
+            loading={loading}
+            readOnly={readOnly}
+            locked={locked}
+          />
+        ) : display === "LIST" ? (
+          <NonTeachingList
+            dates={datesForNonTeaching}
+            assignments={nonTeachingAssignments}
+            onAssign={(date, code) => {
+              const duty = dutyByCode(code);
+              openAssign({ type: "NON_TEACHING", date, dutyId: duty ? String(duty.id) : "" });
+            }}
+            onTeacher={setTeacherMenu}
+            loading={loading}
+            readOnly={readOnly}
+          />
+        ) : (
+          <NonTeachingCalendar
+            dates={datesForNonTeaching}
+            assignments={nonTeachingAssignments}
+            onAssign={(date, code) => {
+              const duty = dutyByCode(code);
+              openAssign({ type: "NON_TEACHING", date, dutyId: duty ? String(duty.id) : "" });
             }}
             onTeacher={setTeacherMenu}
             loading={loading}
@@ -702,7 +867,10 @@ export default function RosterPage() {
           item={teacherMenu}
           assignments={data?.assignments || []}
           isSuperAdmin={superAdmin}
+          isSelf={teacherMenu.userId === session?.staffUserId}
           locked={locked}
+          onExport={(kind) => exportTeacherRoster(teacherMenu, kind)}
+          onNotify={(channel) => sendTeacherReminder(teacherMenu.userId, channel)}
           onClose={() => setTeacherMenu(null)}
           onChange={() => {
             const duty = data?.duties.find(
@@ -737,6 +905,12 @@ export default function RosterPage() {
         />
       )}
       <style jsx>{styles}</style>
+      <style jsx global>{`
+        .roster-page .roster-card-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:14px}.roster-page .roster-grid-card{overflow:hidden;border:1px solid #e2e7ee;border-radius:11px;background:#fff;box-shadow:0 6px 18px #17284708}.roster-page .roster-grid-card>header{display:flex;align-items:center;justify-content:space-between;padding:15px 16px;border-bottom:1px solid #edf0f4;background:linear-gradient(135deg,#fffaf6,#fff)}.roster-page .roster-grid-card>header span{display:block;color:#7a8799;font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}.roster-page .roster-grid-card>header h2{margin:4px 0 0;color:#172945;font-size:20px}.roster-page .roster-grid-card>header>i{width:34px;height:34px;display:grid;place-items:center;border-radius:10px;background:#fff0e9;color:#ed5938;font-style:normal}.roster-page .roster-grid-roles{display:grid}.roster-page .roster-grid-roles>section{display:grid;grid-template-columns:minmax(110px,.78fr) minmax(0,1.22fr);align-items:center;gap:11px;min-height:59px;padding:10px 14px;border-top:1px solid #eef1f4}.roster-page .roster-grid-roles>section>div{display:grid;gap:3px}.roster-page .roster-grid-roles b{color:#2a3b57;font-size:11px}.roster-page .roster-grid-roles small{color:#7d889a;font-size:9px}.roster-page .roster-grid-roles em{color:#8b96a6;font-size:10px;font-style:normal;font-weight:800}.roster-page .roster-grid-roles .teachers{gap:3px}.roster-page .roster-grid-roles .teachers button{font-size:10px}.roster-page .roster-grid-roles .teachers img,.roster-page .roster-grid-roles .teachers i{width:23px;height:23px}.roster-page .roster-duty-list{grid-template-columns:1fr}.roster-page .roster-duty-list .roster-day-card{display:grid;grid-template-columns:190px minmax(0,1fr)}.roster-page .roster-duty-list .roster-day-card>header{border-right:1px solid #edf0f3;border-bottom:0}.roster-page .roster-duty-list .roster-duty-items{grid-template-columns:repeat(2,minmax(0,1fr))}.roster-page .roster-duty-list .roster-duty-items>section{grid-template-columns:1fr;gap:6px;padding:11px 13px;border-top:0;border-left:1px solid #eef0f2}.roster-page .roster-duty-list .roster-duty-items>section:nth-child(odd){border-left:0}.roster-page .roster-duty-list .roster-duty-items>section:nth-child(n+3){border-top:1px solid #eef0f2}@media(max-width:900px){.roster-page .roster-card-grid{grid-template-columns:1fr}.roster-page .roster-duty-list .roster-day-card{grid-template-columns:1fr}.roster-page .roster-duty-list .roster-day-card>header{border-right:0;border-bottom:1px solid #edf0f3}}@media(max-width:620px){.roster-page .roster-duty-list .roster-duty-items{grid-template-columns:1fr}.roster-page .roster-duty-list .roster-duty-items>section{border-left:0;border-top:1px solid #eef0f2}.roster-page .roster-grid-roles>section{grid-template-columns:minmax(96px,.75fr) minmax(0,1.25fr)}}
+        .teacher-roster-actions{display:grid;gap:9px;padding:0 24px 18px}.roster-share-card,.roster-export-card{width:100%;border:1px solid #dfe6ee;border-radius:9px;background:#fff;display:flex;align-items:center;gap:10px;padding:11px;text-align:left}.roster-share-card{cursor:pointer}.roster-share-card:hover{border-color:#ff6846;background:#fff9f6}.roster-share-card:disabled{cursor:wait;opacity:.7}.roster-share-card>svg{width:31px;height:31px;flex:none;padding:7px;border-radius:8px;background:#e6f8ed;color:#07844f}.roster-share-card.email>svg{background:#edf4ff;color:#2667bf}.roster-share-card.self>svg{background:#fff2dd;color:#ba7500}.roster-share-card span{display:grid;gap:3px}.roster-share-card b,.roster-export-card b{color:#20314d;font-size:11px}.roster-share-card small{color:#718098;font-size:9px}.roster-export-card{justify-content:space-between;background:#fafcff}.roster-export-card>span{display:flex;align-items:center;gap:8px}.roster-export-card>span>svg{color:#536c91}.roster-export-card>div{display:flex;gap:6px}.roster-export-card button{height:30px;border:1px solid #d9e1ec;border-radius:6px;background:#fff;color:#275baf;padding:0 9px;font:800 10px var(--font-body);cursor:pointer}.roster-export-card button:hover{border-color:#ff6846;color:#e54c2a}.roster-delivery-note{margin:0;padding:9px 10px;border-radius:7px;background:#eaf8ef;color:#087753;font-size:10px;line-height:1.4}
+        .roster-duty-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;margin-top:14px}.roster-day-card{border:1px solid #e4e6ea;border-radius:10px;background:#fff;overflow:hidden}.roster-day-card>header{display:flex;align-items:center;justify-content:space-between;padding:14px 15px;border-bottom:1px solid #edf0f3;background:#fffcf8}.roster-day-card>header span{display:block;color:#7a8597;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em}.roster-day-card>header h2{margin:3px 0 0;color:#152848;font-size:20px}.roster-day-card>header>svg{color:#f15b39;font-size:18px}.roster-duty-items{display:grid}.roster-duty-items>section{display:grid;grid-template-columns:minmax(120px,.85fr) minmax(0,1.25fr);align-items:center;gap:12px;min-height:57px;padding:10px 14px;border-top:1px solid #eef0f2}.roster-duty-items>section:first-child{border-top:0}.roster-duty-items>section>div{display:grid;gap:3px}.roster-duty-items>section b{font-size:11px;color:#293b59}.roster-duty-items>section small{color:#7a879a;font-size:9px}.roster-duty-items em{color:#8a95a6;font-size:10px;font-style:normal;font-weight:800}.roster-duty-items :global(.teachers){gap:3px}.roster-duty-items :global(.teachers button){font-size:10px}.roster-duty-items :global(.teachers img),.roster-duty-items :global(.teachers i){width:23px;height:23px}.list-empty{margin:14px 0 0;padding:32px;border:1px dashed #dce2ea;border-radius:9px;text-align:center;color:#77849a;font-size:12px}.roster-day-card.compact{grid-column:span 1}
+        @media(max-width:1024px){.roster-duty-list{grid-template-columns:1fr 1fr}}@media(max-width:680px){.roster-duty-list{grid-template-columns:1fr}.roster-duty-items>section{grid-template-columns:minmax(105px,.75fr) minmax(0,1.25fr);padding:10px 12px}.roster-day-card>header{padding:13px}.roster-day-card>header h2{font-size:18px}}
+      `}</style>
     </section>
   );
 }
@@ -802,6 +976,45 @@ function Teachers({
   );
 }
 function SundayGrid({
+  dates,
+  assignments,
+  onAssign,
+  onTeacher,
+  loading,
+  readOnly,
+}: {
+  dates: string[];
+  assignments: (date: string, column: (typeof sundayColumns)[number]) => Assignment[];
+  onAssign: (date: string, column: (typeof sundayColumns)[number]) => void;
+  onTeacher: (item: Assignment) => void;
+  loading: boolean;
+  readOnly: boolean;
+}) {
+  return (
+    <section className="roster-card-grid" aria-label="Sunday duties in card grid view">
+      {dates.map((date) => (
+        <article key={date} className="roster-grid-card">
+          <header>
+            <div><span>Sunday duties</span><h2>{formatDate(date)}</h2></div>
+            <i><FiCalendar /></i>
+          </header>
+          <div className="roster-grid-roles">
+            {sundayColumns.map((column) => {
+              const items = assignments(date, column);
+              return <section key={column.label}>
+                <div><b>{column.label}</b>{"sub" in column && <small>{column.sub}</small>}</div>
+                {items.length ? <Teachers items={items} onTeacher={onTeacher} /> : readOnly ? <em>Unfilled</em> : <button className="cell-assign" onClick={() => onAssign(date, column)}><FiPlus /> Assign</button>}
+              </section>;
+            })}
+          </div>
+        </article>
+      ))}
+      {!dates.length && <p className="list-empty">{loading ? "Loading monthly duties…" : "No Sunday duties match these filters."}</p>}
+    </section>
+  );
+}
+
+function SundayCalendar({
   dates,
   assignments,
   onAssign,
@@ -897,7 +1110,76 @@ function SundayGrid({
     </div>
   );
 }
+function SundayList({
+  dates,
+  assignments,
+  onAssign,
+  onTeacher,
+  loading,
+  readOnly,
+}: {
+  dates: string[];
+  assignments: (date: string, column: (typeof sundayColumns)[number]) => Assignment[];
+  onAssign: (date: string, column: (typeof sundayColumns)[number]) => void;
+  onTeacher: (item: Assignment) => void;
+  loading: boolean;
+  readOnly: boolean;
+}) {
+  return (
+    <div className="roster-duty-list" aria-label="Sunday duties in list view">
+      {dates.map((date) => (
+        <article key={date} className="roster-day-card">
+          <header><div><span>Sunday</span><h2>{formatDate(date)}</h2></div><FiCalendar /></header>
+          <div className="roster-duty-items">
+            {sundayColumns.map((column) => {
+              const items = assignments(date, column);
+              return <section key={column.label}>
+                <div><b>{column.label}</b>{"sub" in column && <small>{column.sub}</small>}</div>
+                {items.length ? <Teachers items={items} onTeacher={onTeacher} /> : readOnly ? <em>Unfilled</em> : <button className="cell-assign" onClick={() => onAssign(date, column)}><FiPlus />Assign</button>}
+              </section>;
+            })}
+          </div>
+        </article>
+      ))}
+      {!dates.length && <p className="list-empty">{loading ? "Loading monthly duties…" : "No Sunday duties match these filters."}</p>}
+    </div>
+  );
+}
 function NonTeachingGrid({
+  dates,
+  assignments,
+  onAssign,
+  onTeacher,
+  loading,
+  readOnly,
+}: {
+  dates: string[];
+  assignments: (date: string, code: string) => Assignment[];
+  onAssign: (date: string, code: string) => void;
+  onTeacher: (item: Assignment) => void;
+  loading: boolean;
+  readOnly: boolean;
+  locked: boolean;
+}) {
+  const duties = [
+    { label: "Prayers", code: "PRAYERS" },
+    { label: "Lesson Plan Review", code: "LESSON_PLAN_REVIEW" },
+  ];
+  return (
+    <section className="roster-card-grid non-teaching-cards" aria-label="Non-teaching duties in card grid view">
+      {dates.map((date) => <article key={date} className="roster-grid-card">
+        <header><div><span>Weekday duty</span><h2>{formatDate(date)}</h2></div><i><FiBookOpen /></i></header>
+        <div className="roster-grid-roles">{duties.map((duty) => {
+          const items = assignments(date, duty.code);
+          return <section key={duty.code}><div><b>{duty.label}</b></div>{items.length ? <Teachers items={items} onTeacher={onTeacher} /> : readOnly ? <em>Unfilled</em> : <button className="cell-assign" onClick={() => onAssign(date, duty.code)}><FiPlus /> Assign</button>}</section>;
+        })}</div>
+      </article>)}
+      {!dates.length && <p className="list-empty">{loading ? "Loading duties…" : "No non-teaching duties are scheduled yet."}</p>}
+    </section>
+  );
+}
+
+function NonTeachingCalendar({
   dates,
   assignments,
   onAssign,
@@ -975,6 +1257,38 @@ function NonTeachingGrid({
           )}
         </tbody>
       </table>
+    </div>
+  );
+}
+function NonTeachingList({
+  dates,
+  assignments,
+  onAssign,
+  onTeacher,
+  loading,
+  readOnly,
+}: {
+  dates: string[];
+  assignments: (date: string, code: string) => Assignment[];
+  onAssign: (date: string, code: string) => void;
+  onTeacher: (item: Assignment) => void;
+  loading: boolean;
+  readOnly: boolean;
+}) {
+  const duties = [
+    { label: "Prayers", code: "PRAYERS" },
+    { label: "Lesson Plan Review", code: "LESSON_PLAN_REVIEW" },
+  ];
+  return (
+    <div className="roster-duty-list" aria-label="Non-teaching duties in list view">
+      {dates.map((date) => <article key={date} className="roster-day-card compact">
+        <header><div><span>Weekday duty</span><h2>{formatDate(date)}</h2></div><FiBookOpen /></header>
+        <div className="roster-duty-items">{duties.map((duty) => {
+          const items = assignments(date, duty.code);
+          return <section key={duty.code}><div><b>{duty.label}</b></div>{items.length ? <Teachers items={items} onTeacher={onTeacher} /> : readOnly ? <em>Unfilled</em> : <button className="cell-assign" onClick={() => onAssign(date, duty.code)}><FiPlus />Assign</button>}</section>;
+        })}</div>
+      </article>)}
+      {!dates.length && <p className="list-empty">{loading ? "Loading duties…" : "No non-teaching duties are scheduled yet."}</p>}
     </div>
   );
 }
@@ -1295,7 +1609,10 @@ function TeacherProfileModal({
   item,
   assignments,
   isSuperAdmin,
+  isSelf,
   locked,
+  onExport,
+  onNotify,
   onClose,
   onChange,
   onRemove,
@@ -1303,17 +1620,35 @@ function TeacherProfileModal({
   item: Assignment;
   assignments: Assignment[];
   isSuperAdmin: boolean;
+  isSelf: boolean;
   locked: boolean;
+  onExport: (kind: "CSV" | "PDF") => void;
+  onNotify: (channel: "IN_APP" | "WHATSAPP" | "EMAIL") => Promise<string>;
   onClose: () => void;
   onChange: () => void;
   onRemove: () => void;
 }) {
   const [tab, setTab] = useState<"PROFILE" | "ROSTER">("PROFILE");
+  const [deliveryBusy, setDeliveryBusy] = useState<"" | "IN_APP" | "WHATSAPP" | "EMAIL">("");
+  const [deliveryNote, setDeliveryNote] = useState("");
   const phone = item.whatsappNumber || item.mobileNumber || "";
   const phoneDigits = phone.replace(/\D/g, "");
   const teacherAssignments = assignments
     .filter((assignment) => assignment.userId === item.userId)
     .sort((a, b) => a.assignmentDate.localeCompare(b.assignmentDate));
+  const sendReminder = async (channel: "IN_APP" | "WHATSAPP" | "EMAIL") => {
+    setDeliveryBusy(channel);
+    setDeliveryNote("");
+    try {
+      setDeliveryNote(await onNotify(channel));
+    } catch (reason) {
+      setDeliveryNote(
+        reason instanceof Error ? reason.message : "We could not send that reminder.",
+      );
+    } finally {
+      setDeliveryBusy("");
+    }
+  };
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <section
@@ -1380,22 +1715,62 @@ function TeacherProfileModal({
             </a>
           </div>
         ) : (
-          <div className="teacher-roster-list">
-            {teacherAssignments.length ? (
-              teacherAssignments.map((assignment) => (
-                <div key={assignment.id}>
-                  <b>{formatDate(assignment.assignmentDate)}</b>
-                  <span>
-                    {assignment.dutyName}
-                    {assignment.className ? ` · ${assignment.className}` : ""}
-                  </span>
-                  <small>{assignment.serviceName || "Non-teaching duty"}</small>
+          <>
+            <div className="teacher-roster-list">
+              {teacherAssignments.length ? (
+                teacherAssignments.map((assignment) => (
+                  <div key={assignment.id}>
+                    <b>{formatDate(assignment.assignmentDate)}</b>
+                    <span>
+                      {assignment.dutyName}
+                      {assignment.className ? ` · ${assignment.className}` : ""}
+                    </span>
+                    <small>{assignment.serviceName || "Non-teaching duty"}</small>
+                  </div>
+                ))
+              ) : (
+                <p>No assignments for this month.</p>
+              )}
+            </div>
+            {(isSuperAdmin || isSelf) && teacherAssignments.length > 0 && (
+              <section className="teacher-roster-actions" aria-label="Roster sharing actions">
+                {isSuperAdmin ? (
+                  <>
+                    <button
+                      className="roster-share-card whatsapp"
+                      disabled={Boolean(deliveryBusy)}
+                      onClick={() => void sendReminder("WHATSAPP")}
+                    >
+                      <FiMessageCircle />
+                      <span><b>{deliveryBusy === "WHATSAPP" ? "Sending WhatsApp…" : "Send to teacher on WhatsApp"}</b><small>They will also receive an in-app reminder.</small></span>
+                    </button>
+                    <button
+                      className="roster-share-card email"
+                      disabled={Boolean(deliveryBusy)}
+                      onClick={() => void sendReminder("EMAIL")}
+                    >
+                      <FiMail />
+                      <span><b>{deliveryBusy === "EMAIL" ? "Sending email…" : "Send to teacher’s email"}</b><small>Shares their monthly roles and board link.</small></span>
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    className="roster-share-card self"
+                    disabled={Boolean(deliveryBusy)}
+                    onClick={() => void sendReminder("IN_APP")}
+                  >
+                    <FiCheck />
+                    <span><b>{deliveryBusy === "IN_APP" ? "Sending reminder…" : "Remind me in TPK"}</b><small>Adds this month’s roles to your notifications.</small></span>
+                  </button>
+                )}
+                <div className="roster-export-card">
+                  <span><FiDownload /><b>Export this teacher’s roles</b></span>
+                  <div><button onClick={() => onExport("PDF")}>PDF</button><button onClick={() => onExport("CSV")}>CSV</button></div>
                 </div>
-              ))
-            ) : (
-              <p>No assignments for this month.</p>
+                {deliveryNote && <p className="roster-delivery-note">{deliveryNote}</p>}
+              </section>
             )}
-          </div>
+          </>
         )}
         {isSuperAdmin && !locked && (
           <footer>

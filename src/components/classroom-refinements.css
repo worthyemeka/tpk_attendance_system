@@ -54,6 +54,188 @@
 .class-detail .review-list article { border-color: #e7e2dc; border-radius: 12px; }
 .class-detail .attendance-cards { display: none !important; }
 
+/* Weekly discussion: a calm, deliberately structured review workspace. */
+.class-detail .discussion-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+}
+
+.class-detail .discussion-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  min-width: 0;
+}
+
+.class-detail .discussion-title-icon,
+.class-detail .review-form-intro > i,
+.class-detail .discussion-empty > i {
+  flex: 0 0 auto;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 13px;
+  background: #fff0e9;
+  color: #ff5a39;
+  font-size: 20px;
+}
+
+.class-detail .discussion-title h2 { margin-top: 2px; }
+.class-detail .discussion-title p:last-child { max-width: 540px; line-height: 1.55; }
+
+.class-detail .discussion-month,
+.class-detail .review-session {
+  display: grid;
+  gap: 6px;
+  color: #667894;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.class-detail .discussion-month input {
+  min-width: 145px;
+  height: 42px;
+  box-sizing: border-box;
+  border: 1px solid #dce2eb;
+  border-radius: 9px;
+  background: #fff;
+  padding: 0 11px;
+  color: #203451;
+  font: 800 12px var(--font-body);
+}
+
+.class-detail .review-form {
+  padding: 0;
+  overflow: hidden;
+  border-color: #f1d9cf;
+  box-shadow: 0 10px 28px rgb(73 41 25 / 4%);
+}
+
+.class-detail .review-form-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 0;
+  padding: 17px 18px;
+  border-bottom-color: #f1e4dc;
+  background: linear-gradient(100deg, #fff9f6, #fff);
+}
+
+.class-detail .review-form-intro {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.class-detail .review-form-intro > i {
+  width: 35px;
+  height: 35px;
+  border-radius: 10px;
+  background: #fff0e9;
+  color: #ff5a39;
+  font-size: 16px;
+}
+
+.class-detail .review-form-intro > div { display: grid; gap: 3px; }
+.class-detail .review-form-intro b { color: #1e304d; font-size: 13px; }
+.class-detail .review-form-intro small { color: #70809a; font-size: 10px; }
+.class-detail .review-session select { min-width: 245px; height: 39px; }
+
+.class-detail .review-fields {
+  gap: 14px;
+  padding: 18px;
+  background: #fff;
+}
+
+.class-detail .review-field {
+  gap: 5px;
+  padding: 13px;
+  border: 1px solid #e4e8ee;
+  border-radius: 11px;
+  background: #fcfdff;
+}
+
+.class-detail .review-field > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #1f3150;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.class-detail .review-field > span svg { font-size: 15px; }
+.class-detail .review-field.worked > span svg { color: #079455; }
+.class-detail .review-field.improve > span svg { color: #e06a20; }
+.class-detail .review-field small { min-height: 28px; color: #7786a0; font-size: 10px; font-weight: 600; line-height: 1.4; }
+.class-detail .review-field textarea { min-height: 118px; border-radius: 8px; background: #fff; line-height: 1.5; }
+
+.class-detail .review-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 18px;
+  border-top: 1px solid #edf0f3;
+  background: #fbfcfe;
+}
+
+.class-detail .review-actions p { color: #72809a; font-size: 10px; }
+.class-detail .review-actions .primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 152px;
+  margin: 0;
+  padding: 0 15px;
+}
+
+.class-detail .review-history-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 24px 0 2px;
+}
+
+.class-detail .review-history-heading h3 { margin: 3px 0 0; font-size: 18px; }
+.class-detail .review-history-heading span { border-radius: 999px; background: #f1f4f8; padding: 5px 9px; color: #667590; font-size: 10px; font-weight: 900; }
+.class-detail .review-list { margin-top: 12px; }
+
+.class-detail .review-list article {
+  position: relative;
+  overflow: hidden;
+  padding: 16px;
+  border-color: #e6e4df;
+  box-shadow: 0 5px 15px rgb(38 32 22 / 2%);
+}
+
+.class-detail .review-list article::before { position: absolute; inset: 0 auto 0 0; width: 3px; background: #ff5a39; content: ""; }
+.class-detail .review-list article header svg { width: 30px; height: 30px; padding: 7px; box-sizing: border-box; border-radius: 9px; background: #fff0e9; }
+.class-detail .review-list article p { padding: 10px 11px; border-radius: 8px; background: #fafbfc; }
+.class-detail .review-list article p strong { color: #334764; }
+
+.class-detail .discussion-empty {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-height: 100px;
+  padding: 17px;
+  border: 1px dashed #d7dee8;
+  border-radius: 12px;
+  background: #fbfcfe;
+}
+
+.class-detail .discussion-empty > i { width: 38px; height: 38px; border-radius: 11px; background: #eef3fa; color: #6e7f9c; font-size: 17px; }
+.class-detail .discussion-empty > div { display: grid; gap: 4px; }
+.class-detail .discussion-empty b { color: #203451; font-size: 12px; }
+.class-detail .discussion-empty p { color: #75839a; font-size: 11px; line-height: 1.5; }
+
 @media (max-width: 650px) {
   .class-detail .attendance-cards { display: grid !important; }
   .class-detail .matrix { display: none !important; }
@@ -61,4 +243,16 @@
   .class-detail .weekly-reviews h2 { font-size: 23px; }
   .class-detail .teacher-cards { grid-template-columns: 1fr; }
   .class-detail .teacher-card { min-height: 88px; }
+  .class-detail .discussion-header,
+  .class-detail .review-form-heading,
+  .class-detail .review-actions { align-items: stretch; flex-direction: column; }
+  .class-detail .discussion-month,
+  .class-detail .review-session,
+  .class-detail .discussion-month input,
+  .class-detail .review-session select { width: 100%; min-width: 0; }
+  .class-detail .review-form-heading { gap: 13px; padding: 15px; }
+  .class-detail .review-fields { padding: 15px; }
+  .class-detail .review-actions { padding: 13px 15px; }
+  .class-detail .review-actions .primary { width: 100%; }
+  .class-detail .review-history-heading { align-items: flex-start; }
 }

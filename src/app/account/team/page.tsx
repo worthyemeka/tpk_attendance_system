@@ -26,9 +26,11 @@ import { printBrandedDocument } from "@/lib/branded-print";
 import { StatCard, type StatCardTone } from "@/components/stat-card";
 import { ProbationJourney } from "@/components/probation-journey";
 import { MonthPicker } from "@/components/month-picker";
+import { DataViewToggle, type DataView } from "@/components/data-view-toggle";
 import "./team-refinements.css";
 
 type Onboarding = "PROBATION" | "ONBOARDED";
+type SubUnit = { id: number; name: string; description?: string | null; isActive?: boolean; assignedCount?: number };
 type Member = {
   id: number;
   name: string;
@@ -46,6 +48,7 @@ type Member = {
   whatsappNumber?: string | null;
   mobileNumber?: string | null;
   birthDate?: string | null;
+  birthDayMonth?: string | null;
   residentialAddress?: string | null;
   emergencyContact?: string | null;
   emergencyRelationship?: string | null;
@@ -57,6 +60,7 @@ type Member = {
   probationExtensionReason?: string | null;
   assignedClasses?: string | null;
   currentAssignment?: string | null;
+  subUnits?: SubUnit[];
 };
 type TeamResponse = {
   members: Member[];
@@ -81,7 +85,7 @@ const initials = (member: Member) =>
   `${member.firstName?.[0] || member.name?.[0] || "T"}${member.lastName?.[0] || ""}`.toUpperCase();
 const genderLabel = (gender?: string | null) =>
   gender === "MALE" ? "Male" : gender === "FEMALE" ? "Female" : "Not recorded";
-const birthdayLabel = (value?: string | null) => value ? new Intl.DateTimeFormat("en-NG", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${value.slice(0, 10)}T00:00:00Z`)) : "—";
+const birthdayLabel = (value?: string | null) => value ? new Intl.DateTimeFormat("en-NG", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${/^\d{2}-\d{2}$/.test(value) ? `2000-${value}` : value.slice(0, 10)}T00:00:00Z`)) : "—";
 const accessLabel = (level?: Member["accessLevel"]) => level === "TPK_SUPER_ADMIN" ? "TPK Super Admin" : level === "TPK_FOLLOW_UP_ADMIN" ? "Follow-Up Lead" : "TPK Admin";
 const whatsappHref = (number?: string | null) => {
   const digits = String(number || "").replace(/\D/g, "");
@@ -108,6 +112,7 @@ export default function TeamPage() {
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
   const [exportOpen, setExportOpen] = useState(false);
+  const [display, setDisplay] = useState<DataView>("LIST");
   const [selected, setSelected] = useState<Member | null>(null);
   const [drawerTab, setDrawerTab] = useState<
     "OVERVIEW" | "ROSTER" | "ONBOARDING"
@@ -116,6 +121,15 @@ export default function TeamPage() {
   const [extendWeeks, setExtendWeeks] = useState("1");
   const [extendReason, setExtendReason] = useState("");
   const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    const saved = window.localStorage.getItem("tpk:team-display");
+    if (saved === "GRID" || saved === "LIST") setDisplay(saved);
+    else if (window.matchMedia("(max-width: 1024px)").matches) setDisplay("GRID");
+  }, []);
+  const setTeamDisplay = (value: DataView) => {
+    setDisplay(value);
+    window.localStorage.setItem("tpk:team-display", value);
+  };
   const isSuper =
     permissions?.isSuperAdmin ?? session?.accessLevel === "TPK_SUPER_ADMIN";
   const load = useCallback(async () => {
@@ -137,6 +151,7 @@ export default function TeamPage() {
         );
       const body = result.data as TeamResponse;
       setMembers(body.members || []);
+      setSelected((current) => current ? (body.members || []).find((item) => item.id === current.id) || null : null);
       setRoles(body.roles || []);
       setPermissions(body.permissions);
     } catch (reason) {
@@ -253,7 +268,7 @@ export default function TeamPage() {
           ? `Probation · Week ${item.probationWeek || 1}/${item.probationTargetWeeks}`
           : "Onboarded",
       "Account Status": item.accountActive === false ? "Inactive" : "Active",
-      "Current Assignment": item.currentAssignment || "—",
+      "Role this week": item.currentAssignment || "—",
       Gender: genderLabel(item.gender),
       "Access Level":
         accessLabel(item.accessLevel),
@@ -305,7 +320,7 @@ export default function TeamPage() {
         row["Date of Birth"],
         row["Onboarding Status"],
         row.Gender,
-        row["Current Assignment"],
+        row["Role this week"],
         row["Account Status"],
         row["Access Level"],
       ]),
@@ -426,20 +441,21 @@ export default function TeamPage() {
                 </div>
                 )}
           </div>
+          <DataViewToggle compact value={display} onChange={setTeamDisplay} gridLabel="Teacher cards" listLabel="Teacher table" />
         </div>
         <p className="directory-count">
           {loading
             ? "Loading team…"
             : `${shown.length} team member${shown.length === 1 ? "" : "s"}`}
         </p>
-        <div className="table-wrap">
+        {display === "LIST" ? <div className="table-wrap">
           <table>
             <thead>
               <tr>
                 <th>#</th>
                 <th>Teacher</th>
                 <th>Team Status</th>
-                <th>Current Assignment</th>
+                <th>Role This Week</th>
                 <th>Date of Birth</th>
                 <th>Gender</th>
                 <th aria-label="Open profile" />
@@ -470,7 +486,7 @@ export default function TeamPage() {
                   <td>
                     {member.currentAssignment || "No upcoming assignment"}
                   </td>
-                  <td>{birthdayLabel(member.birthDate)}</td>
+                  <td>{birthdayLabel(member.birthDayMonth || member.birthDate)}</td>
                   <td>
                     <span
                       className={`gender-badge ${String(member.gender || "").toLowerCase()}`}
@@ -494,7 +510,13 @@ export default function TeamPage() {
               )}
             </tbody>
           </table>
-        </div>
+        </div> : <div className="team-member-grid">
+          {pagedMembers.map((member) => <article key={member.id} onClick={() => openMember(member)}>
+            <header><Avatar member={member} /><span><b>{personName(member)}</b><small>{isSuper ? member.email || member.whatsappNumber || "No contact added" : "TPK Teacher"}</small></span><FiChevronRight /></header>
+            <div><span><small>Team status</small><OnboardingBadge member={member} /></span><span><small>This week</small><b>{member.currentAssignment || "No upcoming assignment"}</b></span></div>
+          </article>)}
+          {!shown.length && <p className="team-grid-empty">{loading ? "Loading registered teachers…" : "No team members match these filters."}</p>}
+        </div>}
         <p className="paging">
           Showing {shown.length ? `${(page - 1) * perPage + 1}–${Math.min(page * perPage, shown.length)}` : "0"} of {shown.length} team members
         </p>
@@ -557,9 +579,19 @@ export default function TeamPage() {
               `${personName(selected)}’s access has been updated.`,
             )
           }
+          refreshTeam={load}
         />
       )}
       <style jsx>{styles}</style>
+      <style jsx>{`
+        .toolbar{grid-template-columns:minmax(180px,1fr) minmax(210px,270px) minmax(118px,145px) minmax(118px,145px) max-content max-content;gap:8px}
+        .toolbar :global(.data-view-toggle){justify-self:end}
+        @media(max-width:1180px){.toolbar{grid-template-columns:minmax(180px,1fr) minmax(200px,250px) minmax(110px,135px) minmax(110px,135px) max-content max-content}.toolbar :global(.data-view-toggle){justify-self:end}}
+        @media(max-width:760px){.toolbar{grid-template-columns:1fr 1fr}.toolbar .directory-select,.toolbar .export-wrap,.toolbar :global(.data-view-toggle){grid-column:auto}}
+      `}</style>
+      <style jsx>{`
+        .team-member-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.team-member-grid article{cursor:pointer;border:1px solid #e6e8eb;border-radius:10px;background:#fff;padding:14px;transition:border-color .16s,box-shadow .16s}.team-member-grid article:hover{border-color:#f3a08a;box-shadow:0 8px 22px #14213c0d}.team-member-grid header{display:flex;align-items:center;gap:9px}.team-member-grid header :global(.avatar){width:38px;height:38px;flex:none}.team-member-grid header span{display:grid;gap:3px;min-width:0;flex:1}.team-member-grid header b{overflow:hidden;color:#172841;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.team-member-grid header small{overflow:hidden;color:#6d7890;text-overflow:ellipsis;white-space:nowrap;font-size:10px}.team-member-grid header>svg{color:#5f7391;font-size:18px}.team-member-grid article>div{display:grid;gap:9px;margin-top:13px;padding-top:11px;border-top:1px solid #edf0f2}.team-member-grid article>div span{display:grid;gap:5px}.team-member-grid article>div small{color:#768299;font-size:9px;text-transform:uppercase;letter-spacing:.05em}.team-member-grid article>div>span:last-child>b{color:#394b68;font-size:11px}.team-grid-empty{grid-column:1/-1;margin:0;padding:34px;border:1px dashed #dce2ea;border-radius:9px;color:#71809a;text-align:center;font-size:12px}@media(max-width:1050px){.team-member-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:600px){.team-member-grid{grid-template-columns:1fr}}
+      `}</style>
     </section>
   );
 }
@@ -623,6 +655,7 @@ function TeacherDrawer({
   extend,
   restoreAccount,
   manageAccess,
+  refreshTeam,
 }: {
   member: Member;
   isSuper: boolean;
@@ -642,6 +675,7 @@ function TeacherDrawer({
   extend: () => void;
   restoreAccount: () => void;
   manageAccess: (level: "TPK_ADMIN" | "TPK_FOLLOW_UP_ADMIN" | "TPK_SUPER_ADMIN") => void;
+  refreshTeam: () => Promise<void>;
 }) {
   const progress =
     member.onboardingStatus === "ONBOARDED"
@@ -678,7 +712,7 @@ function TeacherDrawer({
         </header>
         <div className="drawer-teacher-meta">
           <span><FiCalendar /><small>Joined TPK</small><b>{niceDate(member.joinedAt)}</b></span>
-          <span><FiUsers /><small>Role</small><b>{member.currentAssignment || "TPK Teacher"}</b></span>
+          <span><FiUsers /><small>Role this week</small><b>{member.currentAssignment || "No role assigned this week"}</b></span>
           {isSuper && <span><FiMail /><small>Email</small><b>{member.email ? <a href={`mailto:${member.email}`}>{member.email}</a> : "Not added"}</b></span>}
         </div>
         <nav>
@@ -693,7 +727,7 @@ function TeacherDrawer({
             ))}
         </nav>
         <div className="drawer-content">
-          {tab === "OVERVIEW" && <TeacherOverview member={member} isSuper={isSuper} ownProfile={ownProfile} />}
+          {tab === "OVERVIEW" && <TeacherOverview member={member} isSuper={isSuper} ownProfile={ownProfile} refreshTeam={refreshTeam} />}
           {false && tab === "OVERVIEW" && (
             <>
               <Section title="Contact information">
@@ -917,13 +951,57 @@ function TeacherDrawer({
   );
 }
 
-function TeacherOverview({ member, isSuper, ownProfile }: { member: Member; isSuper: boolean; ownProfile: boolean }) {
+function SubUnitPanel({ member, isSuper, refreshTeam }: { member: Member; isSuper: boolean; refreshTeam: () => Promise<void> }) {
+  const session = useMemo(() => readTeacherSession(), []);
+  const [catalog, setCatalog] = useState<SubUnit[]>([]);
+  const [assigned, setAssigned] = useState<SubUnit[]>(member.subUnits || []);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  useEffect(() => setAssigned(member.subUnits || []), [member.id, member.subUnits]);
+  useEffect(() => {
+    if (!isSuper || !session) return;
+    void (async () => {
+      try {
+        const response = await fetch(`${apiBase}/api/v1/sub-units`, { headers: authHeaders(session) });
+        const result = await response.json();
+        if (response.ok && result.success) setCatalog(result.data?.subUnits || []);
+      } catch { /* The current assigned Sub Units remain visible if the catalog is unavailable. */ }
+    })();
+  }, [isSuper, session]);
+  const selectedIds = new Set(assigned.map((unit) => unit.id));
+  const toggle = (unit: SubUnit) => setAssigned((current) => current.some((item) => item.id === unit.id) ? current.filter((item) => item.id !== unit.id) : [...current, unit]);
+  const save = async () => {
+    if (!session) return;
+    setSaving(true); setMessage("");
+    try {
+      const response = await fetch(`${apiBase}/api/v1/staff/${member.id}/sub-units`, {
+        method: "PUT",
+        headers: { ...authHeaders(session), "Content-Type": "application/json" },
+        body: JSON.stringify({ subUnitIds: assigned.map((unit) => unit.id) }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.error?.message || "We could not save the Sub Units.");
+      await refreshTeam();
+      setMessage("Sub Units saved.");
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : "We could not save the Sub Units.");
+    } finally { setSaving(false); }
+  };
+  return <article className="overview-card sub-units-card">
+    <header><i><FiActivity /></i><div><h3>Sub Units</h3><p>Ministry responsibilities assigned by TPK Super Admins.</p></div></header>
+    {assigned.length ? <div className="sub-unit-pills">{assigned.map((unit) => <span key={unit.id} title={unit.description || unit.name}>{unit.name}</span>)}</div> : <p className="sub-units-empty">No Sub Units have been assigned yet.</p>}
+    {isSuper && <details className="sub-unit-manager"><summary>Manage Sub Units</summary><p>Only TPK Super Admins can change these responsibilities.</p><div>{catalog.map((unit) => <label key={unit.id}><input type="checkbox" checked={selectedIds.has(unit.id)} onChange={() => toggle(unit)} /><span><b>{unit.name}</b><small>{unit.description}</small></span></label>)}</div><button type="button" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save Sub Units"}</button>{message && <small className="sub-unit-message">{message}</small>}</details>}
+  </article>;
+}
+
+function TeacherOverview({ member, isSuper, ownProfile, refreshTeam }: { member: Member; isSuper: boolean; ownProfile: boolean; refreshTeam: () => Promise<void> }) {
   const probation = member.onboardingStatus === "PROBATION";
   return <section className="teacher-overview">
-    <article className="overview-card about-card"><header><i><FiUsers /></i><div><h3>About {member.firstName || personName(member)}</h3><p>Key information and ministry details.</p></div>{ownProfile && <Link href="/account/profile">Edit Details</Link>}</header><dl><div><dt>Full Name</dt><dd>{personName(member)}</dd></div><div><dt>Email Address</dt><dd>{member.email ? <a href={`mailto:${member.email}`}>{member.email}</a> : "Not added"}</dd></div><div><dt>Role</dt><dd>{member.currentAssignment || "TPK Teacher"}</dd></div><div><dt>Phone Number</dt><dd>{whatsappHref(member.whatsappNumber) ? <a href={whatsappHref(member.whatsappNumber)} target="_blank" rel="noreferrer">{member.whatsappNumber}</a> : "Not added"}</dd></div><div><dt>Location</dt><dd>{isSuper ? member.residentialAddress || "Not added" : "Wuse Campus"}</dd></div><div><dt>Start Date</dt><dd>{niceDate(member.joinedAt)}</dd></div><div><dt>Date of Birth</dt><dd>{niceDate(member.birthDate)}</dd></div><div><dt>Emergency Contact</dt><dd>{member.emergencyContact || "Not added"}</dd></div><div><dt>Status</dt><dd className={probation ? "probation-text" : "onboarded-text"}>{probation ? `● On Probation · Week ${member.probationWeek || 1}/${member.probationTargetWeeks}` : "✓ Onboarded"}</dd></div></dl></article>
-    <div className="overview-split"><article className="overview-card assignment-card"><header><i><FiUsers /></i><div><h3>Current Assignment</h3><p>Where {member.firstName || "this teacher"} is currently serving.</p></div></header><dl><div><dt>Role / Duty</dt><dd>{member.currentAssignment || "No upcoming assignment"}</dd></div><div><dt>Class access</dt><dd>{member.assignedClasses || "Assigned by weekly roster"}</dd></div><div><dt>Team</dt><dd>TribePetra Kids</dd></div></dl></article>{probation ? <article className="overview-card probation-card"><header><i><FiShield /></i><div><h3>Probation Summary</h3><p>A quick view of their onboarding progress.</p></div></header><b>{member.probationWeek || 1} of {member.probationTargetWeeks + 1} milestones in progress</b><div className="overview-progress"><i style={{ width: `${Math.min(100, ((member.probationWeek || 1) / member.probationTargetWeeks) * 100)}%` }} /></div><small>Orientation · supported service weeks · final review</small></article> : <article className="overview-card onboarded-card"><header><i><FiCheck /></i><div><h3>Onboarding Complete</h3><p>Ready for ongoing ministry assignments.</p></div></header><b>✓ Fully onboarded</b><small>Orientation and supported serving completed.</small></article>}</div>
+<article className="overview-card about-card"><header><i><FiUsers /></i><div><h3>About {member.firstName || personName(member)}</h3><p>Key information and ministry details.</p></div>{ownProfile && <Link href="/account/profile">Edit Details</Link>}</header><dl><div><dt>Full Name</dt><dd>{personName(member)}</dd></div><div><dt>Email Address</dt><dd>{member.email ? <a href={`mailto:${member.email}`}>{member.email}</a> : "Not added"}</dd></div><div><dt>System role</dt><dd>{accessLabel(member.accessLevel || "TPK_ADMIN")}</dd></div><div><dt>Phone Number</dt><dd>{whatsappHref(member.whatsappNumber) ? <a href={whatsappHref(member.whatsappNumber)} target="_blank" rel="noreferrer">{member.whatsappNumber}</a> : "Not added"}</dd></div><div><dt>Location</dt><dd>{isSuper ? member.residentialAddress || "Not added" : "Wuse Campus"}</dd></div><div><dt>Start Date</dt><dd>{niceDate(member.joinedAt)}</dd></div><div><dt>Date of Birth</dt><dd>{birthdayLabel(member.birthDayMonth || member.birthDate)}</dd></div><div><dt>Emergency Contact</dt><dd>{member.emergencyContact || "Not added"}</dd></div><div><dt>Status</dt><dd className={probation ? "probation-text" : "onboarded-text"}>{probation ? `● On Probation · Week ${member.probationWeek || 1}/${member.probationTargetWeeks}` : "✓ Onboarded"}</dd></div></dl></article>
+    <div className="overview-split"><article className="overview-card assignment-card"><header><i><FiUsers /></i><div><h3>Roles &amp; Responsibilities</h3><p>Leadership assigns system access and ministry responsibilities.</p></div></header><dl><div><dt>System role</dt><dd>{accessLabel(member.accessLevel || "TPK_ADMIN")}</dd></div><div><dt>Upcoming responsibility</dt><dd>{member.currentAssignment || "No upcoming responsibility"}</dd></div><div><dt>Class responsibility</dt><dd>{member.assignedClasses || "Assigned by weekly roster"}</dd></div></dl></article>{probation ? <article className="overview-card probation-card"><header><i><FiShield /></i><div><h3>Probation Summary</h3><p>A quick view of their onboarding progress.</p></div></header><b>{member.probationWeek || 1} of {member.probationTargetWeeks + 1} milestones in progress</b><div className="overview-progress"><i style={{ width: `${Math.min(100, ((member.probationWeek || 1) / member.probationTargetWeeks) * 100)}%` }} /></div><small>Orientation · supported service weeks · final review</small></article> : <article className="overview-card onboarded-card"><header><i><FiCheck /></i><div><h3>Onboarding Complete</h3><p>Ready for ongoing ministry assignments.</p></div></header><b>✓ Fully onboarded</b><small>Orientation and supported serving completed.</small></article>}</div>
     <article className="overview-card ministry-card"><header><i><FiActivity /></i><div><h3>Ministry Information</h3><p>Serving profile and leadership details.</p></div></header><div><p><b>Profile</b><br/>Teacher details, assignment history and emergency contact information are held here for safe ministry coordination.</p><p><b>Emergency contact</b><br/>{member.emergencyRelationship || "Relationship not added"}{member.emergencyPhone ? ` · ${member.emergencyPhone}` : ""}</p></div></article>
-    <article className="overview-card permissions-card"><header><i><FiShield /></i><div><h3>Account &amp; Permissions</h3><p>System access and ministry roles.</p></div></header><div><span className="access-pill">TPK Teacher</span>{member.accessLevel && <span className="access-pill">{accessLabel(member.accessLevel)}</span>}{isSuper && <span className="access-pill">{member.accountActive === false ? "Inactive" : "Active account"}</span>}</div></article>
+    <SubUnitPanel member={member} isSuper={isSuper} refreshTeam={refreshTeam} />
+    <article className="overview-card permissions-card"><header><i><FiShield /></i><div><h3>Account &amp; Permissions</h3><p>System access is separate from Sub Unit responsibilities.</p></div></header><div><span className="access-pill">TPK Teacher</span>{member.accessLevel && <span className="access-pill">{accessLabel(member.accessLevel)}</span>}{isSuper && <span className="access-pill">{member.accountActive === false ? "Inactive" : "Active account"}</span>}</div></article>
   </section>;
 }
 
@@ -957,7 +1035,7 @@ function TeacherRosterPanel({ member }: { member: Member }) {
     if (kind === "CSV") { const csv = [Object.keys(rows[0] || {}).join(","), ...rows.map((row) => Object.values(row).map((value) => `\"${String(value).replaceAll('"', '""')}\"`).join(","))].join("\n"); const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); const link = document.createElement("a"); link.href = url; link.download = `${personName(member).replaceAll(" ", "-").toLowerCase()}-${month.toISOString().slice(0, 7)}-roster.csv`; link.click(); URL.revokeObjectURL(url); return; }
     printBrandedDocument({ eyebrow: "Teaching roster", title: `${personName(member)}’s Roster`, subtitle: `${monthLabel} · TribePetra Kids, Wuse Campus.`, stats: [{ label: "Activities", value: rows.length }, { label: "Served", value: rows.filter((row) => row.Status === "Served").length }, { label: "Upcoming", value: rows.filter((row) => row.Status === "Upcoming").length }], columns: ["Date", "Service", "Class / Duty", "Status"], rows: rows.map((row) => [row.Date, row.Service, row["Class / Duty"], row.Status]) });
   };
-  return <section className="teacher-roster-panel"><header><i><FiCalendar /></i><div><h3>Teaching Roster</h3><p>All scheduled services, assignments and attendance for the selected month.</p></div><div className="drawer-export"><button onClick={() => exportRoster("PDF")}><FiDownload /> PDF</button><button onClick={() => exportRoster("CSV")}>CSV</button></div></header><MonthPicker value={month} onChange={setMonth} ariaLabel="Choose roster month" />{error && <p className="journey-error">{error}</p>}<div className="teacher-roster-table"><table><thead><tr><th>Date</th><th>Service</th><th>Class / Duty</th><th>Status</th></tr></thead><tbody>{activities.map((item) => <tr key={item.id}><td><b>{niceDate(item.assignmentDate)}</b></td><td>{item.serviceName}</td><td>{item.className || item.dutyName}</td><td><span className={`roster-status ${item.status.toLowerCase()}`}>{item.status === "PRESENT" ? "✓ Served" : item.status === "ABSENT" ? "× Absent" : "○ Upcoming"}</span></td></tr>)}{!activities.length && <tr><td colSpan={4}>{loading ? "Loading roster…" : "No activities are scheduled for this month."}</td></tr>}</tbody></table></div><p className="quiet">Showing {activities.length} activit{activities.length === 1 ? "y" : "ies"} for {monthLabel}.</p></section>;
+  return <section className="teacher-roster-panel"><header><i><FiCalendar /></i><div><h3>Teaching Roster</h3><p>All scheduled services, assignments and attendance for the selected month.</p></div><div className="drawer-export"><button onClick={() => exportRoster("PDF")}><FiDownload /> PDF</button><button onClick={() => exportRoster("CSV")}>CSV</button></div></header><MonthPicker value={month} onChange={setMonth} ariaLabel="Choose roster month" />{error && <p className="journey-error">{error}</p>}<div className="teacher-roster-table"><table><thead><tr><th>Date</th><th>Service</th><th>Class / Duty</th><th>Status</th></tr></thead><tbody>{activities.map((item) => <tr key={item.id}><td data-label="Date"><b>{niceDate(item.assignmentDate)}</b></td><td data-label="Service">{item.serviceName}</td><td data-label="Class / Duty">{item.className || item.dutyName}</td><td data-label="Status"><span className={`roster-status ${item.status.toLowerCase()}`}>{item.status === "PRESENT" ? "✓ Served" : item.status === "ABSENT" ? "× Absent" : "○ Upcoming"}</span></td></tr>)}{!activities.length && <tr><td colSpan={4}>{loading ? "Loading roster…" : "No activities are scheduled for this month."}</td></tr>}</tbody></table></div><p className="quiet">Showing {activities.length} activit{activities.length === 1 ? "y" : "ies"} for {monthLabel}.</p></section>;
 }
 function ProbationLog({ member }: { member: Member }) {
   const session = useMemo(() => readTeacherSession(), []);
@@ -1306,4 +1384,4 @@ function Metric({ value, label }: { value: string | number; label: string }) {
   );
 }
 
-const styles = `.team-page{max-width:1260px}.team-page h1,.team-page h2,.team-page h3{font-family:var(--font-display),Georgia,serif}.team-heading{margin:5px 0 16px}.team-heading h1{margin:7px 0 6px;font-size:40px;letter-spacing:-1.25px}.team-heading>p:last-child{margin:0;color:#64718a;font-size:17px}.feedback{display:flex;align-items:center;gap:7px;margin:0 0 13px;padding:10px 13px;border-radius:8px;font-size:12px}.feedback.error{background:#fff0eb;color:#c4432d}.feedback.success{background:#e9f8ef;color:#097750}.team-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px;margin-bottom:18px}.info-card{min-height:111px;padding:15px 17px;border-radius:9px;display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto auto;column-gap:12px}.info-card i{grid-row:span 2;width:37px;height:37px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:20px}.info-card b{align-self:end;font-size:28px;line-height:1}.info-card strong{font-size:13px}.info-card small{grid-column:1 / -1;color:#65728b;font-size:11px}.info-card.green{background:#eff9f3}.info-card.green i{background:#d9f3e2;color:#078056}.info-card.blue{background:#eff6ff}.info-card.blue i{background:#ddecff;color:#1972c4}.info-card.orange{background:#fff6e6}.info-card.orange i{background:#ffebc1;color:#df8f00}.info-card.purple{background:#f6efff}.info-card.purple i{background:#eadcff;color:#7440c2}.team-tabs{display:flex;width:min(100%,540px);margin-bottom:15px;border:1px solid #e0e3e9;border-radius:8px;overflow:hidden;background:#fff}.team-tabs button{flex:1;height:39px;border:0;border-right:1px solid #e8e9ec;background:#fff;color:#59667d;font:800 11px var(--font-body);cursor:pointer}.team-tabs button:last-child{border-right:0}.team-tabs button.active{background:#fff6f0;color:#ec4d2b;box-shadow:inset 0 2px #ff5a35}.team-directory{padding:15px 17px 13px;border:1px solid #e4e1db;border-radius:10px;background:#fffdfa}.toolbar{display:flex;align-items:center;gap:10px}.search{height:42px;min-width:280px;flex:1;display:flex;align-items:center;gap:9px;padding:0 12px;border:1px solid #d9dfe8;border-radius:8px;background:#fff;color:#697792}.search input{width:100%;border:0;outline:0;background:transparent;font:600 12px var(--font-body)}.toolbar select,.filter-button{height:42px;border:1px solid #d9dfe8;border-radius:8px;background:#fff;padding:0 11px;color:#263550;font:800 11px var(--font-body)}.filter-button{display:inline-flex;align-items:center;gap:8px;cursor:pointer}.more-wrap,.export-wrap{position:relative}.more-menu,.export-menu{position:absolute;z-index:25;right:0;top:48px;min-width:210px;padding:10px;border:1px solid #dce1e7;border-radius:8px;background:#fff;box-shadow:0 15px 32px #12203a22}.more-menu label{display:grid;gap:6px;color:#4e5d77;font-size:10px;font-weight:800}.more-menu select{width:100%}.more-menu>button,.export-menu button{width:100%;margin-top:8px;padding:8px;border:0;border-radius:5px;background:transparent;text-align:left;color:#263550;font:700 11px var(--font-body);cursor:pointer}.more-menu>button:hover,.export-menu button:hover{background:#fff1ea;color:#df4b2c}.more-menu p{margin:0;color:#65728a;font-size:11px}.directory-count{margin:17px 0 10px;color:#243653;font-size:13px;font-weight:900}.table-wrap{overflow:auto;border:1px solid #e9e5de;border-radius:8px}.team-directory table{width:100%;min-width:900px;border-collapse:collapse}.team-directory th{padding:11px 10px;background:#f8f7f4;color:#60708a;text-align:left;font-size:10px;font-weight:900}.team-directory td{padding:9px 10px;border-top:1px solid #e9e8e5;color:#506079;font-size:11px}.team-directory tbody tr{cursor:pointer}.team-directory tbody tr:hover{background:#fff8f4}.teacher{display:flex;align-items:center;gap:9px;min-width:200px}.avatar{width:34px;height:34px;flex:none;border-radius:50%;object-fit:cover}.i.avatar,.avatar:not(img){display:grid;place-items:center;background:#e8eef8;color:#285f9f;font-size:10px;font-style:normal;font-weight:900}.teacher span{display:grid;gap:3px}.teacher b{color:#172841;font-size:12px}.teacher small{color:#6d7890;font-size:10px}.status{display:inline-flex;align-items:center;gap:5px;width:max-content;padding:6px 8px;border-radius:99px;font-size:10px;font-weight:900;white-space:nowrap}.status.onboarded{background:#e8f8ed;color:#087950}.status.probation{background:#fff1db;color:#ae6b00}.paging{margin:12px 0 0;color:#65728a;font-size:11px}.empty{text-align:center!important;padding:30px!important;color:#738098!important}.drawer-backdrop{position:fixed;z-index:100;inset:0;display:grid;justify-items:end;background:#09182d38}.teacher-drawer{position:relative;width:min(100%,410px);height:100%;overflow:auto;background:#fffdfa;box-shadow:-16px 0 45px #08172f28}.drawer-close{position:absolute;right:16px;top:17px;border:0;background:transparent;color:#35435d;font-size:20px;cursor:pointer}.teacher-drawer>header{display:flex;align-items:center;gap:13px;padding:28px 23px 18px}.teacher-drawer>header .avatar{width:66px;height:66px;font-size:16px}.teacher-drawer h2{margin:0;font-size:24px}.teacher-drawer header p{margin:3px 0 8px;color:#65728b;font-size:12px}.teacher-drawer nav{display:flex;padding:0 16px;border-bottom:1px solid #e8e6e1}.teacher-drawer nav button{flex:1;padding:11px 5px;border:0;border-bottom:2px solid transparent;background:transparent;color:#66728a;font:800 10px var(--font-body);cursor:pointer}.teacher-drawer nav button.active{border-bottom-color:#ff5533;color:#172a48}.drawer-content{padding:17px 23px 100px}.drawer-section{padding:0 0 15px;margin:0 0 15px;border-bottom:1px solid #ebe8e3}.drawer-section h3{margin:0 0 13px;font-size:16px}.info{display:flex;gap:10px;margin:12px 0}.info>i{width:20px;color:#607391;font-style:normal;font-size:17px}.info span{display:grid;gap:3px}.info small{color:#718099;font-size:10px}.info b{color:#263752;font-size:12px}.quiet{margin:13px 0 0;color:#748097;font-size:11px;line-height:1.5}.outline-link,.edit-link{display:block;padding:11px;border:1px solid #dce1e8;border-radius:7px;color:#283953;text-align:center;font:800 11px var(--font-body);text-decoration:none}.attendance-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.metric{padding:12px;border-radius:8px;background:#f7f8f8;display:grid;gap:5px}.metric b{font-size:21px}.metric small{color:#65728b;font-size:10px}.week{display:block;font-size:13px}.progress{height:9px;margin:11px 0 5px;overflow:hidden;border-radius:99px;background:#e8ebef}.progress i{display:block;height:100%;border-radius:99px;background:#f3a21c}.drawer-section>small{color:#64718a;font-size:10px}.milestones{margin:16px 0 0;padding:0;list-style:none;display:grid;gap:10px}.milestones li{display:flex;justify-content:space-between;gap:8px;color:#68758b;font-size:11px}.milestones li:before{content:"○";margin-right:6px}.milestones li.done:before{content:"✓";color:#099158}.milestones li.current:before{content:"◉";color:#f0a018}.milestones li em{margin-left:auto;padding:3px 6px;border-radius:99px;background:#eef0f4;color:#64708a;font-size:9px;font-style:normal}.extend{padding:13px;border-radius:8px;background:#fff7e8;display:grid;gap:9px}.extend>b{font-size:13px}.extend label{display:grid;gap:5px;color:#52607a;font-size:10px;font-weight:800}.extend select,.extend textarea{width:100%;box-sizing:border-box;border:1px solid #d9dfe8;border-radius:6px;background:#fff;padding:8px;font:11px var(--font-body)}.extend textarea{min-height:60px;resize:vertical}.drawer-actions{position:sticky;bottom:0;display:flex;align-items:center;gap:8px;padding:13px 16px;border-top:1px solid #e9e6df;background:#fffdfa}.drawer-actions button{height:39px}.outline,.primary{border-radius:7px;padding:0 12px;font:800 11px var(--font-body);cursor:pointer}.outline{border:1px solid #d8dee6;background:#fff;color:#253650}.primary{border:1px solid #ff5634;background:#ff5634;color:#fff}.drawer-actions .outline{display:flex;align-items:center;gap:6px}.action-menu{position:absolute;z-index:2;bottom:60px;left:16px;right:16px;padding:12px;border:1px solid #dce1e7;border-radius:8px;background:#fff;box-shadow:0 12px 30px #0b19302e;display:grid;gap:7px}.action-menu>b{font-size:11px}.action-menu>button{height:auto;padding:7px;border:0;background:transparent;color:#d04a31;text-align:left;font:800 11px var(--font-body)}.action-menu label{display:grid;gap:5px;color:#58667e;font-size:10px;font-weight:800}.action-menu select{height:34px;border:1px solid #dce1e7;border-radius:6px;background:#fff;padding:0 8px;font:11px var(--font-body)}@media(max-width:1080px){.team-cards{grid-template-columns:repeat(2,1fr)}.toolbar{flex-wrap:wrap}.search{min-width:240px}}@media(max-width:600px){.team-heading h1{font-size:34px}.team-cards{grid-template-columns:1fr 1fr;gap:8px}.info-card{padding:12px;min-height:100px}.info-card b{font-size:24px}.info-card strong{font-size:11px}.info-card small{font-size:9px}.team-tabs{width:100%;overflow:auto}.team-tabs button{min-width:135px}.toolbar>*{flex:1}.search{min-width:100%;flex-basis:100%}.filter-button{justify-content:center;width:100%}.teacher-drawer{width:100%}}`;
+const styles = `.team-page{max-width:1260px}.team-page h1,.team-page h2,.team-page h3{font-family:var(--font-display),Georgia,serif}.team-heading{margin:5px 0 16px}.team-heading h1{margin:7px 0 6px;font-size:40px;letter-spacing:-1.25px}.team-heading>p:last-child{margin:0;color:#64718a;font-size:17px}.feedback{display:flex;align-items:center;gap:7px;margin:0 0 13px;padding:10px 13px;border-radius:8px;font-size:12px}.feedback.error{background:#fff0eb;color:#c4432d}.feedback.success{background:#e9f8ef;color:#097750}.team-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px;margin-bottom:18px}.info-card{min-height:111px;padding:15px 17px;border-radius:9px;display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto auto;column-gap:12px}.info-card i{grid-row:span 2;width:37px;height:37px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:20px}.info-card b{align-self:end;font-size:28px;line-height:1}.info-card strong{font-size:13px}.info-card small{grid-column:1 / -1;color:#65728b;font-size:11px}.info-card.green{background:#eff9f3}.info-card.green i{background:#d9f3e2;color:#078056}.info-card.blue{background:#eff6ff}.info-card.blue i{background:#ddecff;color:#1972c4}.info-card.orange{background:#fff6e6}.info-card.orange i{background:#ffebc1;color:#df8f00}.info-card.purple{background:#f6efff}.info-card.purple i{background:#eadcff;color:#7440c2}.team-tabs{display:flex;width:min(100%,540px);margin-bottom:15px;border:1px solid #e0e3e9;border-radius:8px;overflow:hidden;background:#fff}.team-tabs button{flex:1;height:39px;border:0;border-right:1px solid #e8e9ec;background:#fff;color:#59667d;font:800 11px var(--font-body);cursor:pointer}.team-tabs button:last-child{border-right:0}.team-tabs button.active{background:#fff6f0;color:#ec4d2b;box-shadow:inset 0 2px #ff5a35}.team-directory{padding:15px 17px 13px;border:1px solid #e4e1db;border-radius:10px;background:#fffdfa}.toolbar{display:grid;grid-template-columns:minmax(220px,1fr) minmax(240px,300px) minmax(130px,170px) minmax(135px,160px) auto auto;align-items:end;gap:9px}.search{height:42px;min-width:0;display:flex;align-items:center;gap:9px;padding:0 12px;border:1px solid #d9dfe8;border-radius:8px;background:#fff;color:#697792}.search input{width:100%;min-width:0;border:0;outline:0;background:transparent;font:600 12px var(--font-body)}.team-month-picker{min-width:0!important;width:100%;height:42px!important}.team-month-picker .tpk-month-picker-arrow{width:35px;font-size:16px}.team-month-picker .tpk-month-picker-trigger{gap:7px;padding:0 9px;font-size:14px}.team-month-picker .tpk-month-picker-trigger>svg:first-child{font-size:16px}.toolbar select,.filter-button{width:100%;height:42px;border:1px solid #d9dfe8;border-radius:8px;background:#fff;padding:0 10px;color:#263550;font:800 11px var(--font-body)}.directory-select{display:grid;gap:4px;min-width:0;color:#6a7890;font-size:9px;font-weight:900}.filter-button{width:auto;display:inline-flex;align-items:center;gap:7px;cursor:pointer}.more-wrap,.export-wrap{position:relative}.more-menu,.export-menu{position:absolute;z-index:25;right:0;top:48px;min-width:210px;padding:10px;border:1px solid #dce1e7;border-radius:8px;background:#fff;box-shadow:0 15px 32px #12203a22}.more-menu label{display:grid;gap:6px;color:#4e5d77;font-size:10px;font-weight:800}.more-menu select{width:100%}.more-menu>button,.export-menu button{width:100%;margin-top:8px;padding:8px;border:0;border-radius:5px;background:transparent;text-align:left;color:#263550;font:700 11px var(--font-body);cursor:pointer}.more-menu>button:hover,.export-menu button:hover{background:#fff1ea;color:#df4b2c}.more-menu p{margin:0;color:#65728a;font-size:11px}.directory-count{margin:17px 0 10px;color:#243653;font-size:13px;font-weight:900}.table-wrap{overflow:auto;border:1px solid #e9e5de;border-radius:8px}.team-directory table{width:100%;min-width:900px;border-collapse:collapse}.team-directory th{padding:11px 10px;background:#f8f7f4;color:#60708a;text-align:left;font-size:10px;font-weight:900}.team-directory td{padding:9px 10px;border-top:1px solid #e9e8e5;color:#506079;font-size:11px}.team-directory tbody tr{cursor:pointer}.team-directory tbody tr:hover{background:#fff8f4}.teacher{display:flex;align-items:center;gap:9px;min-width:200px}.avatar{width:34px;height:34px;flex:none;border-radius:50%;object-fit:cover}.i.avatar,.avatar:not(img){display:grid;place-items:center;background:#e8eef8;color:#285f9f;font-size:10px;font-style:normal;font-weight:900}.teacher span{display:grid;gap:3px}.teacher b{color:#172841;font-size:12px}.teacher small{color:#6d7890;font-size:10px}.status{display:inline-flex;align-items:center;gap:5px;width:max-content;padding:6px 8px;border-radius:99px;font-size:10px;font-weight:900;white-space:nowrap}.status.onboarded{background:#e8f8ed;color:#087950}.status.probation{background:#fff1db;color:#ae6b00}.paging{margin:12px 0 0;color:#65728a;font-size:11px}.empty{text-align:center!important;padding:30px!important;color:#738098!important}.drawer-backdrop{position:fixed;z-index:100;inset:0;display:grid;justify-items:end;background:#09182d38}.teacher-drawer{position:relative;width:min(100%,410px);height:100%;overflow:auto;background:#fffdfa;box-shadow:-16px 0 45px #08172f28}.drawer-close{position:absolute;right:16px;top:17px;border:0;background:transparent;color:#35435d;font-size:20px;cursor:pointer}.teacher-drawer>header{display:flex;align-items:center;gap:13px;padding:28px 23px 18px}.teacher-drawer>header .avatar{width:66px;height:66px;font-size:16px}.teacher-drawer h2{margin:0;font-size:24px}.teacher-drawer header p{margin:3px 0 8px;color:#65728b;font-size:12px}.teacher-drawer nav{display:flex;padding:0 16px;border-bottom:1px solid #e8e6e1}.teacher-drawer nav button{flex:1;padding:11px 5px;border:0;border-bottom:2px solid transparent;background:transparent;color:#66728a;font:800 10px var(--font-body);cursor:pointer}.teacher-drawer nav button.active{border-bottom-color:#ff5533;color:#172a48}.drawer-content{padding:17px 23px 100px}.drawer-section{padding:0 0 15px;margin:0 0 15px;border-bottom:1px solid #ebe8e3}.drawer-section h3{margin:0 0 13px;font-size:16px}.info{display:flex;gap:10px;margin:12px 0}.info>i{width:20px;color:#607391;font-style:normal;font-size:17px}.info span{display:grid;gap:3px}.info small{color:#718099;font-size:10px}.info b{color:#263752;font-size:12px}.quiet{margin:13px 0 0;color:#748097;font-size:11px;line-height:1.5}.outline-link,.edit-link{display:block;padding:11px;border:1px solid #dce1e8;border-radius:7px;color:#283953;text-align:center;font:800 11px var(--font-body);text-decoration:none}.attendance-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.metric{padding:12px;border-radius:8px;background:#f7f8f8;display:grid;gap:5px}.metric b{font-size:21px}.metric small{color:#65728b;font-size:10px}.week{display:block;font-size:13px}.progress{height:9px;margin:11px 0 5px;overflow:hidden;border-radius:99px;background:#e8ebef}.progress i{display:block;height:100%;border-radius:99px;background:#f3a21c}.drawer-section>small{color:#64718a;font-size:10px}.milestones{margin:16px 0 0;padding:0;list-style:none;display:grid;gap:10px}.milestones li{display:flex;justify-content:space-between;gap:8px;color:#68758b;font-size:11px}.milestones li:before{content:"○";margin-right:6px}.milestones li.done:before{content:"✓";color:#099158}.milestones li.current:before{content:"◉";color:#f0a018}.milestones li em{margin-left:auto;padding:3px 6px;border-radius:99px;background:#eef0f4;color:#64708a;font-size:9px;font-style:normal}.extend{padding:13px;border-radius:8px;background:#fff7e8;display:grid;gap:9px}.extend>b{font-size:13px}.extend label{display:grid;gap:5px;color:#52607a;font-size:10px;font-weight:800}.extend select,.extend textarea{width:100%;box-sizing:border-box;border:1px solid #d9dfe8;border-radius:6px;background:#fff;padding:8px;font:11px var(--font-body)}.extend textarea{min-height:60px;resize:vertical}.drawer-actions{position:sticky;bottom:0;display:flex;align-items:center;gap:8px;padding:13px 16px;border-top:1px solid #e9e6df;background:#fffdfa}.drawer-actions button{height:39px}.outline,.primary{border-radius:7px;padding:0 12px;font:800 11px var(--font-body);cursor:pointer}.outline{border:1px solid #d8dee6;background:#fff;color:#253650}.primary{border:1px solid #ff5634;background:#ff5634;color:#fff}.drawer-actions .outline{display:flex;align-items:center;gap:6px}.action-menu{position:absolute;z-index:2;bottom:60px;left:16px;right:16px;padding:12px;border:1px solid #dce1e7;border-radius:8px;background:#fff;box-shadow:0 12px 30px #0b19302e;display:grid;gap:7px}.action-menu>b{font-size:11px}.action-menu>button{height:auto;padding:7px;border:0;background:transparent;color:#d04a31;text-align:left;font:800 11px var(--font-body)}.action-menu label{display:grid;gap:5px;color:#58667e;font-size:10px;font-weight:800}.action-menu select{height:34px;border:1px solid #dce1e7;border-radius:6px;background:#fff;padding:0 8px;font:11px var(--font-body)}@media(max-width:1100px){.team-cards{grid-template-columns:repeat(2,1fr)}.toolbar{grid-template-columns:minmax(220px,1fr) minmax(240px,300px) 150px auto;align-items:end}.toolbar .directory-select{grid-column:3}.toolbar .export-wrap{grid-column:4}.toolbar :global(.data-view-toggle){grid-column:4}}@media(max-width:760px){.toolbar{grid-template-columns:1fr 1fr}.search{grid-column:1/-1}.team-month-picker{grid-column:1/-1}.toolbar .directory-select,.toolbar .export-wrap,.toolbar :global(.data-view-toggle){grid-column:auto}}@media(max-width:600px){.team-heading h1{font-size:34px}.team-cards{grid-template-columns:1fr 1fr;gap:8px}.info-card{padding:12px;min-height:100px}.info-card b{font-size:24px}.info-card strong{font-size:11px}.info-card small{font-size:9px}.team-tabs{width:100%;overflow:auto}.team-tabs button{min-width:135px}.toolbar{grid-template-columns:1fr}.toolbar>*{min-width:0}.search,.team-month-picker{grid-column:auto}.filter-button{justify-content:center;width:100%}.teacher-drawer{width:100%}}`;

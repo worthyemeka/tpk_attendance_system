@@ -18,6 +18,7 @@ import {
 } from "react-icons/fi";
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
 import { StatCard, type StatCardTone } from "@/components/stat-card";
+import { DataViewToggle, type DataView } from "@/components/data-view-toggle";
 import "./child-directory-refinement.css";
 
 type Session = ReturnType<typeof readTeacherSession>;
@@ -117,6 +118,7 @@ export function ChildDirectory() {
     [gender, setGender] = useState(""),
     [sort, setSort] = useState("name"),
     [order, setOrder] = useState("asc"),
+    [display, setDisplay] = useState<DataView>("LIST"),
     [exports, setExports] = useState(false);
   const [page, setPage] = useState(1),
     [total, setTotal] = useState(0),
@@ -137,6 +139,15 @@ export function ChildDirectory() {
   const reset = (fn: () => void) => {
     fn();
     setPage(1);
+  };
+  useEffect(() => {
+    const saved = window.localStorage.getItem("tpk:children-display");
+    if (saved === "GRID" || saved === "LIST") setDisplay(saved);
+    else if (window.matchMedia("(max-width: 1024px)").matches) setDisplay("GRID");
+  }, []);
+  const setChildDisplay = (value: DataView) => {
+    setDisplay(value);
+    window.localStorage.setItem("tpk:children-display", value);
   };
   const load = useCallback(async () => {
     if (!session) return;
@@ -410,6 +421,7 @@ export function ChildDirectory() {
               </div>
             )}
           </div>
+          <DataViewToggle value={display} onChange={setChildDisplay} gridLabel="Children grid" listLabel="Children list" />
         </section>
         <p className="children-count">
           {loading ? "Loading children…" : `${total} children`}
@@ -418,7 +430,7 @@ export function ChildDirectory() {
           <p className="child-error">{error}</p>
         ) : (
           <>
-            <div className="children-table">
+            {display === "LIST" ? <div className="children-table">
               <table>
                 <thead>
                   <tr>
@@ -535,7 +547,13 @@ export function ChildDirectory() {
                   )}
                 </tbody>
               </table>
-            </div>
+            </div> : <div className="child-record-grid">
+              {rows.map((row) => <article key={row.id} onClick={() => void open(row.id)}>
+                <header><i>{initials(row.firstName, row.lastName)}</i><span><b>{row.firstName} {row.lastName}</b><small>{row.className || "No class"} · Age {row.age ?? "—"}</small></span><button aria-label={`Open ${row.firstName} ${row.lastName}`} onClick={(event) => { event.stopPropagation(); void open(row.id); }}><FiChevronRight /></button></header>
+                <div><span><small>Guardian</small><Link href={`/account/guardians?guardianId=${row.guardianId || ""}`} onClick={(event) => event.stopPropagation()}>{row.guardianName || "Not recorded"}</Link></span><span><small>Profile</small><b className={`sex-badge ${row.gender === "FEMALE" ? "female" : "male"}`}>{pretty(row.gender)}</b></span></div>
+              </article>)}
+              {!loading && !rows.length && <p className="child-grid-empty">{query || classId || gender ? "No children found. Try changing your search or filters." : "No children registered yet."}</p>}
+            </div>}
             <footer className="child-pagination">
               <p>
                 Showing {rows.length ? (page - 1) * 25 + 1 : 0}–
@@ -592,6 +610,9 @@ export function ChildDirectory() {
       )}
       <style jsx>{`
         ${styles}${childEditStyles}
+      `}</style>
+      <style jsx>{`
+        .child-record-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.child-record-grid article{cursor:pointer;border:1px solid #e7e7e4;border-radius:10px;background:#fff;padding:14px;transition:border-color .16s,box-shadow .16s}.child-record-grid article:hover{border-color:#f6a48b;box-shadow:0 8px 22px #16213a0d}.child-record-grid header{display:flex;align-items:center;gap:9px}.child-record-grid header>i{width:36px;height:36px;flex:none;display:grid;place-items:center;border-radius:50%;background:#e7efff;color:#225fa6;font-size:10px;font-style:normal;font-weight:900}.child-record-grid header span{min-width:0;display:grid;gap:3px;flex:1}.child-record-grid header b{overflow:hidden;color:#14223b;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.child-record-grid header small,.child-record-grid>article>div small{color:#71809a;font-size:10px}.child-record-grid header button{border:0;background:transparent;color:#526884;font-size:18px;cursor:pointer}.child-record-grid>article>div{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:14px;padding-top:11px;border-top:1px solid #eff0f2}.child-record-grid>article>div span{min-width:0;display:grid;gap:4px}.child-record-grid a{overflow:hidden;color:#2b5797;text-decoration:none;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:800}.child-record-grid .sex-badge{width:max-content}.child-grid-empty{grid-column:1/-1;margin:0;padding:34px;border:1px dashed #dce2ea;border-radius:9px;color:#71809a;text-align:center;font-size:12px}@media(max-width:1120px){.child-record-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:620px){.child-record-grid{grid-template-columns:1fr}}
       `}</style>
     </>
   );

@@ -15,6 +15,7 @@ import {
 } from "react-icons/fi";
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
 import { StatCard, type StatCardTone } from "@/components/stat-card";
+import { DataViewToggle, type DataView } from "@/components/data-view-toggle";
 type Case = {
   id: number;
   familyId: number;
@@ -115,7 +116,17 @@ export function FollowupWorkspace() {
     [reason, setReason] = useState(""),
     [notes, setNotes] = useState(""),
     [expectedBack, setExpectedBack] = useState(""),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [display, setDisplay] = useState<DataView>("LIST");
+  useEffect(() => {
+    const saved = window.localStorage.getItem("tpk:followups-display");
+    if (saved === "GRID" || saved === "LIST") setDisplay(saved);
+    else if (window.matchMedia("(max-width: 1024px)").matches) setDisplay("GRID");
+  }, []);
+  const setFollowupDisplay = (value: DataView) => {
+    setDisplay(value);
+    window.localStorage.setItem("tpk:followups-display", value);
+  };
   const load = useCallback(async () => {
     if (!session) return;
     try {
@@ -303,6 +314,7 @@ export function FollowupWorkspace() {
           </span>
           <span className="app-dropdown-host"><select aria-label="Filter by month" onChange={(e) => { setMonth(e.target.value); setPage(1); }} value={month}><option value="">All months</option>{months.map((label, index) => <option key={label} value={String(index + 1)}>Filter by {label}</option>)}</select></span>
           <span className="app-dropdown-host"><select aria-label="Filter by year" onChange={(e) => { setYear(e.target.value); setPage(1); }} value={year}><option value="">All years</option>{years.map((value) => <option key={value} value={value}>Filter by {value}</option>)}</select></span>
+          <DataViewToggle value={display} onChange={setFollowupDisplay} gridLabel="Follow-up cards" listLabel="Follow-up table" />
         </section>
         <p className="count">
           {total}{" "}
@@ -311,7 +323,7 @@ export function FollowupWorkspace() {
         {error ? (
           <p className="error">{error}</p>
         ) : (
-          <div className="table">
+          display === "LIST" ? <div className="table">
             <table>
               <thead>
                 <tr>
@@ -370,6 +382,13 @@ export function FollowupWorkspace() {
                 )}
               </tbody>
             </table>
+          </div> : <div className="followup-grid">
+            {rows.map((row) => <article key={row.id} onClick={() => void open(row.id)}>
+              <header><span><b>{row.childrenCount === 1 ? childNames(row.children) : `${row.familyName} Family`}</b><small>{row.childrenCount} {row.childrenCount === 1 ? "child" : "children"} · {row.classes}</small></span><Badge status={row.status} /></header>
+              <div><span><small>Last attended</small><b>{date(row.lastAttended)}</b></span><span><small>Missed</small><em>{row.missedSundays || 1} Sunday{(row.missedSundays || 1) === 1 ? "" : "s"}</em></span></div>
+              <footer><span><small>Contact</small><b>{row.guardianName || "Primary guardian"}</b></span><FiChevronRight /></footer>
+            </article>)}
+            {!rows.length && <p className="followup-grid-empty">No follow-up cases found.</p>}
           </div>
         )}{" "}
         {detail && (
@@ -396,6 +415,9 @@ export function FollowupWorkspace() {
       <style jsx>{style}</style>
       <style jsx>{systemStyle}</style>
       <style jsx>{toolbarStyle}</style>
+      <style jsx>{`
+        .followup-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.followup-grid article{cursor:pointer;border:1px solid #e6e8eb;border-radius:10px;background:#fff;padding:14px;transition:border-color .16s,box-shadow .16s}.followup-grid article:hover{border-color:#f4a18b;box-shadow:0 8px 22px #14213c0d}.followup-grid header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.followup-grid header>span:first-child{display:grid;gap:3px;min-width:0}.followup-grid header b{overflow:hidden;color:#1c2e4c;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.followup-grid header small,.followup-grid small{color:#71809a;font-size:10px}.followup-grid article>div{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;padding:11px 0;border-top:1px solid #edf0f2;border-bottom:1px solid #edf0f2}.followup-grid article>div span{display:grid;gap:4px}.followup-grid article>div b{color:#3e506d;font-size:11px}.followup-grid article footer{display:flex;align-items:center;justify-content:space-between;margin-top:11px}.followup-grid footer span{display:grid;gap:3px}.followup-grid footer b{color:#273b5d;font-size:11px}.followup-grid footer>svg{color:#58708f;font-size:18px}.followup-grid-empty{grid-column:1/-1;margin:0;padding:34px;border:1px dashed #dce2ea;border-radius:9px;color:#71809a;text-align:center;font-size:12px}@media(max-width:1050px){.followup-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:600px){.followup-grid{grid-template-columns:1fr}}
+      `}</style>
     </>
   );
 }
