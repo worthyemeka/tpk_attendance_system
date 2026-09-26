@@ -185,6 +185,8 @@
 }
 
 .class-detail .review-actions p { color: #72809a; font-size: 10px; }
+.class-detail .review-save-message { margin-left: auto; color: #c85b2f; font-size: 10px; font-weight: 800; }
+.class-detail .review-save-message.success { color: #078d61; }
 .class-detail .review-actions .primary {
   display: inline-flex;
   align-items: center;
@@ -246,6 +248,7 @@
   .class-detail .discussion-header,
   .class-detail .review-form-heading,
   .class-detail .review-actions { align-items: stretch; flex-direction: column; }
+  .class-detail .review-save-message { margin-left: 0; }
   .class-detail .discussion-month,
   .class-detail .review-session,
   .class-detail .discussion-month input,

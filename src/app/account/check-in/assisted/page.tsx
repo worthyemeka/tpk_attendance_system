@@ -21,6 +21,7 @@ export default function AssistedCheckInPage() {
   const [pickup, setPickup] = useState<Pickup>({ mode: "SELF", fullName: "", relationship: "", phone: "" });
   const [busy, setBusy] = useState(false);
   const [canOperate, setCanOperate] = useState(false);
+  const [permissionLoaded, setPermissionLoaded] = useState(false);
   const [error, setError] = useState("");
   const [receipt, setReceipt] = useState<{ pickupCode: string; pickupTicketUrl: string } | null>(null);
 
@@ -38,11 +39,15 @@ export default function AssistedCheckInPage() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!session || !serviceId) { setCanOperate(false); return; }
+    if (!session || !serviceId) { setCanOperate(false); setPermissionLoaded(false); return; }
+    setPermissionLoaded(false);
+    let cancelled = false;
     fetch(`${apiBase}/api/v1/check-ins?serviceSessionId=${serviceId}`, { headers: authHeaders(session) })
       .then((response) => response.json())
-      .then((result) => setCanOperate(Boolean(result.success && result.data?.canOperate)))
-      .catch(() => setCanOperate(false));
+      .then((result) => { if (!cancelled) setCanOperate(Boolean(result.success && result.data?.canAssistedCheckin)); })
+      .catch(() => { if (!cancelled) setCanOperate(false); })
+      .finally(() => { if (!cancelled) setPermissionLoaded(true); });
+    return () => { cancelled = true; };
   }, [serviceId, session]);
 
   const updateChild = (index: number, key: keyof Child, value: string) => setChildren((current) => current.map((child, childIndex) => childIndex === index ? { ...child, [key]: value } : child));
@@ -71,6 +76,8 @@ export default function AssistedCheckInPage() {
   }
 
   if (receipt) return <section className="assisted-page"><div className="receipt panel"><FiCheckCircle /><p className="eyebrow">Desk check-in complete</p><h1>Pickup ticket ready</h1><p>The family and child records have been saved. They are now in the live pickup list for this service.</p><b>{receipt.pickupCode}</b><a className="solid-button" href={receipt.pickupTicketUrl} target="_blank" rel="noreferrer">Open pickup ticket / PDF</a><Link className="outline-button" href="/account/check-in">Return to check-in</Link></div><style jsx>{receiptStyles}</style></section>;
+
+  if (permissionLoaded && !canOperate) return <section className="assisted-page"><div className="panel access-denied"><p className="eyebrow">Desk check-in</p><h1>Access not available</h1><p>Only the Super Admin or the Head/Assistant assigned to the selected service can use assisted check-in once the service window opens.</p><Link className="outline-button" href="/account/overview">Return to overview</Link></div><style jsx>{receiptStyles}</style></section>;
 
   return <section className="assisted-page">
     <header><Link href="/account/check-in"><FiArrowLeft /> Back to check-in</Link><p className="eyebrow">TPK staff tool</p><h1>Desk check-in</h1><p className="intro">Use the same registration details as the parent form when a family needs help at the desk. Saving checks the children in immediately and creates this Sunday’s pickup ticket.</p></header>
@@ -102,5 +109,5 @@ export default function AssistedCheckInPage() {
   </section>;
 }
 
-const receiptStyles = `.assisted-page{max-width:760px}.receipt{display:grid;justify-items:center;gap:13px;padding:40px;text-align:center}.receipt>svg{font-size:52px;color:#12965f}.receipt h1{margin:0;font-family:var(--font-display),Georgia,serif;font-size:40px}.receipt p{max-width:480px;margin:0;color:var(--muted);line-height:1.55}.receipt>b{margin:10px 0;padding:16px 24px;border:1px dashed var(--orange);border-radius:10px;color:var(--orange);font:700 36px var(--font-display),Georgia,serif}.receipt a{width:min(100%,360px);justify-content:center}`;
+const receiptStyles = `.assisted-page{max-width:760px}.receipt,.access-denied{display:grid;justify-items:center;gap:13px;padding:40px;text-align:center}.receipt>svg{font-size:52px;color:#12965f}.receipt h1,.access-denied h1{margin:0;font-family:var(--font-display),Georgia,serif;font-size:40px}.receipt p,.access-denied p{max-width:480px;margin:0;color:var(--muted);line-height:1.55}.receipt>b{margin:10px 0;padding:16px 24px;border:1px dashed var(--orange);border-radius:10px;color:var(--orange);font:700 36px var(--font-display),Georgia,serif}.receipt a,.access-denied a{width:min(100%,360px);justify-content:center}`;
 const styles = `.assisted-page{max-width:1100px}.assisted-page header{margin-bottom:22px}.assisted-page header>a{display:inline-flex;align-items:center;gap:6px;margin-bottom:17px;color:#546b93;font-size:12px;font-weight:800;text-decoration:none}.assisted-page h1,.assisted-page h2{font-family:var(--font-display),Georgia,serif}.assisted-page h1{margin:0}.assisted-page h2{margin:22px 0 7px;font-size:23px}.assisted-form{display:grid;gap:14px}.assisted-form label{display:grid;gap:6px;color:#5d574f;font-size:11px;font-weight:800}.assisted-form small{font-weight:500;color:var(--muted)}.assisted-form input,.assisted-form select,.assisted-form textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:0 10px;background:#fffdfa;color:var(--ink);font:13px var(--font-body)}.assisted-form input,.assisted-form select{height:42px}.assisted-form textarea{min-height:76px;padding-top:10px;resize:vertical}.readonly-notice{margin:0;padding:11px 13px;border:1px solid #f0dfb6;border-radius:10px;background:#fff9e9;color:#896515;font-size:12px;line-height:1.45}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.guardian-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.wide{grid-column:span 2}.children-heading{display:flex;justify-content:space-between;align-items:end;margin-top:4px}.children-heading h2{margin-bottom:2px}.children-heading p,.pickup-section>p{margin:0;color:var(--muted);font-size:12px}.children-heading button{display:inline-flex;align-items:center;gap:5px;height:36px}.child-card{padding:15px;border:1px solid var(--line);border-radius:10px;background:#fff}.child-label{display:flex;justify-content:space-between;margin-bottom:12px;font-size:12px}.remove{border:0;background:transparent;color:#bd472f;font:800 11px var(--font-body);cursor:pointer;display:inline-flex;gap:4px;align-items:center}.pickup-section{border-top:1px solid var(--line);padding-top:4px}.pickup-section h2{margin-bottom:3px}.pickup-options{display:flex;gap:10px;margin:14px 0}.pickup-options button{min-height:40px;padding:0 14px;border:1px solid var(--line);border-radius:8px;background:#fff;font:700 12px var(--font-body);color:var(--ink);cursor:pointer}.pickup-options .selected{border-color:var(--orange);background:#fff4ef;color:var(--orange)}.submit{min-height:48px;justify-content:center;margin-top:4px}.error{margin:0;color:#bf422a;font-size:12px}@media(max-width:860px){.grid,.guardian-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.wide{grid-column:span 2}}@media(max-width:500px){.grid,.guardian-grid{grid-template-columns:1fr}.wide{grid-column:auto}.children-heading{align-items:start;gap:12px}.children-heading button{white-space:nowrap}.pickup-options{display:grid}.pickup-options button{width:100%}}`;

@@ -1,14 +1,36 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { FiArrowUpRight, FiChevronRight, FiClock, FiSearch, FiUserPlus } from "react-icons/fi";
 import type { IconType } from "react-icons";
-import { readTeacherSession } from "@/lib/session";
+import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
+import { readActiveService } from "@/lib/active-service";
 
 export function QuickActions() {
-  const superAdmin = readTeacherSession()?.accessLevel === "TPK_SUPER_ADMIN";
+  const session = readTeacherSession();
+  const superAdmin = session?.accessLevel === "TPK_SUPER_ADMIN";
+  const [canAssistedCheckIn, setCanAssistedCheckIn] = useState(false);
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const active = readActiveService();
+        const current = active?.id
+          ? { id: active.id }
+          : await fetch(`${apiBase}/api/v1/service-sessions/current`, { headers: authHeaders(session) }).then((response) => response.json()).then((body) => body.success ? body.data : null);
+        if (!current?.id) return;
+        const response = await fetch(`${apiBase}/api/v1/check-ins?serviceSessionId=${current.id}`, { headers: authHeaders(session) });
+        const body = await response.json();
+        if (!cancelled) setCanAssistedCheckIn(Boolean(body.success && body.data?.canAssistedCheckin));
+      } catch { if (!cancelled) setCanAssistedCheckIn(false); }
+    };
+    void check();
+    return () => { cancelled = true; };
+  }, [session?.staffUserId, session?.sessionToken]);
   const actions: Array<[string, string, string, IconType]> = [
-    ["Assist a Check-In", "Help a parent complete check-in", "/check-in/parent?assisted=1", FiUserPlus],
+    ...(canAssistedCheckIn ? [["Assist a Check-In", "Open the desk check-in form", "/account/check-in/assisted", FiUserPlus] as [string, string, string, IconType]] : []),
     ["Find a Child", "Search live child records", "/account/children", FiSearch],
     ["Start a Pick-Up", "Verify a child’s collector", "/account/pick-up", FiArrowUpRight],
     [superAdmin ? "View Follow-Ups" : "My Follow-Ups", "Review children needing care", "/account/relations", FiClock],

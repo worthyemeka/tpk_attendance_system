@@ -1,0 +1,10 @@
+Options -MultiViews
+RewriteEngine On
+
+# Keep real files (including profile photos) directly accessible.
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Send API requests to the same router used in local development.
+RewriteRule ^ router.php [QSA,L]

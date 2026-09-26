@@ -506,6 +506,7 @@ export function ClassroomDetail({ classId }: { classId: number }) {
   const [assignmentFilter, setAssignmentFilter] = useState("");
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   const [error, setError] = useState("");
+  const [discussionMessage, setDiscussionMessage] = useState("");
   const [assignmentOpen, setAssignmentOpen] = useState(false);
   const [reviewSessionId, setReviewSessionId] = useState("");
   const [workedWell, setWorkedWell] = useState("");
@@ -567,25 +568,31 @@ export function ClassroomDetail({ classId }: { classId: number }) {
       (!workedWell.trim() && !needsImprovement.trim())
     )
       return;
-    const r = await fetch(
-      `${apiBase}/api/v1/classrooms/${classId}/weekly-reviews`,
-      {
-        method: "POST",
-        headers: {
-          ...authHeaders(session),
-          "Content-Type": "application/json",
+    setDiscussionMessage("Saving discussion…");
+    try {
+      const r = await fetch(
+        `${apiBase}/api/v1/classrooms/${classId}/weekly-reviews`,
+        {
+          method: "POST",
+          headers: {
+            ...authHeaders(session),
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            serviceSessionId: Number(reviewSessionId),
+            workedWell: workedWell.trim(),
+            needsImprovement: needsImprovement.trim(),
+          }),
         },
-        body: JSON.stringify({
-          serviceSessionId: Number(reviewSessionId),
-          workedWell,
-          needsImprovement,
-        }),
-      },
-    );
-    if (r.ok) {
+      );
+      const body = await r.json().catch(() => null);
+      if (!r.ok || !body?.success) throw new Error(body?.error?.message || "We could not save this discussion.");
       setWorkedWell("");
       setNeedsImprovement("");
+      setDiscussionMessage("Discussion saved.");
       void load();
+    } catch (reason) {
+      setDiscussionMessage(reason instanceof Error ? reason.message : "We could not save this discussion.");
     }
   };
   if (error)
@@ -790,6 +797,7 @@ export function ClassroomDetail({ classId }: { classId: number }) {
           setWorkedWell={setWorkedWell}
           needsImprovement={needsImprovement}
           setNeedsImprovement={setNeedsImprovement}
+          discussionMessage={discussionMessage}
           onSave={addWeeklyReview}
         />
       )}
@@ -844,6 +852,7 @@ function WeeklyReviews({
   setWorkedWell,
   needsImprovement,
   setNeedsImprovement,
+  discussionMessage,
   onSave,
 }: {
   data: Detail;
@@ -855,6 +864,7 @@ function WeeklyReviews({
   setWorkedWell: (value: string) => void;
   needsImprovement: string;
   setNeedsImprovement: (value: string) => void;
+  discussionMessage: string;
   onSave: () => void;
 }) {
   const sessions = [
@@ -935,6 +945,7 @@ function WeeklyReviews({
           </div>
           <footer className="review-actions">
             <p>Visible to teachers assigned to this class.</p>
+            {discussionMessage && <span className={`review-save-message${discussionMessage === "Discussion saved." ? " success" : ""}`}>{discussionMessage}</span>}
             <button
               className="primary"
               disabled={

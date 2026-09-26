@@ -1,6 +1,13 @@
 <?php
 // Use this as router arg: php -S localhost:8000 backend/public/router.php
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?: '/';
+// The hosted API lives inside /tpk-api/public, while local development lives
+// at the domain root. Normalize both to the same route shape for the API.
+$basePath = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '')), '/');
+if ($basePath !== '' && $basePath !== '/' && str_starts_with($path, $basePath . '/')) {
+    $path = substr($path, strlen($basePath));
+    $_SERVER['REQUEST_URI'] = $path;
+}
 $file = __DIR__ . $path;
 if ($path !== '/' && is_file($file)) return false;
 

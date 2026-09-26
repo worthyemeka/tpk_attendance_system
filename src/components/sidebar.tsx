@@ -381,11 +381,16 @@ export function Sidebar() {
             .mobile-tpk-mark {
               position: fixed;
               z-index: 104;
-              top: 19px;
-              left: 17px;
+              top: 0;
+              left: 0;
               display: flex;
               align-items: center;
-              height: 42px;
+              width: 100%;
+              height: 64px;
+              padding: 0 17px;
+              background: #fff5eb;
+              border-bottom: 1px solid #eadfd4;
+              box-shadow: 0 4px 16px #5a2b1712;
             }
             .mobile-tpk-mark img {
               width: 76px;
@@ -404,7 +409,7 @@ export function Sidebar() {
               align-items: center;
               border: 1px solid #e0d9cf;
               border-radius: 8px;
-              background: transparent;
+              background: #fffdfa;
               color: #172641;
               width: 40px;
               justify-content: center;
