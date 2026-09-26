@@ -26,6 +26,8 @@ import {
   readTeacherSession,
   type TeacherSession,
 } from "@/lib/session";
+import { subscribeToActiveService, type ActiveService } from "@/lib/active-service";
+import { NotificationBell } from "@/components/notification-bell";
 import "./sidebar-refinement.css";
 
 type Item = readonly [string, string, typeof FiHome];
@@ -106,7 +108,16 @@ export function Sidebar() {
   const [session, setSession] = useState<TeacherSession | null>(null);
   const [open, setOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [mobileNavScrolled, setMobileNavScrolled] = useState(false);
+  const [activeService, setActiveService] = useState<ActiveService | null>(null);
   useEffect(() => setSession(readTeacherSession()), []);
+  useEffect(() => subscribeToActiveService(setActiveService), []);
+  useEffect(() => {
+    const update = () => setMobileNavScrolled(window.scrollY > 8);
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    return () => window.removeEventListener("scroll", update);
+  }, []);
   useEffect(() => {
     setMobileNavOpen(false);
     setOpen(false);
@@ -128,26 +139,31 @@ export function Sidebar() {
   const closeMobileNav = () => setMobileNavOpen(false);
   return (
     <>
-      <Link className="mobile-tpk-mark" href="/account/overview">
-        <Image
-          src="/brand/tpk-logo.png"
-          alt="TribePetra Kids"
-          width={118}
-          height={27}
-          priority
-        />
-      </Link>
-      <button
-        className="mobile-nav-toggle"
-        type="button"
-        onClick={() => setMobileNavOpen((value) => !value)}
-        aria-expanded={mobileNavOpen}
-        aria-controls="dashboard-navigation"
-        aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
-        title={mobileNavOpen ? "Close navigation" : "Open navigation"}
-      >
-        {mobileNavOpen ? <FiX /> : <FiMenu />}
-      </button>
+      <div className={`mobile-nav-bar${mobileNavScrolled ? " is-scrolled" : ""}`}>
+        <Link className="mobile-tpk-mark" href="/account/overview">
+          <Image
+            src="/brand/tpk-logo.png"
+            alt="TribePetra Kids"
+            width={118}
+            height={27}
+            priority
+          />
+        </Link>
+        <div className="mobile-nav-actions">
+          <NotificationBell serviceSessionId={activeService?.id} />
+          <button
+            className="mobile-nav-toggle"
+            type="button"
+            onClick={() => setMobileNavOpen((value) => !value)}
+            aria-expanded={mobileNavOpen}
+            aria-controls="dashboard-navigation"
+            aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
+            title={mobileNavOpen ? "Close navigation" : "Open navigation"}
+          >
+            {mobileNavOpen ? <FiX /> : <FiMenu />}
+          </button>
+        </div>
+      </div>
       {mobileNavOpen && (
         <button
           className="sidebar-backdrop"
@@ -344,6 +360,7 @@ export function Sidebar() {
         <style jsx global>{`
           .mobile-tpk-mark,
           .mobile-nav-toggle,
+          .mobile-nav-bar,
           .sidebar-backdrop {
             display: none;
           }
@@ -378,19 +395,35 @@ export function Sidebar() {
             }
           }
           @media (max-width: 590px) {
-            .mobile-tpk-mark {
+            .mobile-nav-bar {
               position: fixed;
               z-index: 104;
               top: 0;
               left: 0;
               display: flex;
               align-items: center;
+              justify-content: space-between;
               width: 100%;
               height: 64px;
               padding: 0 17px;
+              background: transparent;
+              border-bottom: 1px solid transparent;
+              transition: background .2s ease, border-color .2s ease, box-shadow .2s ease;
+            }
+            .mobile-nav-bar.is-scrolled {
               background: #fff5eb;
-              border-bottom: 1px solid #eadfd4;
+              border-bottom-color: #eadfd4;
               box-shadow: 0 4px 16px #5a2b1712;
+            }
+            .mobile-tpk-mark {
+              display: flex;
+              align-items: center;
+              height: 42px;
+            }
+            .mobile-nav-actions {
+              display: flex;
+              align-items: center;
+              gap: 8px;
             }
             .mobile-tpk-mark img {
               width: 76px;
@@ -399,11 +432,7 @@ export function Sidebar() {
               object-position: left center;
             }
             .mobile-nav-toggle {
-              position: fixed;
-              z-index: 104;
-              top: 12px;
-              right: 12px;
-              left: auto;
+              position: static;
               height: 40px;
               display: inline-flex;
               align-items: center;
@@ -416,6 +445,20 @@ export function Sidebar() {
               padding: 0;
               box-shadow: none;
               cursor: pointer;
+            }
+            .mobile-nav-actions .notification-wrap {
+              position: relative;
+              display: block;
+            }
+            .mobile-nav-actions .notification-button {
+              width: 40px;
+              height: 40px;
+              background: #fffdfa;
+              box-shadow: none;
+            }
+            .mobile-nav-actions .notification-popover {
+              top: 48px;
+              right: 0;
             }
             .mobile-nav-toggle svg {
               font-size: 18px;
