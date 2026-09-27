@@ -613,11 +613,13 @@ function InfoCard({
   return <StatCard icon={icon} value={value} title={title} description={detail} tone={tone} />;
 }
 function Avatar({ member }: { member: Member }) {
-  return member.profileImageUrl ? (
+  const [imageFailed, setImageFailed] = useState(false);
+  return member.profileImageUrl && !imageFailed ? (
     <img
       className="avatar"
       src={mediaUrl(member.profileImageUrl)}
-      alt=""
+      alt={`${personName(member)} profile`}
+      onError={() => setImageFailed(true)}
     />
   ) : (
     <i className="avatar">{initials(member)}</i>

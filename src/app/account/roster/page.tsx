@@ -928,8 +928,9 @@ function Stat({
   );
 }
 function Avatar({ name, src }: { name: string; src?: string | null }) {
-  return src ? (
-    <img src={mediaUrl(src)} alt="" />
+  const [imageFailed, setImageFailed] = useState(false);
+  return src && !imageFailed ? (
+    <img src={mediaUrl(src)} alt={`${name} profile`} onError={() => setImageFailed(true)} />
   ) : (
     <i>{initials(name)}</i>
   );

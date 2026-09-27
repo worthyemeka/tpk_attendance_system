@@ -119,6 +119,7 @@ export function Sidebar() {
   const [activeService, setActiveService] = useState<ActiveService | null>(null);
   const [checkinVisible, setCheckinVisible] = useState(false);
   const [peopleDirectoryVisible, setPeopleDirectoryVisible] = useState(false);
+  const [profileImageFailed, setProfileImageFailed] = useState(false);
   useEffect(() => setSession(readTeacherSession()), []);
   useEffect(() => subscribeToActiveService(setActiveService), []);
   useEffect(() => {
@@ -283,11 +284,12 @@ export function Sidebar() {
               onClick={() => setOpen((value) => !value)}
               aria-expanded={open}
             >
-              {session.profileImageUrl ? (
+              {session.profileImageUrl && !profileImageFailed ? (
                 <img
                   className="avatar avatar-image"
                   src={mediaUrl(session.profileImageUrl)}
-                  alt=""
+                  alt={`${session.title} ${session.firstName} profile`}
+                  onError={() => setProfileImageFailed(true)}
                 />
               ) : (
                 <div className="avatar">

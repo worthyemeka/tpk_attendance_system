@@ -25,11 +25,16 @@ export const apiBase = process.env.NODE_ENV === "production" ? "" : configuredAp
 
 export function mediaUrl(value?: string | null): string | undefined {
   if (!value) return undefined;
+  if (/^(data:|blob:)/i.test(value)) return value;
   if (/^https?:\/\//i.test(value)) return value;
-  if (value.startsWith("/uploads/profiles/")) {
-    const filename = value.slice("/uploads/profiles/".length);
+  const profileMatch = value.replace(/^\/+/, "").match(/(?:^|\/)uploads\/profiles\/([^/]+)$/i);
+  if (profileMatch) {
+    const filename = profileMatch[1];
     if (/^[A-Za-z0-9._-]+$/.test(filename)) {
-      return `${apiBase}/api/v1/public/profile-images/${encodeURIComponent(filename)}`;
+      // Keep the browser URL on the normal uploads path. It is served as a
+      // static file by Nginx/Apache in production and by the PHP router in
+      // local development, so images work without an authenticated API call.
+      return `${apiBase}/uploads/profiles/${encodeURIComponent(filename)}` || `/uploads/profiles/${encodeURIComponent(filename)}`;
     }
   }
   const path = value.startsWith("/") ? value : `/${value}`;

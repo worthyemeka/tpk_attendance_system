@@ -163,9 +163,15 @@ export function TeacherAuth({ mode }: Props) {
         const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error?.message || data.error || "The TPK service could not complete that request.");
         window.location.assign("/teacher/login?registered=1");
         return;
-      } else response = await fetch(`${apiBase}/api/teachers/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(login) });
-      const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || "The TPK sign-in service is temporarily unavailable.");
-      saveTeacherSession({ ...data.teacher, sessionToken: data.sessionToken } as TeacherSession); window.location.assign("/account/overview");
+      } else response = await fetch(`${apiBase}/api/teachers/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ identifier: login.identifier.trim(), password: login.password }) });
+      const payload = await response.json().catch(() => ({}));
+      const data = payload?.data?.teacher ? payload.data : payload;
+      const errorMessage = typeof payload?.error === "string" ? payload.error : payload?.error?.message;
+      if (!response.ok) throw new Error(errorMessage || "The TPK sign-in service is temporarily unavailable.");
+      if (!data?.teacher || !data?.sessionToken) throw new Error("The TPK sign-in service returned an incomplete session. Please try again.");
+      saveTeacherSession({ ...data.teacher, sessionToken: data.sessionToken } as TeacherSession);
+      const next = new URLSearchParams(window.location.search).get("next");
+      window.location.replace(next && next.startsWith("/account/") ? next : "/account/overview");
     } catch (reason) { const message = reason instanceof Error ? reason.message : ""; setError(/failed to fetch|load failed|networkerror/i.test(message) ? "The TPK sign-in service cannot be reached right now. Please try again shortly or contact a Super Admin." : (message || "Please try again.")); } finally { setBusy(false); }
   }
   const field = (key: keyof Values, label: string, type = "text", autoComplete?: string) => <label htmlFor={`teacher-${key}`}>{label}<input autoComplete={autoComplete} id={`teacher-${key}`} name={key} type={type} value={typeof values[key] === "string" ? values[key] : ""} onChange={(event) => update(key, event.currentTarget.value as never)} onInput={(event) => update(key, event.currentTarget.value as never)} required /></label>;

@@ -82,8 +82,9 @@ const teacherInitials = (name: string) =>
     .toUpperCase() || "TP";
 const teacherImage = mediaUrl;
 function TeacherPhoto({ name, src }: { name: string; src?: string | null }) {
-  return src ? (
-    <img src={teacherImage(src)} alt="" />
+  const [imageFailed, setImageFailed] = useState(false);
+  return src && !imageFailed ? (
+    <img src={teacherImage(src)} alt={`${name} profile`} onError={() => setImageFailed(true)} />
   ) : (
     <i aria-hidden>{teacherInitials(name)}</i>
   );
