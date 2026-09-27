@@ -3,8 +3,9 @@
 import "./check-in-qr.css";
 
 import Link from "next/link";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { FiCheck, FiChevronDown, FiCopy, FiExternalLink, FiGrid, FiMessageSquare, FiPhone, FiSearch, FiX } from "react-icons/fi";
+import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
 
 type Row = { id: number; name: string; group: string; gender: string; guardian: string; phone: string; service: string; time: string; visit: string; weeks: string[]; last: string; missed: number };
 const groups = ["All Classes", "TribePetra Teens", "Tribe A", "Tribe B", "Tribe C", "Tribe D"];
@@ -17,7 +18,7 @@ const rows: Row[] = [
   { id: 6, name: "John Ade", group: "Unassigned", gender: "Male", guardian: "Ruth Ade", phone: "0810••••230", service: "First Service", time: "10:02 AM", visit: "First Visit", weeks: ["–", "–", "–", "Present"], last: "27 Sep 2026", missed: 0 },
   { id: 7, name: "Mabel James", group: "Tribe A", gender: "Female", guardian: "Tosin James", phone: "0703••••920", service: "First Service", time: "9:51 AM", visit: "Returning", weeks: ["Present", "Absent", "Absent", "Absent"], last: "6 Sep 2026", missed: 3 },
 ];
-const coordinators = [
+const defaultCoordinators = [
   { label: "Uncle Courage", phone: "2349023232606" },
   { label: "Aunty Mafo", phone: "2348098666128" },
 ];
@@ -38,7 +39,19 @@ export function CheckInMonitor() {
   const [noteFor, setNoteFor] = useState<number | null>(null);
   const [notes, setNotes] = useState<Record<number, string>>({});
   const [contacted, setContacted] = useState<number[]>([]);
-  const [coordinator, setCoordinator] = useState(coordinators[0].phone);
+  const [coordinators, setCoordinators] = useState(defaultCoordinators);
+  const [coordinator, setCoordinator] = useState(defaultCoordinators[0].phone);
+  const session = readTeacherSession();
+  useEffect(() => {
+    if (!session) return;
+    fetch(`${apiBase}/api/v1/follow-ups/recipients`, { headers: authHeaders(session) })
+      .then((response) => response.json())
+      .then((body) => {
+        const people = Array.isArray(body.data) ? body.data.filter((person: { name?: string; phone?: string }) => person.name && person.phone) : [];
+        if (people.length) { setCoordinators(people); setCoordinator(people[0].phone); }
+      })
+      .catch(() => undefined);
+  }, [session?.staffUserId, session?.sessionToken]);
   const selectedService = service.startsWith("First") ? "First Service" : "Second Service";
   const follow = rows.filter((row) => row.missed >= 2 || row.group === "Unassigned");
   const list = useMemo(() => rows.filter((row) => {

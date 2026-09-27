@@ -62,6 +62,7 @@ type Assignment = {
   dutyCategory: Duty["category"];
   className?: string | null;
   teacherName: string;
+  email?: string | null;
   accessLevel: string;
   teamStatus: string;
   onboardingStatus: "PROBATION" | "ONBOARDED";
@@ -382,14 +383,12 @@ export default function RosterPage() {
         throw new Error(
           result.error?.message || "We could not update roster state.",
         );
-      const sent = Number(result.data.notificationsSent || 0);
-      const failed = Number(result.data.notificationsFailed || 0);
       const inApp = Number(result.data.inAppNotifications || 0);
       setNotice(
         status === "PUBLISHED"
           ? result.data.notificationsSkipped
             ? "This roster is already published, so no duplicate team notifications were created."
-            : `Roster published. ${inApp} assigned teacher${inApp === 1 ? "" : "s"} now have an in-app roster notification.${sent ? ` ${sent} WhatsApp message${sent === 1 ? " was" : "s were"} also sent.` : ""}${failed ? ` ${failed} WhatsApp message${failed === 1 ? " could" : "s could"} not be sent.` : ""}`
+            : `Roster published. ${inApp} assigned teacher${inApp === 1 ? "" : "s"} now have an in-app roster notification. They can open WhatsApp or email from their assignment card.`
           : `${formatMonth(monthDate)} saved as a draft.`,
       );
       setPublishOpen(false);
@@ -549,12 +548,9 @@ export default function RosterPage() {
       throw new Error(
         result.error?.message || "We could not send that roster reminder.",
       );
-    const description =
-      channel === "IN_APP"
-        ? "An in-app reminder is ready on your board."
-        : "An in-app reminder was created and the " +
-          (channel === "EMAIL" ? "email" : "WhatsApp") +
-          " reminder was sent.";
+    const description = channel === "IN_APP"
+      ? "An in-app reminder is ready on your board."
+      : `An in-app reminder was created. Open the ${channel === "EMAIL" ? "email" : "WhatsApp"} link on the assignment card to send it.`;
     setNotice(description);
     return description;
   }
@@ -1636,6 +1632,13 @@ function TeacherProfileModal({
   const teacherAssignments = assignments
     .filter((assignment) => assignment.userId === item.userId)
     .sort((a, b) => a.assignmentDate.localeCompare(b.assignmentDate));
+  const monthLabel = new Intl.DateTimeFormat("en-NG", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${teacherAssignments[0]?.assignmentDate?.slice(0, 7) || "2026-01"}-01T00:00:00Z`));
+  const assignmentSummary = teacherAssignments
+    .map((assignment) => `${formatDate(assignment.assignmentDate)} · ${assignment.dutyName}${assignment.className ? ` · ${assignment.className}` : ""}`)
+    .join("; ");
+  const message = `Hi ${item.teacherName}, your TribePetra Kids ${monthLabel} roles and responsibilities are ready.\n\n${assignmentSummary}\n\nOpen your TPK board: ${typeof window === "undefined" ? "/account/roster" : `${window.location.origin}/account/roster`}`;
+  const whatsappHref = phoneDigits ? `https://wa.me/${phoneDigits}?text=${encodeURIComponent(message)}` : "#";
+  const emailHref = item.email ? `mailto:${item.email}?subject=${encodeURIComponent(`Your TribePetra Kids ${monthLabel} roster`)}&body=${encodeURIComponent(message)}` : "#";
   const sendReminder = async (channel: "IN_APP" | "WHATSAPP" | "EMAIL") => {
     setDeliveryBusy(channel);
     setDeliveryNote("");
@@ -1695,7 +1698,7 @@ function TeacherProfileModal({
                   Call
                 </a>
                 <a
-                  href={`https://wa.me/${phoneDigits}`}
+                  href={`https://wa.me/${phoneDigits}?text=${encodeURIComponent(`Hi ${item.teacherName}, please check your TribePetra Kids roster for ${monthLabel}.`)}`}
                   target="_blank"
                   rel="noreferrer"
                 >
@@ -1736,22 +1739,24 @@ function TeacherProfileModal({
               <section className="teacher-roster-actions" aria-label="Roster sharing actions">
                 {isSuperAdmin ? (
                   <>
-                    <button
+                    <a
                       className="roster-share-card whatsapp"
-                      disabled={Boolean(deliveryBusy)}
-                      onClick={() => void sendReminder("WHATSAPP")}
+                      href={whatsappHref}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={() => { if (phoneDigits) void onNotify("IN_APP"); }}
                     >
                       <FiMessageCircle />
-                      <span><b>{deliveryBusy === "WHATSAPP" ? "Sending WhatsApp…" : "Send to teacher on WhatsApp"}</b><small>They will also receive an in-app reminder.</small></span>
-                    </button>
-                    <button
+                      <span><b>Send to teacher on WhatsApp</b><small>{phoneDigits ? "Opens WhatsApp with the roster message ready." : "No WhatsApp or mobile number recorded."}</small></span>
+                    </a>
+                    <a
                       className="roster-share-card email"
-                      disabled={Boolean(deliveryBusy)}
-                      onClick={() => void sendReminder("EMAIL")}
+                      href={emailHref}
+                      onClick={() => { if (item.email) void onNotify("IN_APP"); }}
                     >
                       <FiMail />
-                      <span><b>{deliveryBusy === "EMAIL" ? "Sending email…" : "Send to teacher’s email"}</b><small>Shares their monthly roles and board link.</small></span>
-                    </button>
+                      <span><b>Send to teacher&apos;s email</b><small>{item.email ? "Opens their email app with the roster message ready." : "No email address recorded."}</small></span>
+                    </a>
                   </>
                 ) : (
                   <button
@@ -1806,9 +1811,9 @@ function PublishDialog({
         <h2>Publish this roster?</h2>
         <p>
           {summary?.assignments || 0} assignments for {teachers} teacher
-          {teachers === 1 ? "" : "s"} will be published and sent by WhatsApp.
-          Each teacher receives their roles and a link to view their monthly
-          roster and team.
+          {teachers === 1 ? "" : "s"} will be published and added to each
+          teacher&apos;s in-app notifications. Each teacher can then open a
+          prepared WhatsApp or email message from their assignment card.
         </p>
         {Boolean(summary?.unfilled) && (
           <p className="unfilled-note">
