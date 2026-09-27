@@ -49,7 +49,20 @@ export default function AccountCheckInPage() {
     } catch (reason) { setRequestError(reason instanceof Error ? reason.message : "We could not load check-in requests."); }
   }, [serviceSessionId, session]);
 
-  useEffect(() => subscribeToActiveService(service => setServiceSessionId(service?.id)), []);
+  useEffect(() => {
+    const unsubscribe = subscribeToActiveService(service => setServiceSessionId(service?.id));
+    /* The top bar normally publishes the active service. Keep the page
+       usable when it is opened directly or before that bar has hydrated. */
+    if (!readTeacherSession()) return unsubscribe;
+    let cancelled = false;
+    fetch(`${apiBase}/api/v1/service-sessions/current`, { headers: authHeaders(session) })
+      .then(response => response.json())
+      .then(result => {
+        if (!cancelled && result.success && result.data?.id) setServiceSessionId(Number(result.data.id));
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; unsubscribe(); };
+  }, [session?.staffUserId, session?.sessionToken]);
 
   useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 180); return () => window.clearTimeout(timer); }, [load]);
   useEffect(() => { void loadRequests(); const timer = window.setInterval(() => { void loadRequests(); }, 7_500); return () => window.clearInterval(timer); }, [loadRequests]);

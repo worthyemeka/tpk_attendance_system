@@ -124,14 +124,18 @@ export function TeacherAuth({ mode }: Props) {
     const formData = new FormData(form);
     const read = (name: string) => String(formData.get(name) || "").trim();
     if (step === 0) {
-      const day = read("birthDay").replace(/\D/g, "").slice(0, 2);
-      const month = read("birthMonth").replace(/\D/g, "").slice(0, 2);
-      const year = read("birthYear").replace(/\D/g, "").slice(0, 4);
+      /* Safari/mobile autofill can paint the visible date fields without
+         updating React’s controlled value. Use the current state as a
+         fallback so the button validates what the teacher actually entered. */
+      const stateDate = values.birthDate.split("-");
+      const day = (read("birthDay") || stateDate[2] || "").replace(/\D/g, "").slice(0, 2);
+      const month = (read("birthMonth") || stateDate[1] || "").replace(/\D/g, "").slice(0, 2);
+      const year = (read("birthYear") || stateDate[0] || "").replace(/\D/g, "").slice(0, 4);
       const candidate = `${year}-${month}-${day}`;
       const date = new Date(`${candidate}T00:00:00Z`);
       const birthDate = day.length === 2 && month.length === 2 && year.length === 4 && !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === candidate && candidate <= new Date().toISOString().slice(0, 10) ? candidate : "";
-      const gender = read("gender").toUpperCase() as Values["gender"];
-      const next = { ...values, gender, firstName: read("firstName"), lastName: read("lastName"), birthDate };
+      const gender = (read("gender") || values.gender).toUpperCase() as Values["gender"];
+      const next = { ...values, gender, firstName: read("firstName") || values.firstName, lastName: read("lastName") || values.lastName, birthDate };
       setValues(next);
       if (!next.gender || !next.firstName || !next.lastName || !birthDate) { setError("Choose a gender and complete your name and date of birth to continue."); return; }
     }
@@ -156,7 +160,7 @@ export function TeacherAuth({ mode }: Props) {
         Object.entries(registrationValues).forEach(([key, value]) => { if (key !== "profilePhoto" && value) form.append(key, value); });
         if (values.profilePhoto) form.append("profilePhoto", values.profilePhoto);
         response = await fetch(`${apiBase}/api/teachers/register`, { method: "POST", body: form });
-        const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || "The TPK service could not complete that request.");
+        const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error?.message || data.error || "The TPK service could not complete that request.");
         window.location.assign("/teacher/login?registered=1");
         return;
       } else response = await fetch(`${apiBase}/api/teachers/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(login) });

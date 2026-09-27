@@ -33,6 +33,16 @@ if ($method === 'POST' && $path === '/api/teachers/register') {
     $gender = strtoupper(trim((string)$v['gender']));
     if (!in_array($gender, ['FEMALE', 'MALE'], true)) json_response(['error' => 'Choose Female or Male.'], 422);
     $title = $gender === 'FEMALE' ? 'Auntie' : 'Uncle';
+    $firstName = trim(preg_replace('/\s+/', ' ', (string)$v['firstName']) ?: '');
+    $lastName = trim(preg_replace('/\s+/', ' ', (string)$v['lastName']) ?: '');
+    $address = trim((string)$v['residentialAddress']);
+    if ($firstName === '' || $lastName === '' || $address === '') json_response(['error' => 'Enter your first name, last name, and house address.'], 422);
+    $birthDate = trim((string)$v['birthDate']);
+    $birth = DateTimeImmutable::createFromFormat('!Y-m-d', $birthDate);
+    $birthErrors = DateTimeImmutable::getLastErrors();
+    if (!$birth || ($birthErrors !== false && ($birthErrors['warning_count'] || $birthErrors['error_count'])) || $birth->format('Y-m-d') !== $birthDate || $birth > new DateTimeImmutable('today')) {
+        json_response(['error' => 'Enter a valid date of birth that is not in the future.'], 422);
+    }
     if ($v['password'] !== $v['confirmPassword']) json_response(['error' => 'Your passwords do not match.'], 422);
     if (strlen((string)$v['password']) < 8) json_response(['error' => 'Password must be at least 8 characters.'], 422);
     $whatsapp = tpk_normalize_nigerian_phone($v['whatsappNumber']);
@@ -40,16 +50,28 @@ if ($method === 'POST' && $path === '/api/teachers/register') {
     if (!$whatsapp || !$mobile) json_response(['error' => 'Enter valid Nigerian WhatsApp and mobile numbers.'], 422);
     if (!filter_var($v['email'], FILTER_VALIDATE_EMAIL)) json_response(['error' => 'Enter a valid email address.'], 422);
     $email = strtolower(trim($v['email']));
-    $existing = $db->prepare('SELECT s.id FROM staff_users s LEFT JOIN teacher_profiles p ON p.staff_user_id=s.id WHERE s.email=? OR p.whatsapp_number_normalized=? LIMIT 1');
-    $existing->execute([$email, $whatsapp]);
-    if ($existing->fetch()) json_response(['error' => 'An account already exists for this email address or WhatsApp number.'], 409);
+    $existing = $db->prepare('SELECT s.email,p.whatsapp_number_normalized FROM staff_users s LEFT JOIN teacher_profiles p ON p.staff_user_id=s.id WHERE s.campus_id=? AND (LOWER(s.email)=? OR p.whatsapp_number_normalized=?) LIMIT 1');
+    $existing->execute([$campusId, $email, $whatsapp]);
+    if ($duplicate = $existing->fetch()) {
+        $field = strtolower((string)($duplicate['email'] ?? '')) === $email ? 'email address' : 'WhatsApp number';
+        json_response(['error' => "An account already exists for this {$field}. Please sign in instead or ask a TPK Super Admin to help you recover access."], 409);
+    }
     $db->beginTransaction();
     try {
-        $name = trim($v['firstName'] . ' ' . $v['lastName']);
+        $name = trim($firstName . ' ' . $lastName);
         $db->prepare("INSERT INTO staff_users(campus_id,name,email,role,access_level,team_status,account_status,is_active) VALUES(?,?,?,'VIEWER','TPK_ADMIN','ACTIVE','VERIFIED',1)")->execute([$campusId, $name, $email]);
         $staffId = (int)$db->lastInsertId();
-        $db->prepare('INSERT INTO teacher_profiles(staff_user_id,title,first_name,last_name,birth_date,gender,marital_status,primary_phone,secondary_phone,residential_address,emergency_contact,emergency_relationship_phone,password_hash,whatsapp_number,whatsapp_number_normalized,mobile_number,mobile_number_normalized) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')->execute([$staffId, $title, trim($v['firstName']), trim($v['lastName']), $v['birthDate'], $gender, 'Not provided', $whatsapp, $mobile === $whatsapp ? null : $mobile, trim($v['residentialAddress']), 'Not provided', 'Not provided', password_hash($v['password'], PASSWORD_DEFAULT), $whatsapp, $whatsapp, $mobile === $whatsapp ? null : $mobile, $mobile === $whatsapp ? null : $mobile]);
-        if (!empty($_FILES['profilePhoto']) && ($_FILES['profilePhoto']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) $db->prepare('UPDATE teacher_profiles SET profile_image_url=? WHERE staff_user_id=?')->execute([tpk_store_profile_photo($_FILES['profilePhoto'], $staffId), $staffId]);
+        $db->prepare('INSERT INTO teacher_profiles(staff_user_id,title,first_name,last_name,birth_date,gender,marital_status,primary_phone,secondary_phone,residential_address,emergency_contact,emergency_relationship_phone,password_hash,whatsapp_number,whatsapp_number_normalized,mobile_number,mobile_number_normalized) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')->execute([$staffId, $title, $firstName, $lastName, $birthDate, $gender, 'Not provided', $whatsapp, $mobile === $whatsapp ? null : $mobile, $address, 'Not provided', 'Not provided', password_hash($v['password'], PASSWORD_DEFAULT), $whatsapp, $whatsapp, $mobile === $whatsapp ? null : $mobile, $mobile === $whatsapp ? null : $mobile]);
+        /* A photo is optional. Do not roll back an otherwise valid account if
+           the host cannot persist the optional upload; it can be added later. */
+        if (!empty($_FILES['profilePhoto']) && ($_FILES['profilePhoto']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+            try {
+                $photoUrl = tpk_store_profile_photo($_FILES['profilePhoto'], $staffId);
+                if ($photoUrl !== '') $db->prepare('UPDATE teacher_profiles SET profile_image_url=? WHERE staff_user_id=?')->execute([$photoUrl, $staffId]);
+            } catch (Throwable $photoError) {
+                error_log('[TPK teacher registration photo] ' . $photoError->getMessage());
+            }
+        }
         $db->prepare('UPDATE teacher_profiles SET whatsapp_verified_at=NOW() WHERE staff_user_id=?')->execute([$staffId]);
         audit($db, $campusId, 'TEACHER_REGISTERED', 'StaffUser', $staffId, ['email' => $email]);
         $db->commit();

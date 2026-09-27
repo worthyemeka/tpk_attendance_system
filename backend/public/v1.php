@@ -493,9 +493,18 @@ function api_approve_checkin_request(PDO $db, int $requestId): never {
     } catch (Throwable $e) { if($db->inTransaction())$db->rollBack(); throw $e; }
 }
 function api_checkins(PDO $db): never {
-    $actor=api_actor($db);$allowed=api_permitted_class_ids($db,$actor);$sessionId=(int)($_GET['serviceSessionId']??0);
+    $actor=api_actor($db);$sessionId=(int)($_GET['serviceSessionId']??0);
     if(!$sessionId){$current=$db->prepare('SELECT id FROM service_sessions WHERE campus_id=? AND is_open=1 AND service_date=CURDATE() ORDER BY starts_at DESC LIMIT 1');$current->execute([$actor['campus_id']]);$sessionId=(int)$current->fetchColumn();}
-    if(!$sessionId)api_ok(['serviceSessionId'=>null,'canOperate'=>false,'canAssistedCheckin'=>false,'items'=>[]]);$canOperate=api_can_operate_checkin($db,$actor,$sessionId);$canAssistedCheckin=api_can_assisted_checkin($db,$actor,$sessionId);$where=['a.service_session_id=?'];$params=[$sessionId];if($allowed!==null){if(!$allowed)api_ok(['serviceSessionId'=>$sessionId,'canOperate'=>$canOperate,'canAssistedCheckin'=>$canAssistedCheckin,'items'=>[]]);$where[]='a.class_id IN ('.implode(',',array_fill(0,count($allowed),'?')).')';$params=array_merge($params,$allowed);}
+    if(!$sessionId)api_ok(['serviceSessionId'=>null,'canOperate'=>false,'canAssistedCheckin'=>false,'items'=>[]]);
+    $canOperate=api_can_operate_checkin($db,$actor,$sessionId);
+    $canAssistedCheckin=api_can_assisted_checkin($db,$actor,$sessionId);
+    /* Service leads are assigned a duty (Head/Assistant/Assembly), not a
+       classroom. Once they are authorised to operate this session they must
+       see the whole live attendance table, including children in every class.
+       Classroom staff remain scoped to their assigned class IDs. */
+    $allowed=$canOperate ? null : api_permitted_class_ids($db,$actor);
+    $where=['a.service_session_id=?'];$params=[$sessionId];
+    if($allowed!==null){if(!$allowed)api_ok(['serviceSessionId'=>$sessionId,'canOperate'=>$canOperate,'canAssistedCheckin'=>$canAssistedCheckin,'items'=>[]]);$where[]='a.class_id IN ('.implode(',',array_fill(0,count($allowed),'?')).')';$params=array_merge($params,$allowed);}
     if(($q=trim((string)($_GET['search']??'')))!==''){$where[]='(c.first_name LIKE ? OR c.last_name LIKE ? OR g.first_name LIKE ? OR g.last_name LIKE ?)';$params=array_merge($params,["%$q%","%$q%","%$q%","%$q%"]);}
     $sql="SELECT a.id,c.id AS childId,c.first_name AS firstName,c.last_name AS lastName,c.gender,cl.name AS className,a.status,a.checked_in_at AS checkedInAt,a.is_first_visit AS firstVisit,g.first_name AS guardianFirstName,g.last_name AS guardianLastName,cir.id AS checkInRequestId,pc.qr_token AS ticketToken FROM attendance a JOIN children c ON c.id=a.child_id LEFT JOIN classes cl ON cl.id=a.class_id LEFT JOIN child_guardians cg ON cg.child_id=c.id AND cg.is_primary=1 LEFT JOIN guardians g ON g.id=cg.guardian_id LEFT JOIN check_in_requests cir ON cir.id=a.check_in_request_id LEFT JOIN service_pickup_codes pc ON pc.id=cir.pickup_code_id WHERE ".implode(' AND ',$where).' ORDER BY a.checked_in_at DESC';$s=$db->prepare($sql);$s->execute($params);$items=$s->fetchAll();foreach($items as &$item){$item['checkInFormUrl']=!empty($item['ticketToken'])?tpk_pickup_ticket_url($item['ticketToken']):null;unset($item['ticketToken']);}unset($item);api_ok(['serviceSessionId'=>$sessionId,'canOperate'=>$canOperate,'canAssistedCheckin'=>$canAssistedCheckin,'items'=>$items]);
 }
