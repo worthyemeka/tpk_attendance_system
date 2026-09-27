@@ -1,9 +1,9 @@
 "use client";
 
-import { Fragment, type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FiCheckCircle, FiChevronRight, FiClock, FiDownload, FiHelpCircle, FiSearch, FiUsers } from "react-icons/fi";
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
-import { subscribeToActiveService } from "@/lib/active-service";
+import { readActiveService, subscribeToActiveService } from "@/lib/active-service";
 
 type Child = { attendanceId: number; firstName: string; lastName: string; className?: string; guardianName?: string; checkedInAt?: string; pickedUpAt?: string; serviceDate?: string; serviceName?: string; pickupCode?: string | null; pickupTicketUrl?: string | null };
 type Dashboard = { service?: { id: number; name: string; serviceDate: string } | null; canOperate?: boolean; checkedIn: number; pickedUp: number; stillPresent: number; items: Child[]; queue: "PRESENT" | "COMPLETED" };
@@ -23,33 +23,43 @@ export function PickupDashboard() {
   const [historyYear, setHistoryYear] = useState(String(new Date().getFullYear()));
   const [query, setQuery] = useState(""); const [classId, setClassId] = useState(""); const [classes, setClasses] = useState<{ id: number; name: string }[]>([]);
   const [code, setCode] = useState(""); const [pickup, setPickup] = useState<Pickup | null>(null); const [verificationMethod, setVerificationMethod] = useState<VerificationMethod>("PICKUP_CODE"); const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false); const [assisted, setAssisted] = useState(false); const [assistedValues, setAssistedValues] = useState({ firstName: "", lastName: "", dateOfBirth: "" });
-  const [serviceSessionId, setServiceSessionId] = useState<number | undefined>();
+  const initialServiceId = useMemo(() => readActiveService()?.id, []);
+  const [serviceSessionId, setServiceSessionId] = useState<number | undefined>(initialServiceId);
+  const lastServiceId = useRef<number | undefined>(initialServiceId);
+  const loadSequence = useRef(0);
   const [historyYears, setHistoryYears] = useState<string[]>([String(new Date().getFullYear())]);
   const months = useMemo(() => Array.from({length:12},(_,index)=>({value:String(index+1).padStart(2,"0"),label:new Intl.DateTimeFormat("en-NG",{month:"long"}).format(new Date(2026,index,1))})), []);
   const scope:Scope=queue==="PRESENT"?"CURRENT":historyMonth?"MONTH":"YEAR";
 
   const load = useCallback(async () => {
     if (!session || (scope === "CURRENT" && !serviceSessionId) || !historyYear) return;
+    const sequence = ++loadSequence.current;
     try {
       const params = new URLSearchParams({ status: queue, scope });
       if (scope === "CURRENT" && serviceSessionId) params.set("serviceSessionId", String(serviceSessionId));
       if (scope === "MONTH") params.set("month", `${historyYear}-${historyMonth}`);
       if (scope === "YEAR") params.set("year", historyYear);
       if (query) params.set("search", query); if (classId) params.set("classId", classId);
-      const response = await fetch(`${apiBase}/api/v1/pickup-dashboard?${params}`, { headers: authHeaders(session) }); const result = await response.json();
+      const response = await fetch(`${apiBase}/api/v1/pickup-dashboard?${params}`, { headers: { ...authHeaders(session), "Cache-Control": "no-cache" }, cache: "no-store" }); const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.error?.message || "We could not load the pickup queue.");
-      setDashboard(result.data);
-    } catch (reason) { setMessage(reason instanceof Error ? reason.message : "We could not load the pickup queue."); }
+      if (sequence === loadSequence.current) setDashboard(result.data);
+    } catch (reason) { if (sequence === loadSequence.current) setMessage(reason instanceof Error ? reason.message : "We could not load the pickup queue."); }
   }, [classId, historyMonth, historyYear, query, queue, scope, serviceSessionId, session]);
 
   useEffect(() => { const timer = window.setTimeout(() => void load(), query ? 160 : 0); return () => window.clearTimeout(timer); }, [load, query]);
   useEffect(() => { if (scope !== "CURRENT") return; const timer = window.setInterval(() => void load(), 5000); return () => window.clearInterval(timer); }, [load, scope]);
   useEffect(() => { if (!session) return; void fetch(`${apiBase}/api/v1/classes`, { headers: authHeaders(session) }).then((response) => response.json()).then((result) => { if (result.success) setClasses(result.data || []); }).catch(() => undefined); }, [session]);
   useEffect(() => { if (!session) return; void fetch(`${apiBase}/api/v1/service-sessions`, { headers: authHeaders(session) }).then((response) => response.json()).then((result) => { if (!result.success) return; const years=new Set<string>([String(new Date().getFullYear())]); (result.data||[]).forEach((item:{serviceDate?:string;serviceType?:string})=>{if((item.serviceType==="FIRST_SERVICE"||item.serviceType==="SECOND_SERVICE")&&item.serviceDate)years.add(item.serviceDate.slice(0,4));});setHistoryYears([...years].sort((a,b)=>Number(b)-Number(a))); }).catch(()=>undefined); }, [session]);
-  useEffect(() => subscribeToActiveService((service) => { setPickup(null); setServiceSessionId(service?.id); }), []);
+  useEffect(() => subscribeToActiveService((service) => {
+    const nextId = service?.id;
+    const changed = lastServiceId.current !== undefined && lastServiceId.current !== nextId;
+    lastServiceId.current = nextId;
+    if (changed) { setPickup(null); setMessage(""); }
+    setServiceSessionId(nextId);
+  }), []);
   useEffect(() => { const openAssisted = () => setAssisted(window.location.hash === "#assisted"); openAssisted(); window.addEventListener("hashchange", openAssisted); return () => window.removeEventListener("hashchange", openAssisted); }, []);
 
-  async function lookup(event: FormEvent) { event.preventDefault(); if (!session || !code.trim()) return; setBusy(true); setMessage(""); setPickup(null); try { const entered=code.trim(); const response = await fetch(`${apiBase}/api/v1/pickup-codes?code=${encodeURIComponent(entered)}`, { headers: authHeaders(session) }); const result = await response.json(); if (!response.ok || !result.success) throw new Error(result.error?.message || "We could not find that pickup code."); setPickup(result.data); setVerificationMethod(entered.startsWith("TPK-PICKUP:") || /^[a-f0-9]{64}$/i.test(entered) ? "QR_CODE" : "PICKUP_CODE"); } catch (reason) { setMessage(reason instanceof Error ? reason.message : "We could not find that pickup code."); } finally { setBusy(false); } }
+  async function lookup(event: FormEvent) { event.preventDefault(); if (!session || !code.trim()) return; setBusy(true); setMessage(""); setPickup(null); try { const entered=code.trim(); const response = await fetch(`${apiBase}/api/v1/pickup-codes?code=${encodeURIComponent(entered)}`, { headers: { ...authHeaders(session), "Cache-Control": "no-cache" }, cache: "no-store" }); const result = await response.json(); if (!response.ok || !result.success) throw new Error(result.error?.message || "We could not find that pickup code."); setPickup(result.data); setVerificationMethod(entered.startsWith("TPK-PICKUP:") || /^[a-f0-9]{64}$/i.test(entered) ? "QR_CODE" : "PICKUP_CODE"); } catch (reason) { setMessage(reason instanceof Error ? reason.message : "We could not find that pickup code."); } finally { setBusy(false); } }
   async function assistedLookup(event: FormEvent) { event.preventDefault(); if (!session) return; if (!dashboard.canOperate) { setMessage("Pick-up is read-only unless you are today’s Assembly lead."); return; } setBusy(true); setMessage(""); try { const response = await fetch(`${apiBase}/api/v1/pickup-codes/assisted-lookup`, { method: "POST", headers: { ...authHeaders(session), "Content-Type": "application/json" }, body: JSON.stringify(assistedValues) }); const result = await response.json(); if (!response.ok || !result.success) throw new Error(result.error?.message || "We could not verify this child."); setPickup(result.data); setVerificationMethod("ASSISTED_BIRTH_DATE"); setAssisted(false); } catch (reason) { setMessage(reason instanceof Error ? reason.message : "We could not verify this child."); } finally { setBusy(false); } }
   async function complete() { if (!session || !pickup) return; if (!dashboard.canOperate) { setMessage("Pick-up is read-only unless you are today’s Assembly lead."); return; } setBusy(true); setMessage(""); try { const response = await fetch(`${apiBase}/api/v1/pickup-codes/${pickup.id}/complete`, { method: "POST", headers: { ...authHeaders(session), "Content-Type": "application/json" }, body: JSON.stringify({ verificationMethod }) }); const result = await response.json(); if (!response.ok || !result.success) throw new Error(result.error?.message || "We could not complete pickup."); setMessage(`${result.data.childrenReleased} child${result.data.childrenReleased === 1 ? "" : "ren"} safely released.`); setPickup(null); setCode(""); await load(); } catch (reason) { setMessage(reason instanceof Error ? reason.message : "We could not complete pickup."); } finally { setBusy(false); } }
   const count = queue === "PRESENT" ? dashboard.stillPresent : dashboard.pickedUp;

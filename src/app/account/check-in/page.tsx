@@ -25,28 +25,36 @@ export default function AccountCheckInPage() {
   const [requestError, setRequestError] = useState("");
   const [loading, setLoading] = useState(true);
   const [approvingId, setApprovingId] = useState<number | null>(null);
-  const [serviceSessionId, setServiceSessionId] = useState<number | undefined>();
+  const initialServiceId = readActiveService()?.id;
+  const [serviceSessionId, setServiceSessionId] = useState<number | undefined>(initialServiceId);
+  const loadSequence = useRef(0);
+  const requestSequence = useRef(0);
 
   const load = useCallback(async () => {
     if (!session) return;
+    const sequence = ++loadSequence.current;
     setLoading(true); setError("");
     try {
-      if (!serviceSessionId) { setItems([]); setCanOperate(false); return; }
-      const response = await fetch(`${apiBase}/api/v1/check-ins?serviceSessionId=${serviceSessionId}&search=${encodeURIComponent(query)}`, { headers: authHeaders(session) });
+      if (!serviceSessionId) { if (sequence === loadSequence.current) { setItems([]); setCanOperate(false); } return; }
+      const response = await fetch(`${apiBase}/api/v1/check-ins?serviceSessionId=${serviceSessionId}&search=${encodeURIComponent(query)}`, { headers: { ...authHeaders(session), "Cache-Control": "no-cache" }, cache: "no-store" });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error?.message || "We could not load check-ins.");
-      setItems(result.data.items || []);
-      setCanOperate(Boolean(result.data.canOperate));
+      if (sequence === loadSequence.current) {
+        setItems(result.data.items || []);
+        setCanOperate(Boolean(result.data.canOperate));
+      }
     } catch (reason) { setError(reason instanceof Error ? reason.message : "We could not load check-ins."); }
-    finally { setLoading(false); }
+    finally { if (sequence === loadSequence.current) setLoading(false); }
   }, [query, serviceSessionId, session]);
 
   const loadRequests = useCallback(async () => {
     if (!session) return;
     try {
       if (!serviceSessionId) { setCanApprove(false); setRequests([]); return; }
-      let response = await fetch(`${apiBase}/api/v1/check-in-requests?serviceSessionId=${serviceSessionId}`, { headers: authHeaders(session) });
+      const sequence = ++requestSequence.current;
+      let response = await fetch(`${apiBase}/api/v1/check-in-requests?serviceSessionId=${serviceSessionId}`, { headers: { ...authHeaders(session), "Cache-Control": "no-cache" }, cache: "no-store" });
       let result = await response.json();
+      if (sequence !== requestSequence.current) return;
       if (response.status === 403) { setCanApprove(false); setRequests([]); setRequestError(result.error?.message || "You are not assigned to approve this service."); return; }
       if (!response.ok || !result.success) throw new Error(result.error?.message || "We could not load check-in requests.");
       setCanApprove(Boolean(result.data.canApprove)); setRequests(result.data.items || []); setRequestError("");
