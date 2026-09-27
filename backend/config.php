@@ -46,6 +46,33 @@ function db(): PDO {
     return $pdo;
 }
 
+/**
+ * Ensure both Sunday service rows exist before current-service flows read them.
+ * This is idempotent and safe to call when no scheduler is available.
+ */
+function tpk_ensure_sunday_sessions(PDO $db, int $campusId, ?DateTimeImmutable $serviceDate = null): array {
+    $zone = new DateTimeZone('Africa/Lagos');
+    $date = $serviceDate ? $serviceDate->setTimezone($zone) : new DateTimeImmutable('today', $zone);
+    if ($date->format('w') !== '0') $date = $date->modify('next sunday');
+    $specifications = [
+        ['First Service', 'FIRST_SERVICE', 1, '08:30:00', '10:15:00'],
+        ['Second Service', 'SECOND_SERVICE', 2, '10:30:00', '12:15:00'],
+    ];
+    $prepared = [];
+    foreach ($specifications as [$name, $type, $order, $start, $end]) {
+        $existing = $db->prepare('SELECT id FROM service_sessions WHERE campus_id=? AND service_date=? AND service_type=? LIMIT 1');
+        $existing->execute([$campusId, $date->format('Y-m-d'), $type]);
+        $id = (int)$existing->fetchColumn();
+        if (!$id) {
+            $insert = $db->prepare('INSERT INTO service_sessions(campus_id,name,starts_at,ends_at,is_open,service_date,service_order,service_type) VALUES(?,?,?,?,1,?,?,?)');
+            $insert->execute([$campusId, $name, $date->format('Y-m-d') . ' ' . $start, $date->format('Y-m-d') . ' ' . $end, $date->format('Y-m-d'), $order, $type]);
+            $id = (int)$db->lastInsertId();
+        }
+        $prepared[] = ['id' => $id, 'name' => $name, 'serviceDate' => $date->format('Y-m-d'), 'serviceType' => $type];
+    }
+    return $prepared;
+}
+
 function json_response(mixed $data, int $status = 200): never {
     http_response_code($status);
     header('Content-Type: application/json; charset=utf-8');

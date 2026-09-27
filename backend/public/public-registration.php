@@ -44,6 +44,7 @@ function public_split_name(string $name): array {
 function public_current_session(PDO $db, int $campusId): ?array {
     $now = new DateTimeImmutable('now', new DateTimeZone('Africa/Lagos'));
     if ($now->format('w') !== '0' || $now->format('H:i:s') < '06:00:00') return null;
+    tpk_ensure_sunday_sessions($db, $campusId, $now);
     $serviceType = $now->format('H:i:s') >= '10:30:00' ? 'SECOND_SERVICE' : 'FIRST_SERVICE';
     $statement = $db->prepare("SELECT id,campus_id,service_date,service_type,starts_at,ends_at FROM service_sessions WHERE campus_id=? AND service_date=? AND service_type=? LIMIT 1");
     $statement->execute([$campusId, $now->format('Y-m-d'), $serviceType]);
