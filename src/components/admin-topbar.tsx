@@ -41,6 +41,13 @@ function currentSundaySessions(items: ServiceChoice[], requestedId?: number, sav
   return [...byType.values()].sort((left, right) => (left.serviceType === "FIRST_SERVICE" ? -1 : 1) - (right.serviceType === "FIRST_SERVICE" ? -1 : 1));
 }
 
+function serviceForCurrentSunday(choices: ServiceChoice[], now: Date) {
+  const time = lagosParts(now);
+  if (time.day !== "Sun") return undefined;
+  const secondServiceHasStarted = time.hour > 10 || (time.hour === 10 && time.minute >= 30);
+  return choices.find((choice) => choice.serviceType === (secondServiceHasStarted ? "SECOND_SERVICE" : "FIRST_SERVICE"));
+}
+
 function dateTime(now: Date) {
   return new Intl.DateTimeFormat("en-NG", {
     timeZone: "Africa/Lagos", weekday: "long", day: "numeric", month: "long", year: "numeric",
@@ -73,9 +80,18 @@ export function AdminTopbar() {
     const saved = readActiveService();
     const choices = currentSundaySessions(result.data || [], requestedServiceId, saved?.id);
     setServices(choices);
-    const selected = choices.find(item => item.id === requestedServiceId) || choices.find(item => item.id === saved?.id) || choices[0];
+    const selected = choices.find(item => item.id === requestedServiceId) || serviceForCurrentSunday(choices, new Date()) || choices.find(item => item.id === saved?.id) || choices[0];
     if (selected) { const next={ id:selected.id, label:serviceLabel(selected), serviceType:selected.serviceType, serviceDate:selected.serviceDate }; setService(next); setActiveService(next); }
   }).catch(() => undefined); }, [requestedServiceId, session]);
+
+  useEffect(() => {
+    if (!now || requestedServiceId || !services.length) return;
+    const timedService = serviceForCurrentSunday(services, now);
+    if (!timedService || timedService.id === service?.id) return;
+    const next = { id: timedService.id, label: serviceLabel(timedService), serviceType: timedService.serviceType, serviceDate: timedService.serviceDate };
+    setService(next);
+    setActiveService(next);
+  }, [now, requestedServiceId, service?.id, services]);
 
   useEffect(() => {
     if (!session || !service?.id) { setCanAssistedCheckIn(false); return; }
