@@ -153,7 +153,7 @@ export function AdminTopbar() {
       <img className="qr-image" src="/brand/TribePetra_Kids_CheckIn_QR.png" alt="TribePetra Kids parent check-in QR code" /><code>{link}</code>
       <div className="modal-actions">
         <button className="quiet-button" onClick={async () => { await navigator.clipboard?.writeText(link); setCopied(true); }}><FiCopy />{copied ? "Link copied" : "Copy link"}</button>
-        <Link className="solid-button" href="/check-in/parent">Open parent form</Link>
+        <Link className="solid-button" href="account/check-in/assisted">Open parent form</Link>
       </div>
     </div></div>}
     <style jsx global>{`
