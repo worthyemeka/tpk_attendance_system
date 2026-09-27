@@ -15,7 +15,7 @@ import {
   FiSearch,
   FiUsers,
 } from "react-icons/fi";
-import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
+import { apiBase, authHeaders, mediaUrl, readTeacherSession } from "@/lib/session";
 import { StatCard, type StatCardTone } from "@/components/stat-card";
 import "./classroom-refinements.css";
 import {
@@ -139,7 +139,7 @@ function Avatar({ teacher }: { teacher: Teacher }) {
   return teacher.profileImageUrl && !imageFailed ? (
     <img
       className="teacher-photo"
-      src={teacher.profileImageUrl}
+      src={mediaUrl(teacher.profileImageUrl)}
       alt=""
       onError={() => setImageFailed(true)}
     />

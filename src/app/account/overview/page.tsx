@@ -11,7 +11,7 @@ import {
 import { QuickActions } from "@/components/quick-actions";
 import { UserGreeting } from "@/components/user-greeting";
 import { StatCard } from "@/components/stat-card";
-import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
+import { apiBase, authHeaders, mediaUrl, readTeacherSession } from "@/lib/session";
 import { subscribeToActiveService } from "@/lib/active-service";
 import "./overview-team.css";
 
@@ -80,12 +80,7 @@ const teacherInitials = (name: string) =>
     .slice(0, 2)
     .join("")
     .toUpperCase() || "TP";
-const teacherImage = (src?: string | null) =>
-  !src
-    ? ""
-    : /^https?:\/\//.test(src)
-      ? src
-      : `${apiBase}${src.startsWith("/") ? src : `/${src}`}`;
+const teacherImage = mediaUrl;
 function TeacherPhoto({ name, src }: { name: string; src?: string | null }) {
   return src ? (
     <img src={teacherImage(src)} alt="" />

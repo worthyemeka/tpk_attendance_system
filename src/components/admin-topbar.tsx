@@ -65,6 +65,7 @@ export function AdminTopbar() {
   const [menu, setMenu] = useState(false);
   const [qr, setQr] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [canViewCheckIn, setCanViewCheckIn] = useState(false);
   const [canAssistedCheckIn, setCanAssistedCheckIn] = useState(false);
   const session = readTeacherSession();
 
@@ -94,12 +95,20 @@ export function AdminTopbar() {
   }, [now, requestedServiceId, service?.id, services]);
 
   useEffect(() => {
-    if (!session || !service?.id) { setCanAssistedCheckIn(false); return; }
+    if (!session || !service?.id) { setCanViewCheckIn(false); setCanAssistedCheckIn(false); return; }
     let cancelled = false;
     fetch(`${apiBase}/api/v1/check-ins?serviceSessionId=${service.id}`, { headers: authHeaders(session) })
       .then((response) => response.json())
-      .then((result) => { if (!cancelled) setCanAssistedCheckIn(Boolean(result.success && result.data?.canAssistedCheckin)); })
-      .catch(() => { if (!cancelled) setCanAssistedCheckIn(false); });
+      .then((result) => {
+        if (cancelled) return;
+        setCanViewCheckIn(Boolean(result.success && result.data?.canViewCheckin));
+        setCanAssistedCheckIn(Boolean(result.success && result.data?.canAssistedCheckin));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setCanViewCheckIn(false);
+        setCanAssistedCheckIn(false);
+      });
     return () => { cancelled = true; };
   }, [service?.id, session?.staffUserId, session?.sessionToken]);
 
@@ -133,11 +142,11 @@ export function AdminTopbar() {
           </button>)}
         </div>}
       </div>
-      <span className={`universal-open ${serviceOpen ? "" : "closed"}`} title={serviceOpen ? "Check-in open" : "Check-in closed · Opens Sunday 6:00 AM"}><i /><span className="status-full">{serviceOpen ? "Check-in open" : "Check-in closed · Opens Sunday 6:00 AM"}</span><span className="status-compact">{serviceOpen ? "Open" : "Closed"}</span></span>
-      <button className="universal-qr" onClick={() => setQr(true)} title="View Check-In QR"><FiGrid /><span>View Check-In QR</span></button>
+      {canViewCheckIn && <span className={`universal-open ${serviceOpen ? "" : "closed"}`} title={serviceOpen ? "Check-in open" : "Check-in closed · Opens Sunday 6:00 AM"}><i /><span className="status-full">{serviceOpen ? "Check-in open" : "Check-in closed · Opens Sunday 6:00 AM"}</span><span className="status-compact">{serviceOpen ? "Open" : "Closed"}</span></span>}
+      {canViewCheckIn && <button className="universal-qr" onClick={() => setQr(true)} title="View Check-In QR"><FiGrid /><span>View Check-In QR</span></button>}
       {canAssistedCheckIn && <Link className="universal-assist" href={isPickupPage ? "/account/pick-up#assisted" : "/account/check-in/assisted"}><span className="assist-full">{isPickupPage ? "Start Assisted Pick-Up" : "Assisted Check-In"}</span><span className="assist-compact">Assisted</span></Link>}
     </div>
-    {qr && <div className="modal-backdrop"><div className="qr-modal">
+    {canViewCheckIn && qr && <div className="modal-backdrop"><div className="qr-modal">
       <button className="close-modal" onClick={() => setQr(false)}><FiX /></button>
       <p className="eyebrow">Parent Check-In</p><h2>Scan to check in</h2>
       <p>Place this QR on the entrance poster. It opens the public, password-free form.</p>

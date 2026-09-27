@@ -21,7 +21,7 @@ import {
   FiUsers,
   FiX,
 } from "react-icons/fi";
-import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
+import { apiBase, authHeaders, mediaUrl, readTeacherSession } from "@/lib/session";
 import { printBrandedDocument } from "@/lib/branded-print";
 import { StatCard, type StatCardTone } from "@/components/stat-card";
 import { ProbationJourney } from "@/components/probation-journey";
@@ -615,7 +615,7 @@ function Avatar({ member }: { member: Member }) {
   return member.profileImageUrl ? (
     <img
       className="avatar"
-      src={`${apiBase}${member.profileImageUrl}`}
+      src={mediaUrl(member.profileImageUrl)}
       alt=""
     />
   ) : (

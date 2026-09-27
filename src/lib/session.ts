@@ -18,6 +18,19 @@ export type TeacherSession = {
 // `/api` bridge, so no browser code needs a different endpoint locally.
 export const apiBase = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
 
+export function mediaUrl(value?: string | null): string | undefined {
+  if (!value) return undefined;
+  if (/^https?:\/\//i.test(value)) return value;
+  if (value.startsWith("/uploads/profiles/")) {
+    const filename = value.slice("/uploads/profiles/".length);
+    if (/^[A-Za-z0-9._-]+$/.test(filename)) {
+      return `${apiBase}/api/v1/public/profile-images/${encodeURIComponent(filename)}`;
+    }
+  }
+  const path = value.startsWith("/") ? value : `/${value}`;
+  return `${apiBase}${path}` || path;
+}
+
 export function readTeacherSession(): TeacherSession | null {
   if (typeof window === "undefined") return null;
   try {

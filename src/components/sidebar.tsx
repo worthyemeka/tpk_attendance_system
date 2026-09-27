@@ -22,6 +22,7 @@ import {
 import {
   apiBase,
   authHeaders,
+  mediaUrl,
   clearTeacherSession,
   readTeacherSession,
   type TeacherSession,
@@ -110,8 +111,19 @@ export function Sidebar() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [mobileNavScrolled, setMobileNavScrolled] = useState(false);
   const [activeService, setActiveService] = useState<ActiveService | null>(null);
+  const [checkinVisible, setCheckinVisible] = useState(false);
   useEffect(() => setSession(readTeacherSession()), []);
   useEffect(() => subscribeToActiveService(setActiveService), []);
+  useEffect(() => {
+    if (!session) return;
+    if (session.accessLevel === "TPK_SUPER_ADMIN") { setCheckinVisible(true); return; }
+    if (!activeService?.id) { setCheckinVisible(false); return; }
+    let cancelled = false;
+    fetch(`${apiBase}/api/v1/check-ins?serviceSessionId=${activeService.id}`, { headers: authHeaders(session) })
+      .then((response) => { if (!cancelled) setCheckinVisible(response.ok); })
+      .catch(() => { if (!cancelled) setCheckinVisible(false); });
+    return () => { cancelled = true; };
+  }, [activeService?.id, session]);
   useEffect(() => {
     const update = () => setMobileNavScrolled(window.scrollY > 8);
     update();
@@ -201,7 +213,7 @@ export function Sidebar() {
           <nav aria-label="Dashboard navigation">
             <Group
               title="Sunday"
-              items={superAdmin ? superSunday : adminSunday}
+              items={(superAdmin || checkinVisible) ? (superAdmin ? superSunday : adminSunday) : adminSunday.filter((item) => item[1] !== "/account/check-in")}
               onNavigate={closeMobileNav}
             />
             {superAdmin && (
@@ -252,7 +264,7 @@ export function Sidebar() {
               {session.profileImageUrl ? (
                 <img
                   className="avatar avatar-image"
-                  src={`${apiBase}${session.profileImageUrl}`}
+                  src={mediaUrl(session.profileImageUrl)}
                   alt=""
                 />
               ) : (

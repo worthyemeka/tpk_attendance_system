@@ -4,6 +4,7 @@ import Link from "next/link";
 import { type FormEvent, useEffect, useState } from "react";
 import { FiArrowLeft, FiCheckCircle, FiMinus, FiPlus } from "react-icons/fi";
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
+import { readActiveService, subscribeToActiveService } from "@/lib/active-service";
 
 type Child = { firstName: string; lastName: string; dateOfBirth: string; gender: "" | "MALE" | "FEMALE"; careInformation: string };
 type Service = { id: number; name: string; serviceDate: string; serviceType: "FIRST_SERVICE" | "SECOND_SERVICE"; isOpen: boolean };
@@ -15,6 +16,7 @@ const blankChild = (): Child => ({ firstName: "", lastName: "", dateOfBirth: "",
 export default function AssistedCheckInPage() {
   const session = readTeacherSession();
   const [services, setServices] = useState<Service[]>([]);
+  const [activeServiceId, setActiveServiceId] = useState<number | undefined>();
   const [serviceId, setServiceId] = useState("");
   const [guardian, setGuardian] = useState<Guardian>({ firstName: "", lastName: "", phone: "", secondaryPhone: "", relationship: "", email: "", address: "" });
   const [children, setChildren] = useState<Child[]>([blankChild()]);
@@ -33,10 +35,17 @@ export default function AssistedCheckInPage() {
         if (!response.ok || !result.success) throw new Error(result.error?.message || "We could not load services.");
         const items = (result.data || []).filter((service: Service) => service.serviceType === "FIRST_SERVICE" || service.serviceType === "SECOND_SERVICE");
         setServices(items);
-        setServiceId(String(items.find((service: Service) => service.isOpen)?.id || items[0]?.id || ""));
+        const activeId = readActiveService()?.id;
+        setServiceId(String(items.find((service: Service) => service.id === activeId)?.id || items.find((service: Service) => service.isOpen)?.id || items[0]?.id || ""));
       })
       .catch((reason) => setError(reason instanceof Error ? reason.message : "We could not load services."));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => subscribeToActiveService((service) => setActiveServiceId(service?.id)), []);
+
+  useEffect(() => {
+    if (activeServiceId && services.some((service) => service.id === activeServiceId)) setServiceId(String(activeServiceId));
+  }, [activeServiceId, services]);
 
   useEffect(() => {
     if (!session || !serviceId) { setCanOperate(false); setPermissionLoaded(false); return; }
@@ -75,7 +84,7 @@ export default function AssistedCheckInPage() {
     } finally { setBusy(false); }
   }
 
-  if (receipt) return <section className="assisted-page"><div className="receipt panel"><FiCheckCircle /><p className="eyebrow">Desk check-in complete</p><h1>Pickup ticket ready</h1><p>The family and child records have been saved. They are now in the live pickup list for this service.</p><b>{receipt.pickupCode}</b><a className="solid-button" href={receipt.pickupTicketUrl} target="_blank" rel="noreferrer">Open pickup ticket / PDF</a><Link className="outline-button" href="/account/check-in">Return to check-in</Link></div><style jsx>{receiptStyles}</style></section>;
+  if (receipt) return <section className="assisted-page"><div className="receipt panel"><FiCheckCircle /><p className="eyebrow">Desk check-in complete</p><h1>Pickup ticket ready</h1><p>The family and child records have been saved and are visible in this service’s live check-in table.</p><b>{receipt.pickupCode}</b><a className="solid-button" href={receipt.pickupTicketUrl} target="_blank" rel="noreferrer">Open ticket / save PDF</a><Link className="outline-button" href={`/account/check-in?serviceSessionId=${serviceId}`}>Return to live check-in</Link></div><style jsx>{receiptStyles}</style></section>;
 
   if (permissionLoaded && !canOperate) return <section className="assisted-page"><div className="panel access-denied"><p className="eyebrow">Desk check-in</p><h1>Access not available</h1><p>Only the Super Admin or the Head/Assistant assigned to the selected service can use assisted check-in once the service window opens.</p><Link className="outline-button" href="/account/overview">Return to overview</Link></div><style jsx>{receiptStyles}</style></section>;
 

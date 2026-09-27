@@ -38,8 +38,11 @@ function public_split_name(string $name): array {
     return [$first, implode(' ', $parts) ?: 'Pickup'];
 }
 function public_current_session(PDO $db, int $campusId): ?array {
-    $statement = $db->prepare("SELECT id,campus_id,service_date,service_type,starts_at,ends_at FROM service_sessions WHERE campus_id=? AND is_open=1 AND service_date=CURDATE() AND service_type IN ('FIRST_SERVICE','SECOND_SERVICE') ORDER BY starts_at DESC LIMIT 1");
-    $statement->execute([$campusId]);
+    $now = new DateTimeImmutable('now', new DateTimeZone('Africa/Lagos'));
+    if ($now->format('w') !== '0' || $now->format('H:i:s') < '06:00:00') return null;
+    $serviceType = $now->format('H:i:s') >= '10:30:00' ? 'SECOND_SERVICE' : 'FIRST_SERVICE';
+    $statement = $db->prepare("SELECT id,campus_id,service_date,service_type,starts_at,ends_at FROM service_sessions WHERE campus_id=? AND service_date=? AND service_type=? LIMIT 1");
+    $statement->execute([$campusId, $now->format('Y-m-d'), $serviceType]);
     return $statement->fetch() ?: null;
 }
 function public_campus(PDO $db): array {
@@ -88,7 +91,8 @@ function public_registration(PDO $db): never {
     $secondaryPhone = empty($guardian['secondaryPhone']) ? null : public_phone($guardian['secondaryPhone']);
     if (!empty($guardian['secondaryPhone']) && !$secondaryPhone) public_error('INVALID_PHONE', 'Enter a valid Nigerian secondary phone number.', 422);
     $sessionId = isset($payload['serviceSessionId']) ? (int)$payload['serviceSessionId'] : 0;
-    $session = $sessionId ? (function () use ($db, $sessionId, $campus) { $s=$db->prepare("SELECT id,campus_id,service_type,service_order FROM service_sessions WHERE id=? AND campus_id=? AND is_open=1 AND service_date=CURDATE() AND service_type IN ('FIRST_SERVICE','SECOND_SERVICE')"); $s->execute([$sessionId,$campus['id']]); return $s->fetch() ?: null; })() : public_current_session($db, (int)$campus['id']);
+    $session = public_current_session($db, (int)$campus['id']);
+    if ($session && $sessionId && (int)$session['id'] !== $sessionId) public_error('SERVICE_SESSION_CHANGED', 'The active service has changed. Please refresh the form and submit again.', 409);
     if (!$session) public_error('SERVICE_SESSION_NOT_OPEN', 'Check-in is not open right now. Please ask a TPK team member for help.', 409);
     $db->beginTransaction();
     try {

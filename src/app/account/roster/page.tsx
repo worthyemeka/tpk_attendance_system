@@ -24,7 +24,7 @@ import {
   FiUsers,
   FiX,
 } from "react-icons/fi";
-import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
+import { apiBase, authHeaders, mediaUrl, readTeacherSession } from "@/lib/session";
 import { printBrandedDocument } from "@/lib/branded-print";
 import { MonthPicker } from "@/components/month-picker";
 import { DataViewToggle, type DataView } from "@/components/data-view-toggle";
@@ -933,7 +933,7 @@ function Stat({
 }
 function Avatar({ name, src }: { name: string; src?: string | null }) {
   return src ? (
-    <img src={`${apiBase}${src}`} alt="" />
+    <img src={mediaUrl(src)} alt="" />
   ) : (
     <i>{initials(name)}</i>
   );
