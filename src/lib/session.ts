@@ -16,7 +16,12 @@ export type TeacherSession = {
 // A production tunnel can be supplied when the PHP service lives outside
 // Vercel. Local development intentionally falls back to Next's same-origin
 // `/api` bridge, so no browser code needs a different endpoint locally.
-export const apiBase = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
+// Production browser requests must stay same-origin so Vercel's /api proxy
+// can forward them to the Oracle PHP backend. A localhost value is useful for
+// local development only; in a deployed browser it points back at the phone
+// or computer running the browser and makes the live app appear disconnected.
+const configuredApiBase = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
+export const apiBase = process.env.NODE_ENV === "production" ? "" : configuredApiBase;
 
 export function mediaUrl(value?: string | null): string | undefined {
   if (!value) return undefined;
