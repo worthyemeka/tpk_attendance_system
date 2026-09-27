@@ -57,6 +57,12 @@ const adminSunday: readonly Item[] = [
   ["My Classrooms", "/account/classrooms", FiUsers],
 ];
 const adminPeople: readonly Item[] = [["Team", "/account/team", FiUsers]];
+const serviceLeadPeople: readonly Item[] = [
+  ["Children", "/account/children", FiUser],
+  ["Guardians", "/account/guardians", FiUserCheck],
+  ["Families", "/account/families", FiUsers],
+  ["Team", "/account/team", FiUsers],
+];
 const adminMinistry: readonly Item[] = [
   ["My Roster", "/account/roster", FiClock],
   ["My Follow-Ups", "/account/relations", FiUserCheck],
@@ -112,18 +118,32 @@ export function Sidebar() {
   const [mobileNavScrolled, setMobileNavScrolled] = useState(false);
   const [activeService, setActiveService] = useState<ActiveService | null>(null);
   const [checkinVisible, setCheckinVisible] = useState(false);
+  const [peopleDirectoryVisible, setPeopleDirectoryVisible] = useState(false);
   useEffect(() => setSession(readTeacherSession()), []);
   useEffect(() => subscribeToActiveService(setActiveService), []);
   useEffect(() => {
     if (!session) return;
-    if (session.accessLevel === "TPK_SUPER_ADMIN") { setCheckinVisible(true); return; }
+    if (session.accessLevel === "TPK_SUPER_ADMIN") {
+      setCheckinVisible(true);
+      setPeopleDirectoryVisible(true);
+      return;
+    }
     let cancelled = false;
-    const checkInUrl = activeService?.id
-      ? `${apiBase}/api/v1/check-ins?serviceSessionId=${activeService.id}`
-      : `${apiBase}/api/v1/check-ins`;
-    fetch(checkInUrl, { headers: authHeaders(session) })
-      .then((response) => { if (!cancelled) setCheckinVisible(response.ok); })
-      .catch(() => { if (!cancelled) setCheckinVisible(false); });
+    const headers = authHeaders(session);
+    Promise.all([
+      fetch(`${apiBase}/api/v1/check-ins`, { headers }),
+      fetch(`${apiBase}/api/v1/guardians/summary`, { headers }),
+    ])
+      .then(([checkinResponse, peopleResponse]) => {
+        if (cancelled) return;
+        setCheckinVisible(checkinResponse.ok);
+        setPeopleDirectoryVisible(peopleResponse.ok);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setCheckinVisible(false);
+        setPeopleDirectoryVisible(false);
+      });
     return () => { cancelled = true; };
   }, [activeService?.id, session]);
   useEffect(() => {
@@ -236,7 +256,7 @@ export function Sidebar() {
               <>
                 <Group
                   title="People"
-                  items={adminPeople}
+                  items={peopleDirectoryVisible ? serviceLeadPeople : adminPeople}
                   onNavigate={closeMobileNav}
                 />
                 <Group

@@ -76,14 +76,30 @@ export function AdminTopbar() {
     return () => window.clearInterval(id);
   }, []);
 
-  useEffect(() => { if (!session) return; void fetch(`${apiBase}/api/v1/service-sessions`, { headers:authHeaders(session) }).then(r => r.json()).then(result => {
-    if (!result.success) return;
-    const saved = readActiveService();
-    const choices = currentSundaySessions(result.data || [], requestedServiceId, saved?.id);
-    setServices(choices);
-    const selected = choices.find(item => item.id === requestedServiceId) || serviceForCurrentSunday(choices, new Date()) || choices.find(item => item.id === saved?.id) || choices[0];
-    if (selected) { const next={ id:selected.id, label:serviceLabel(selected), serviceType:selected.serviceType, serviceDate:selected.serviceDate }; setService(next); setActiveService(next); }
-  }).catch(() => undefined); }, [requestedServiceId, session]);
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+    const applyChoices = (items: ServiceChoice[]) => {
+      if (cancelled) return;
+      const saved = readActiveService();
+      const choices = currentSundaySessions(items, requestedServiceId, saved?.id);
+      setServices(choices);
+      const selected = choices.find(item => item.id === requestedServiceId) || serviceForCurrentSunday(choices, new Date()) || choices.find(item => item.id === saved?.id) || choices[0];
+      if (selected) { const next={ id:selected.id, label:serviceLabel(selected), serviceType:selected.serviceType, serviceDate:selected.serviceDate }; setService(next); setActiveService(next); }
+    };
+    const hydrate = async () => {
+      try {
+        const response = await fetch(`${apiBase}/api/v1/service-sessions`, { headers:authHeaders(session) });
+        const result = await response.json();
+        if (result.success && Array.isArray(result.data) && result.data.length) { applyChoices(result.data); return; }
+        const fallback = await fetch(`${apiBase}/api/v1/service-sessions/current`, { headers:authHeaders(session) });
+        const current = await fallback.json();
+        if (current.success && current.data?.id) applyChoices([current.data]);
+      } catch { /* The page remains usable with its existing session state. */ }
+    };
+    void hydrate();
+    return () => { cancelled = true; };
+  }, [requestedServiceId, session]);
 
   useEffect(() => {
     if (!now || requestedServiceId || !services.length) return;
