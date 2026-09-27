@@ -117,9 +117,11 @@ export function Sidebar() {
   useEffect(() => {
     if (!session) return;
     if (session.accessLevel === "TPK_SUPER_ADMIN") { setCheckinVisible(true); return; }
-    if (!activeService?.id) { setCheckinVisible(false); return; }
     let cancelled = false;
-    fetch(`${apiBase}/api/v1/check-ins?serviceSessionId=${activeService.id}`, { headers: authHeaders(session) })
+    const checkInUrl = activeService?.id
+      ? `${apiBase}/api/v1/check-ins?serviceSessionId=${activeService.id}`
+      : `${apiBase}/api/v1/check-ins`;
+    fetch(checkInUrl, { headers: authHeaders(session) })
       .then((response) => { if (!cancelled) setCheckinVisible(response.ok); })
       .catch(() => { if (!cancelled) setCheckinVisible(false); });
     return () => { cancelled = true; };

@@ -266,7 +266,7 @@ function api_families_summary(PDO $db): never { $actor=api_actor($db);$campus=$a
 function api_family_directory_detail(PDO $db,int $id): never { $actor=api_actor($db);$s=$db->prepare('SELECT id,surname AS familyName,family_code AS familyCode,phone,email,home_address AS homeAddress,notes,is_active AS active,created_at AS joinedAt FROM families WHERE id=? AND campus_id=?');$s->execute([$id,$actor['campus_id']]);$family=$s->fetch();if(!$family)api_error('FAMILY_NOT_FOUND','Family not found.',404);$children=$db->prepare('SELECT c.id,c.first_name AS firstName,c.last_name AS lastName,c.date_of_birth AS dateOfBirth,c.is_active AS active,cl.name AS className FROM children c LEFT JOIN classes cl ON cl.id=c.class_id WHERE c.family_id=? ORDER BY c.first_name,c.last_name');$children->execute([$id]);$family['children']=$children->fetchAll();foreach($family['children'] as &$child)$child['age']=api_child_age($child['dateOfBirth']);unset($child);$guardians=$db->prepare('SELECT id,first_name AS firstName,last_name AS lastName,phone AS primaryPhone,secondary_phone AS secondaryPhone,email,relationship,is_primary AS primaryGuardian,is_authorized AS authorisedPickup FROM guardians WHERE family_id=? ORDER BY is_primary DESC,first_name,last_name');$guardians->execute([$id]);$family['guardians']=$guardians->fetchAll();$pickups=$db->prepare('SELECT id,first_name AS firstName,last_name AS lastName,phone,relationship FROM authorized_pickups WHERE family_id=? AND is_active=1 ORDER BY first_name,last_name');$pickups->execute([$id]);$family['additionalPickupPeople']=$pickups->fetchAll();$primaryRows=array_values(array_filter($family['guardians'],fn($g)=>(bool)$g['primaryGuardian']));$primary=$primaryRows[0]??($family['guardians'][0]??null);$family['profileStatus']=($primary&&!empty($primary['primaryPhone'])&&trim((string)$family['homeAddress'])!=='')?'COMPLETE':'NEEDS_INFO';api_ok($family); }
 function api_child_guardians(PDO $db,int $childId): never { $actor=api_actor($db);api_child_allowed($db,$actor,$childId);$s=$db->prepare('SELECT g.id,g.first_name AS firstName,g.last_name AS lastName,g.phone AS primaryPhone,g.email,cg.relationship,cg.is_primary AS `primary`,cg.authorised_pickup AS authorisedPickup FROM child_guardians cg JOIN guardians g ON g.id=cg.guardian_id WHERE cg.child_id=?');$s->execute([$childId]);api_ok($s->fetchAll()); }
 function api_profile(PDO $db,int $childId,string $table): never { $actor=api_actor($db,true);api_child_allowed($db,$actor,$childId);if(api_method()==='GET'){$s=$db->prepare("SELECT * FROM $table WHERE child_id=?");$s->execute([$childId]);api_ok($s->fetch()?:null);}$v=api_input();$valid=array_column($db->query("SHOW COLUMNS FROM $table")->fetchAll(),'Field');$fields=array_values(array_filter(array_keys($v),fn($key)=>in_array($key,$valid,true)&&!in_array($key,['child_id','created_at','updated_at'],true)));if(!$fields)api_error('VALIDATION_ERROR','No recognised profile fields were supplied.',422);$cols=implode(',', $fields);$marks=implode(',',array_fill(0,count($fields),'?'));$sets=implode(',',array_map(fn($f)=>"$f=VALUES($f)",$fields));$s=$db->prepare("INSERT INTO $table(child_id,$cols) VALUES(?,$marks) ON DUPLICATE KEY UPDATE $sets");$s->execute(array_merge([$childId],array_map(fn($f)=>$v[$f],$fields)));api_audit($db,$actor,'CHILD_PROFILE_UPDATED','Child',$childId,['profile'=>$table]);api_ok(['childId'=>$childId,'updated'=>true]); }
-function api_public_lookup(PDO $db): never { $v=api_input();$phone=api_phone($v['phone']??null);$sessionId=(int)($v['serviceSessionId']??0);if(!$phone||!$sessionId)api_error('VALIDATION_ERROR','A valid phone number and service session are required.',422);$s=$db->query('SELECT id,first_name,last_name,phone,secondary_phone FROM guardians');$guardian=null;foreach($s->fetchAll() as $row)if(api_phone($row['phone'])===$phone||api_phone($row['secondary_phone']??null)===$phone){$guardian=$row;break;}if(!$guardian)api_ok(['guardianFirstName'=>null,'children'=>[]]);$children=$db->prepare("SELECT c.id,c.first_name AS firstName,CONCAT(LEFT(c.last_name,1),'.') AS lastInitial,cl.name AS className,a.checked_in_at AS checkedInAt,CASE WHEN a.status IN ('CHECKED_IN','PICKED_UP') THEN TRUE ELSE FALSE END AS alreadyCheckedIn FROM child_guardians cg JOIN children c ON c.id=cg.child_id LEFT JOIN classes cl ON cl.id=c.class_id LEFT JOIN attendance a ON a.child_id=c.id AND a.service_session_id=? WHERE cg.guardian_id=? ORDER BY c.first_name");$children->execute([$sessionId,$guardian['id']]);api_ok(['guardianFirstName'=>$guardian['first_name'],'children'=>$children->fetchAll()]); }
+function api_public_lookup(PDO $db): never { $v=api_input();$phone=api_phone($v['phone']??null);$sessionId=(int)($v['serviceSessionId']??0);if(!$phone||!$sessionId)api_error('VALIDATION_ERROR','A valid phone number and service session are required.',422);$s=$db->query('SELECT id,first_name,last_name,phone,secondary_phone FROM guardians');$guardian=null;foreach($s->fetchAll() as $row)if(api_phone($row['phone'])===$phone||api_phone($row['secondary_phone']??null)===$phone){$guardian=$row;break;}if(!$guardian)api_ok(['guardianFirstName'=>null,'children'=>[]]);$children=$db->prepare("SELECT c.id,c.first_name AS firstName,CONCAT(LEFT(c.last_name,1),'.') AS lastInitial,cl.name AS className,a.checked_in_at AS checkedInAt,CASE WHEN a.status IN ('CHECKED_IN','PICKED_UP') AND (a.source='ASSISTED' OR approved_request.id IS NOT NULL OR pickup.id IS NOT NULL) THEN TRUE ELSE FALSE END AS alreadyCheckedIn FROM child_guardians cg JOIN children c ON c.id=cg.child_id LEFT JOIN classes cl ON cl.id=c.class_id LEFT JOIN attendance a ON a.child_id=c.id AND a.service_session_id=? LEFT JOIN check_in_requests approved_request ON approved_request.id=a.check_in_request_id AND approved_request.status='APPROVED' LEFT JOIN service_pickup_codes pickup ON pickup.service_session_id=a.service_session_id AND pickup.family_id=c.family_id WHERE cg.guardian_id=? ORDER BY c.first_name");$children->execute([$sessionId,$guardian['id']]);api_ok(['guardianFirstName'=>$guardian['first_name'],'children'=>$children->fetchAll()]); }
 function api_sessions(PDO $db): never { $actor=api_actor($db);$where=['campus_id=?',"service_type IN ('FIRST_SERVICE','SECOND_SERVICE')"];$params=[$actor['campus_id']];if(isset($_GET['date'])){$where[]='service_date=?';$params[]=$_GET['date'];}if(isset($_GET['service'])){$where[]='service_type=?';$params[]=$_GET['service'];}$s=$db->prepare('SELECT id,campus_id AS campusId,name,service_date AS serviceDate,service_type AS serviceType,starts_at AS startsAt,ends_at AS endsAt,is_open AS isOpen FROM service_sessions WHERE '.implode(' AND ',$where).' ORDER BY service_date DESC,starts_at DESC');$s->execute($params);api_ok($s->fetchAll()); }
 function api_session(PDO $db,int $id): never { $actor=api_actor($db,api_method()!=='GET');if(api_method()==='GET'){$s=$db->prepare('SELECT id,campus_id AS campusId,name,service_date AS serviceDate,service_type AS serviceType,starts_at AS startsAt,ends_at AS endsAt,is_open AS isOpen FROM service_sessions WHERE id=? AND campus_id=?');$s->execute([$id,$actor['campus_id']]);$row=$s->fetch();if(!$row)api_error('SERVICE_SESSION_NOT_FOUND','Service session not found.',404);api_ok($row);}$v=api_input();$fields=['name','startsAt'=>'starts_at','endsAt'=>'ends_at','serviceDate'=>'service_date','serviceType'=>'service_type','isOpen'=>'is_open'];$sets=[];$params=[];foreach($fields as $input=>$col)if(array_key_exists($input,$v)){$sets[]=is_int($input)?"$col=?":"$col=?";$params[]=$v[$input];}if(!$sets)api_error('VALIDATION_ERROR','No editable service-session fields were supplied.',422);$params[]=$id;$db->prepare('UPDATE service_sessions SET '.implode(',',$sets).' WHERE id=?')->execute($params);api_audit($db,$actor,'SERVICE_SESSION_UPDATED','ServiceSession',$id);api_ok(['id'=>$id,'updated'=>true]); }
 function api_current_service(PDO $db, int $campusId): ?array {
@@ -418,7 +418,7 @@ function api_dashboard(PDO $db): never {
     api_ok(['serviceSession'=>$activeSession?:null,'serviceSessionId'=>$sessionId?:null,'metrics'=>['checkedIn'=>$checked,'pickedUp'=>$picked,'stillPresent'=>$checked-$picked,'activeClasses'=>(int)$allClasses->fetchColumn()],'classes'=>$rows,'personalAssignment'=>$personalAssignment,'todayTeam'=>$todayTeam,'needsAttention'=>$needs,'childrenRelations'=>$relations,'upcomingRoster'=>$upcoming]);
 }
 function api_notifications(PDO $db): never {
-    $actor=api_actor($db); $campus=(int)$actor['campus_id']; $isSuper=$actor['access_level']==='TPK_SUPER_ADMIN'; $followUpLead=api_is_followup_lead($actor);
+    $actor=api_actor($db); api_reconcile_stale_checkin_requests($db,(int)$actor['campus_id']); $campus=(int)$actor['campus_id']; $isSuper=$actor['access_level']==='TPK_SUPER_ADMIN'; $followUpLead=api_is_followup_lead($actor);
     $allowed=api_permitted_class_ids($db,$actor); $items=[];
     try{
         $saved=$db->prepare("SELECT id,type,title,body,target_path AS href FROM notifications WHERE campus_id=? AND staff_user_id=? AND type IN ('ROSTER_PUBLISHED','ROSTER_REMINDER') ORDER BY created_at DESC LIMIT 20");
@@ -495,6 +495,29 @@ function api_can_assisted_checkin(PDO $db,array $actor,int $serviceSessionId): b
     if (!api_checkin_window_open($db, $serviceSessionId)) return false;
     return $actor['access_level'] === 'TPK_SUPER_ADMIN' || api_is_head_of_service($db, $actor, $serviceSessionId);
 }
+/**
+ * Repair requests created by the old service-selection bug. Before the
+ * time-aware public check-in route shipped, requests made after the second
+ * service opened could be stored against First Service. Keep the request and
+ * its child links intact, but move still-pending requests to the real
+ * same-day Second Service so the assigned Head/Assistants can approve them.
+ */
+function api_reconcile_stale_checkin_requests(PDO $db, int $campusId): void {
+  $stmt = $db->prepare("UPDATE check_in_requests r
+    JOIN service_sessions old_session ON old_session.id=r.service_session_id
+    JOIN service_sessions second_session
+      ON second_session.campus_id=r.campus_id
+     AND second_session.service_date=old_session.service_date
+     AND second_session.service_type='SECOND_SERVICE'
+    SET r.service_session_id=second_session.id
+    WHERE r.campus_id=?
+      AND r.status='PENDING'
+      AND old_session.service_type='FIRST_SERVICE'
+      AND DATE(r.requested_at)=old_session.service_date
+      AND r.requested_at>=second_session.starts_at");
+  $stmt->execute([$campusId]);
+}
+
 function api_checkin_request_rows(PDO $db, int $sessionId): array {
     $s=$db->prepare("SELECT r.id,r.status,r.requested_at AS requestedAt,r.approved_at AS approvedAt,r.child_ids_json,r.request_token AS requestToken,g.first_name AS guardianFirstName,g.last_name AS guardianLastName,g.phone AS guardianPhone,f.surname,pc.display_code AS pickupCode,pc.qr_token AS qrToken FROM check_in_requests r JOIN guardians g ON g.id=r.guardian_id JOIN families f ON f.id=r.family_id LEFT JOIN service_pickup_codes pc ON pc.id=r.pickup_code_id WHERE r.service_session_id=? ORDER BY r.status='PENDING' DESC,r.requested_at DESC");
     $s->execute([$sessionId]);$rows=$s->fetchAll();
@@ -502,7 +525,7 @@ function api_checkin_request_rows(PDO $db, int $sessionId): array {
     unset($row);return $rows;
 }
 function api_checkin_requests(PDO $db): never {
-    $actor=api_actor($db);$sessionId=(int)($_GET['serviceSessionId']??0);
+    $actor=api_actor($db);api_reconcile_stale_checkin_requests($db,(int)$actor['campus_id']);$sessionId=(int)($_GET['serviceSessionId']??0);
     if(!$sessionId){$session=api_current_service($db,(int)$actor['campus_id']);$sessionId=(int)($session['id']??0);}
     if(!$sessionId) api_ok(['serviceSessionId'=>null,'canApprove'=>false,'items'=>[]]);
     if(!api_can_view_checkin($db,$actor,$sessionId)) api_error('FORBIDDEN','Check-in is available only to the TPK Super Admin, Head of Service, and Assistant Heads assigned to this service.',403);
@@ -511,7 +534,7 @@ function api_checkin_requests(PDO $db): never {
     api_ok(['serviceSessionId'=>$sessionId,'canApprove'=>$canApprove,'items'=>api_checkin_request_rows($db,$sessionId)]);
 }
 function api_approve_checkin_request(PDO $db, int $requestId): never {
-    $actor=api_actor($db);$db->beginTransaction();
+    $actor=api_actor($db);api_reconcile_stale_checkin_requests($db,(int)$actor['campus_id']);$db->beginTransaction();
     try {
         $s=$db->prepare('SELECT r.*,ss.campus_id FROM check_in_requests r JOIN service_sessions ss ON ss.id=r.service_session_id WHERE r.id=? FOR UPDATE');$s->execute([$requestId]);$request=$s->fetch();
         if(!$request || (int)$request['campus_id']!==(int)$actor['campus_id']) { $db->rollBack(); api_error('CHECKIN_REQUEST_NOT_FOUND','This check-in request is not available.',404); }
@@ -522,6 +545,10 @@ function api_approve_checkin_request(PDO $db, int $requestId): never {
         $marks=implode(',',array_fill(0,count($ids),'?'));$children=$db->prepare("SELECT id,class_id,is_first_visit,first_name,last_name FROM children WHERE family_id=? AND id IN ($marks) AND is_active=1 FOR UPDATE");$children->execute(array_merge([(int)$request['family_id']],$ids));$rows=$children->fetchAll();
         if(count($rows)!==count($ids)){$db->rollBack();api_error('CHECKIN_REQUEST_INVALID','One or more children are no longer available for this request.',422);}
         foreach($rows as $child)if(!$child['class_id']){$db->rollBack();api_error('CLASS_ASSIGNMENT_REQUIRED',trim($child['first_name'].' '.$child['last_name']).' needs a class assignment before approval.',409);}
+        /* A previous interrupted check-in can leave a duplicate attendance row
+           without a timestamp. Approval repairs that row so the child becomes
+           a normal, traceable arrival instead of remaining a ghost record. */
+        foreach($rows as $child){$db->prepare("UPDATE attendance SET checked_in_at=COALESCE(checked_in_at,NOW()),check_in_request_id=? WHERE service_session_id=? AND child_id=? AND status='CHECKED_IN' AND checked_in_at IS NULL")->execute([$requestId,(int)$request['service_session_id'],(int)$child['id']]);}
         foreach($rows as $child){$db->prepare("INSERT INTO attendance(service_session_id,check_in_request_id,child_id,class_id,status,source,is_first_visit) VALUES(?,?,?,?,'CHECKED_IN','PARENT_QR',?) ON DUPLICATE KEY UPDATE check_in_request_id=VALUES(check_in_request_id),status=status")->execute([(int)$request['service_session_id'],$requestId,(int)$child['id'],(int)$child['class_id'],(int)$child['is_first_visit']]);}
         $pickup=tpk_issue_pickup_code($db,(int)$request['service_session_id'],(int)$request['family_id'],(int)$request['guardian_id']);
         $db->prepare("UPDATE check_in_requests SET status='APPROVED',approved_at=NOW(),approved_by_staff_user_id=?,pickup_code_id=? WHERE id=?")->execute([$actor['id'],$pickup['id'],$requestId]);

@@ -95,13 +95,19 @@ export function AdminTopbar() {
   }, [now, requestedServiceId, service?.id, services]);
 
   useEffect(() => {
-    if (!session || !service?.id) { setCanViewCheckIn(false); setCanAssistedCheckIn(false); return; }
+    if (!session) { setCanViewCheckIn(false); setCanAssistedCheckIn(false); return; }
     let cancelled = false;
-    fetch(`${apiBase}/api/v1/check-ins?serviceSessionId=${service.id}`, { headers: authHeaders(session) })
+    const checkInUrl = service?.id
+      ? `${apiBase}/api/v1/check-ins?serviceSessionId=${service.id}`
+      : `${apiBase}/api/v1/check-ins`;
+    fetch(checkInUrl, { headers: authHeaders(session) })
       .then((response) => response.json())
       .then((result) => {
         if (cancelled) return;
-        setCanViewCheckIn(Boolean(result.success && result.data?.canViewCheckin));
+        /* A successful check-in read already proves the server authorised this
+           viewer. The fallback keeps older API deployments usable while they
+           roll out the explicit permission field. */
+        setCanViewCheckIn(Boolean(result.success && (result.data?.canViewCheckin ?? true)));
         setCanAssistedCheckIn(Boolean(result.success && result.data?.canAssistedCheckin));
       })
       .catch(() => {
