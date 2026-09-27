@@ -56,6 +56,7 @@ type Member = {
   onboardingStatus: Onboarding;
   probationStartedAt?: string | null;
   probationTargetWeeks: number;
+  onboardedAt?: string | null;
   probationWeek?: number | null;
   probationExtensionReason?: string | null;
   assignedClasses?: string | null;
@@ -1007,7 +1008,7 @@ function TeacherOverview({ member, isSuper, ownProfile, refreshTeam }: { member:
 
 function OnboardedSummary({ member }: { member: Member }) {
   return <section className="onboarded-summary">
-    <i><FiCheck /></i><div><h3>{member.title || "This teacher"} {member.firstName || personName(member)} is fully onboarded</h3><p>Orientation and the supported-service review have been completed. Their ministry profile is active and ready for Team &amp; Roster assignments.</p><dl><div><dt>Joined TPK</dt><dd>{niceDate(member.joinedAt)}</dd></div><div><dt>Current role</dt><dd>{member.currentAssignment || "TPK Teacher"}</dd></div><div><dt>Status</dt><dd>✓ Onboarded</dd></div></dl></div>
+    <i><FiCheck /></i><div><h3>{member.title || "This teacher"} {member.firstName || personName(member)} is fully onboarded</h3><p>Orientation and the supported-service review have been completed. Their ministry profile is active and ready for Team &amp; Roster assignments.</p><dl><div><dt>Joined TPK</dt><dd>{niceDate(member.joinedAt)}</dd></div><div><dt>Fully onboarded</dt><dd>{niceDate(member.onboardedAt)}</dd></div><div><dt>Current role</dt><dd>{member.currentAssignment || "TPK Teacher"}</dd></div><div><dt>Status</dt><dd>✓ Onboarded</dd></div></dl></div>
   </section>;
 }
 
