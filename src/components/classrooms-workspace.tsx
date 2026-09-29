@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FiAlertTriangle,
@@ -10,7 +11,6 @@ import {
   FiChevronRight,
   FiClipboard,
   FiFileText,
-  FiFilter,
   FiMessageCircle,
   FiPlus,
   FiSearch,
@@ -23,7 +23,6 @@ import "./classroom-refinements.css";
 import {
   useSundayContext,
   serviceDisplayLabel,
-  type ServiceSessionContext,
 } from "@/lib/sunday-context";
 
 type Teacher = {
@@ -183,70 +182,32 @@ function Status({ value }: { value: string }) {
 
 export function ClassroomsOverview() {
   const session = useMemo(() => readTeacherSession(), []);
-  const service = useService();
-  const [data, setData] = useState<Overview>({
-    summary: {
-      activeClasses: 0,
-      checkedIn: 0,
-      teachersAssigned: 0,
-    },
-    items: [],
-  });
-  const [weeks, setWeeks] = useState<ServiceWeek[]>([]);
-  const [weekServiceSessionId, setWeekServiceSessionId] = useState("");
-  const [weekScope, setWeekScope] = useState("");
+  const context = useSundayContext();
+  const isSuperAdmin = session?.accessLevel === "TPK_SUPER_ADMIN";
+  const [data, setData] = useState<Overview>(emptyOverview);
+  const [assembly, setAssembly] = useState<{ groups: AssemblyGroup[] }>({ groups: [] });
+  const [activeTab, setActiveTab] = useState<"classrooms" | "assembly">("classrooms");
+  const [localScope, setLocalScope] = useState("THIS");
   const [query, setQuery] = useState("");
   const [classId, setClassId] = useState("");
   const [status, setStatus] = useState("");
-  const [moreFilters, setMoreFilters] = useState(false);
   const [sort, setSort] = useState("name");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const requestVersion = useRef(0);
-  const serviceScope =
-    service?.serviceDate && service?.serviceType
-      ? `${service.serviceType}:${service.serviceDate.slice(0, 7)}`
-      : "";
-  const selectedServiceSessionId =
-    weekScope === serviceScope && weekServiceSessionId
-      ? Number(weekServiceSessionId)
-      : Number(service?.id || 0);
-  useEffect(() => {
-    if (!session || !service?.serviceDate || !service.serviceType) {
-      setWeeks([]);
-      setWeekServiceSessionId("");
-      setWeekScope("");
-      return;
-    }
-    let cancelled = false;
-    const scope = `${service.serviceType}:${service.serviceDate.slice(0, 7)}`;
-    setWeeks([]);
-    setWeekServiceSessionId(String(service.id));
-    setWeekScope("");
-    void fetch(`${apiBase}/api/v1/service-sessions`, { headers: authHeaders(session) })
-      .then((response) => response.json())
-      .then((result) => {
-        if (cancelled || !result.success) return;
-        const month = service.serviceDate!.slice(0, 7);
-        const bySunday = new Map<string, ServiceWeek>();
-        (result.data as ServiceWeek[])
-          .filter((item) => item.serviceType === service.serviceType && item.serviceDate?.startsWith(month))
-          .sort((left, right) => left.serviceDate.localeCompare(right.serviceDate))
-          .forEach((item) => { if (!bySunday.has(item.serviceDate)) bySunday.set(item.serviceDate, item); });
-        const choices = [...bySunday.values()];
-        setWeeks(choices);
-        setWeekServiceSessionId(String(choices.find((item) => item.id === service.id)?.id || choices.at(-1)?.id || service.id));
-        setWeekScope(scope);
-      })
-      .catch(() => { if (!cancelled) setWeeks([]); });
-    return () => { cancelled = true; };
-  }, [service?.id, service?.serviceDate, service?.serviceType, session]);
+  const selectedService = context.selectedService;
+  const serviceDate = context.selectedSundayDate || selectedService?.serviceDate || "";
+  useEffect(() => { setLocalScope("THIS"); }, [context.selectedServiceSessionId, context.selectedSundayDate]);
+  const serviceScopeParam = localScope === "THIS" ? "THIS" : localScope;
   const load = useCallback(async () => {
-    if (!session) return;
+    if (!session || !context.selectedServiceSessionId) { setLoading(false); return; }
     const version = ++requestVersion.current;
     setLoading(true);
+    setError("");
     try {
       const p = new URLSearchParams();
-      if (selectedServiceSessionId) p.set("serviceSessionId", String(selectedServiceSessionId));
+      if (serviceScopeParam === "THIS") p.set("serviceSessionId", String(context.selectedServiceSessionId));
+      else { p.set("serviceScope", serviceScopeParam); p.set("date", serviceDate); }
       if (query) p.set("search", query);
       if (classId) p.set("classId", classId);
       if (status) p.set("status", status);
@@ -257,10 +218,15 @@ export function ClassroomsOverview() {
       if (!r.ok || !b.success)
         throw new Error(b.error?.message || "We could not load classrooms.");
       if (version === requestVersion.current) setData(b.data);
+      const a = await fetch(`${apiBase}/api/v1/assembly?${p.toString()}`, { headers: authHeaders(session) });
+      const assemblyBody = await a.json();
+      if (version === requestVersion.current && a.ok && assemblyBody.success) setAssembly({ groups: assemblyBody.data?.groups || [] });
+    } catch (reason) {
+      if (version === requestVersion.current) setError(reason instanceof Error ? reason.message : "We could not load this service.");
     } finally {
       if (version === requestVersion.current) setLoading(false);
     }
-  }, [classId, query, selectedServiceSessionId, session, status]);
+  }, [classId, context.selectedServiceSessionId, query, serviceDate, serviceScopeParam, session, status]);
   useEffect(() => {
     const id = window.setTimeout(() => void load(), query ? 180 : 0);
     return () => window.clearTimeout(id);
@@ -274,11 +240,18 @@ export function ClassroomsOverview() {
       ),
     [data.items, sort],
   );
+  const classroomGroups = data.groups?.length ? data.groups : [{ serviceSession: data.serviceSession || selectedService, summary: data.summary, items: classes }];
+  const serviceOptions = [
+    ...(selectedService ? [{ value: "THIS", label: `This Service · ${serviceDisplayLabel(selectedService)}` }] : []),
+    ...(context.services.some((item) => item.serviceType === "FIRST_SERVICE") ? [{ value: "FIRST_SERVICE", label: "First Service" }] : []),
+    ...(context.services.some((item) => item.serviceType === "SECOND_SERVICE") ? [{ value: "SECOND_SERVICE", label: "Second Service" }] : []),
+    ...(isSuperAdmin ? [{ value: "ALL", label: "All Services" }] : []),
+  ];
   return (
     <section className="cw-page">
       <style>{`
-        .cw-page .cw-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-        .cw-page .cw-tools { grid-template-columns: minmax(250px, 1.7fr) 180px 180px 180px auto; }
+        .cw-page .cw-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        .cw-page .cw-tools { grid-template-columns: minmax(220px, 1.7fr) repeat(4, minmax(145px, 1fr)); }
         @media (max-width: 1100px) {
           .cw-page .cw-tools { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
@@ -291,8 +264,14 @@ export function ClassroomsOverview() {
           <p className="eyebrow">Petra Wuse</p>
           <h1>Classrooms</h1>
           <p>See attendance, children and teachers across TPK classrooms.</p>
+          {serviceDate && selectedService && <small className="cw-context-line">Viewing Sunday, {formatDate(serviceDate)} · {selectedService.name}</small>}
         </div>
       </header>
+      <nav className="cw-primary-tabs" aria-label="Classroom ministry views">
+        <button className={activeTab === "classrooms" ? "selected" : ""} onClick={() => setActiveTab("classrooms")}>Classrooms</button>
+        <button className={activeTab === "assembly" ? "selected" : ""} onClick={() => setActiveTab("assembly")}>Assembly</button>
+      </nav>
+      {activeTab === "classrooms" ? <>
       <section className="cw-metrics">
         <Metric
           icon={<FiUsers />}
@@ -314,6 +293,7 @@ export function ClassroomsOverview() {
           text="Across all classes"
           tone="purple"
         />
+        <Metric icon={<FiAlertTriangle />} value={data.summary.needAttention || classes.filter((item) => item.status === "NEEDS_ATTENTION" || item.status === "NO_TEACHER_ASSIGNED").length} title="Need Attention" text="Selected service" tone="red" />
       </section>
       <section className="cw-tools">
         <label>
@@ -324,18 +304,8 @@ export function ClassroomsOverview() {
             placeholder="Search classroom, child or teacher..."
           />
         </label>
-        <select
-          aria-label="Sunday in selected month"
-          value={weekServiceSessionId}
-          onChange={(event) => setWeekServiceSessionId(event.target.value)}
-          disabled={!weeks.length}
-        >
-          {weeks.map((item, index) => (
-            <option key={item.id} value={item.id}>
-              Week {index + 1} · {formatDate(item.serviceDate)}
-            </option>
-          ))}
-          {!weeks.length && <option value="">Selected Sunday</option>}
+        <select aria-label="Classroom service filter" value={localScope} onChange={(event) => setLocalScope(event.target.value)} disabled={!serviceOptions.length}>
+          {serviceOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
         </select>
         <select
           value={classId}
@@ -353,62 +323,21 @@ export function ClassroomsOverview() {
           onChange={(event) => setStatus(event.target.value)}
         >
           <option value="">All Statuses</option>
-          <option value="ASSIGNED">Teacher Assigned</option>
+          <option value="RUNNING_SMOOTHLY">Running Smoothly</option>
+          <option value="NEEDS_ATTENTION">Needs Attention</option>
           <option value="NO_TEACHER_ASSIGNED">No Teacher Assigned</option>
         </select>
-        <button
-          onClick={() => setMoreFilters((value) => !value)}
-          aria-expanded={moreFilters}
-        >
-          <FiFilter />
-          More Filters
-        </button>
+        <select aria-label="Sort classrooms" value={sort} onChange={(event) => setSort(event.target.value)}><option value="name">Class name A–Z</option><option value="attendance">Highest attendance</option></select>
       </section>
-      {moreFilters && (
-        <section
-          className="cw-more-filters"
-          style={{ display: "flex", alignItems: "end", gap: 10, marginTop: -8 }}
-        >
-          <label
-            style={{
-              display: "grid",
-              gap: 6,
-              color: "#53647d",
-              fontSize: 11,
-              fontWeight: 800,
-            }}
-          >
-            Sort classrooms
-            <select
-              value={sort}
-              onChange={(event) => setSort(event.target.value)}
-            >
-              <option value="name">Class name A–Z</option>
-              <option value="attendance">Highest attendance</option>
-            </select>
-          </label>
-          <button
-            onClick={() => {
-              setQuery("");
-              setClassId("");
-              setStatus("");
-              setSort("name");
-            }}
-          >
-            Clear Filters
-          </button>
-        </section>
-      )}
-      <div className="cw-list-heading">
-        <h2>Classrooms ({classes.length})</h2>
-        <span>{data.serviceSession ? `${data.serviceSession.name} · ${formatDate(data.serviceSession.serviceDate)}` : "Choose a service"}</span>
-      </div>
+      {error && <p className="cw-error">{error}</p>}
+      <div className="cw-list-heading"><h2>Classrooms ({classes.length})</h2><span>{selectedService ? `${selectedService.name} · ${formatDate(serviceDate)}` : "Choose a service"}</span></div>
       {loading ? (
         <p className="cw-empty">Loading classrooms…</p>
       ) : (
-        <section className="class-grid">
-          {classes.map((item) => (
-            <article className="class-card" key={item.id}>
+        <>{classroomGroups.map((group, groupIndex) => <section className="cw-service-group" key={group.serviceSession?.id || groupIndex}>
+          {data.groups?.length ? <h3>{group.serviceSession?.name || "Service"} · {formatDate(group.serviceSession?.serviceDate)} <small>{group.items.length} classrooms</small></h3> : null}
+          <div className="class-grid">{group.items.map((item) => (
+            <article className="class-card" key={`${group.serviceSession?.id || "service"}-${item.id}`}>
               <header>
                 <div>
                   <i className="class-symbol">
@@ -419,9 +348,7 @@ export function ClassroomsOverview() {
                 </div>
                 <Status value={item.status} />
               </header>
-              <p className="teacher-heading">
-                Teachers on duty this Sunday
-              </p>
+              <p className="teacher-heading">Assigned teachers</p>
               <div className="teacher-strip">
                 {item.teachers.length ? (
                   item.teachers.map((teacher) => (
@@ -462,23 +389,21 @@ export function ClassroomsOverview() {
               <footer>
                 <small>
                   <FiCalendar />
-                  {data.serviceSession?.serviceDate
-                    ? `Service: ${formatDate(data.serviceSession.serviceDate)}`
+                  {group.serviceSession?.serviceDate
+                    ? `Service: ${formatDate(group.serviceSession.serviceDate)}`
                     : "No selected service"}
                 </small>
                 <Link
-                  href={`/account/classrooms/${item.id}${data.serviceSession?.id ? `?serviceSessionId=${data.serviceSession.id}` : ""}`}
+                  href={`/account/classrooms/${item.id}${group.serviceSession?.id ? `?serviceSessionId=${group.serviceSession.id}&date=${group.serviceSession.serviceDate}` : ""}`}
                 >
                   Open Class <FiChevronRight />
                 </Link>
               </footer>
             </article>
-          ))}
-          {!classes.length && (
-            <p className="cw-empty">No classrooms match these filters.</p>
-          )}
-        </section>
+          ))}{!group.items.length && <p className="cw-empty">No classrooms match these filters.</p>}</div>
+        </section>)}</>
       )}
+      </> : <AssemblyView groups={assembly.groups} loading={loading} isSuperAdmin={Boolean(isSuperAdmin)} />}
       <style jsx>{styles}</style>
       <style jsx>{mobileDetailStyles}</style>
     </section>
@@ -501,9 +426,63 @@ function Metric({
   return <StatCard icon={icon} value={value} title={title} description={text} tone={tone === "red" ? "orange" : tone} />;
 }
 
+function AssemblyView({ groups, loading, isSuperAdmin }: { groups: AssemblyGroup[]; loading: boolean; isSuperAdmin: boolean }) {
+  const session = useMemo(() => readTeacherSession(), []);
+  const [selectedGroup, setSelectedGroup] = useState(0);
+  const [showActivity, setShowActivity] = useState(false);
+  const [activityName, setActivityName] = useState("");
+  const [activityNotes, setActivityNotes] = useState("");
+  const [activityStatus, setActivityStatus] = useState<AssemblyActivity["status"]>("UPCOMING");
+  const [leaderId, setLeaderId] = useState("");
+  const [note, setNote] = useState("");
+  const [message, setMessage] = useState("");
+  const group = groups[selectedGroup] || groups[0];
+  useEffect(() => { if (selectedGroup >= groups.length) setSelectedGroup(0); }, [groups.length, selectedGroup]);
+  const canManage = Boolean(group?.canManage);
+  const submitActivity = async () => {
+    if (!session || !group?.serviceSession?.id || !activityName.trim()) return;
+    const r = await fetch(`${apiBase}/api/v1/assembly/activities`, { method: "POST", headers: { ...authHeaders(session), "Content-Type": "application/json" }, body: JSON.stringify({ serviceSessionId: group.serviceSession.id, activityName: activityName.trim(), ledByStaffUserId: leaderId ? Number(leaderId) : null, notes: activityNotes.trim() || null, status: activityStatus }) });
+    const b = await r.json().catch(() => null);
+    setMessage(r.ok && b?.success ? "Activity added." : (b?.error?.message || "We could not save this activity."));
+    if (r.ok && b?.success) { setActivityName(""); setActivityNotes(""); setLeaderId(""); setShowActivity(false); window.location.reload(); }
+  };
+  const updateActivity = async (activity: AssemblyActivity, status: string) => {
+    if (!session) return;
+    await fetch(`${apiBase}/api/v1/assembly/activities/${activity.id}`, { method: "PATCH", headers: { ...authHeaders(session), "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
+    window.location.reload();
+  };
+  const addNote = async () => {
+    if (!session || !group?.serviceSession?.id || !note.trim()) return;
+    const r = await fetch(`${apiBase}/api/v1/assembly/notes`, { method: "POST", headers: { ...authHeaders(session), "Content-Type": "application/json" }, body: JSON.stringify({ serviceSessionId: group.serviceSession.id, note: note.trim() }) });
+    const b = await r.json().catch(() => null);
+    setMessage(r.ok && b?.success ? "Note added." : (b?.error?.message || "We could not save this note."));
+    if (r.ok && b?.success) { setNote(""); window.location.reload(); }
+  };
+  const children = groups.reduce((sum, item) => sum + item.childrenInService, 0);
+  const team = groups.reduce((sum, item) => sum + item.team.length, 0);
+  const activities = groups.reduce((sum, item) => sum + item.activities.length, 0);
+  const attention = groups.reduce((sum, item) => sum + item.needAttention, 0);
+  if (loading) return <p className="cw-empty">Loading Assembly…</p>;
+  if (!groups.length) return <section className="assembly-empty"><FiUsers /><h2>No Assembly data configured</h2><p>There is no Assembly team or programme recorded for this Sunday and service.</p></section>;
+  return <section className="assembly-view">
+    <div className="assembly-intro"><div><p className="eyebrow">Service ministry</p><h2>Assembly</h2><p>View the team, activities and notes for assembly during the selected service.</p></div>{groups.length > 1 && <select value={selectedGroup} onChange={(e) => setSelectedGroup(Number(e.target.value))}>{groups.map((item, index) => <option key={item.serviceSession?.id || index} value={index}>{item.serviceSession?.name || "Service"} · {formatDate(item.serviceSession?.serviceDate)}</option>)}</select>}</div>
+    <section className="assembly-metrics"><Metric icon={<FiUsers />} value={children} title="Children in Service" text="Existing service attendance" tone="green" /><Metric icon={<FiUsers />} value={team} title="Assembly Team" text="Assigned for this service" tone="purple" /><Metric icon={<FiClipboard />} value={activities} title="Activities" text="Programme records" /><Metric icon={<FiAlertTriangle />} value={attention} title="Need Attention" text="Items needing review" tone="red" /></section>
+    {groups.length > 1 && <div className="assembly-groups">{groups.map((item, index) => <button key={item.serviceSession?.id || index} className={index === selectedGroup ? "selected" : ""} onClick={() => setSelectedGroup(index)}>{item.serviceSession?.name || "Service"}<small>{formatDate(item.serviceSession?.serviceDate)}</small></button>)}</div>}
+    <section className="assembly-panel"><header><div><p className="eyebrow">Assigned teachers</p><h3>Assembly Team</h3></div>{isSuperAdmin && <Link href="/account/roster">Manage in Team &amp; Roster <FiChevronRight /></Link>}</header><div className="assembly-team">{group.team.map((teacher) => <article key={teacher.userId}><Avatar teacher={teacher} /><div><b>{teacher.name}</b><small>{teacher.dutyName || "Assembly"}</small><Status value={teacher.status || "ASSIGNED"} /></div></article>)}{!group.team.length && <p className="cw-empty">No Assembly team assigned.</p>}</div></section>
+    <section className="assembly-panel"><header><div><p className="eyebrow">Service programme</p><h3>Assembly Programme</h3></div>{canManage && <button className="primary" onClick={() => setShowActivity(true)}><FiPlus /> Add Activity</button>}</header><div className="assembly-activity-list">{group.activities.map((activity) => <article key={activity.id}><div><b>{activity.activityName}</b><small>{activity.ledBy || "Leader not specified"}{activity.notes ? ` · ${activity.notes}` : ""}</small></div>{canManage ? <select value={activity.status} onChange={(e) => void updateActivity(activity, e.target.value)}><option value="UPCOMING">Upcoming</option><option value="COMPLETED">Completed</option><option value="SKIPPED">Skipped</option></select> : <Status value={activity.status} />}</article>)}{!group.activities.length && <p className="cw-empty">No Assembly activities recorded for this service.</p>}</div></section>
+    <section className="assembly-panel"><header><div><p className="eyebrow">Service history</p><h3>Assembly Notes</h3></div></header><div className="assembly-notes">{group.notes.map((item) => <article key={item.id}><p>{item.note}</p><small>{item.author} · {formatDate(item.createdAt)}</small></article>)}{!group.notes.length && <p className="cw-empty">No Assembly notes yet.</p>}</div>{canManage && <div className="assembly-note-form"><textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a short note about this service…" /><button className="primary" onClick={() => void addNote()} disabled={!note.trim()}>Save note</button></div>}</section>
+    {message && <p className="cw-save-message">{message}</p>}
+    {showActivity && <div className="cw-modal"><section><button className="modal-close" onClick={() => setShowActivity(false)}><FiX /></button><p className="eyebrow">Assembly Programme</p><h2>Add Activity</h2><label>Activity Name<input value={activityName} onChange={(e) => setActivityName(e.target.value)} placeholder="e.g. Opening prayer" /></label><label>Led By<select value={leaderId} onChange={(e) => setLeaderId(e.target.value)}><option value="">Choose a teacher (optional)</option>{group.team.map((teacher) => <option key={teacher.userId} value={teacher.userId}>{teacher.name}</option>)}</select></label><label>Notes <small>(optional)</small><textarea value={activityNotes} onChange={(e) => setActivityNotes(e.target.value)} placeholder="Add context for the team…" /></label><label>Status<select value={activityStatus} onChange={(e) => setActivityStatus(e.target.value as AssemblyActivity["status"])}><option value="UPCOMING">Upcoming</option><option value="COMPLETED">Completed</option><option value="SKIPPED">Skipped</option></select></label><footer><button onClick={() => setShowActivity(false)}>Cancel</button><button className="primary" onClick={() => void submitActivity()} disabled={!activityName.trim()}>Save Activity</button></footer></section></div>}
+  </section>;
+}
+
 export function ClassroomDetail({ classId }: { classId: number }) {
   const session = useMemo(() => readTeacherSession(), []);
-  const active = useService();
+  const searchParams = useSearchParams();
+  const context = useSundayContext();
+  const requestedServiceId = Number(searchParams.get("serviceSessionId")) || 0;
+  const active = context.services.find((service) => service.id === requestedServiceId)
+    || context.selectedService;
   const [data, setData] = useState<Detail | null>(null);
   const [tab, setTab] = useState("children");
   const [query, setQuery] = useState("");
@@ -535,8 +514,7 @@ export function ClassroomDetail({ classId }: { classId: number }) {
       if (requestVersion !== detailRequestVersion.current) return;
       setData(b.data);
       setReviewSessionId(
-        (value) =>
-          value || String(active?.id || b.data.serviceSession?.id || ""),
+        (value) => value || String(active?.id || b.data.serviceSession?.id || ""),
       );
       setError("");
     } catch (reason) {
@@ -624,7 +602,7 @@ export function ClassroomDetail({ classId }: { classId: number }) {
     <section className="cw-page class-detail">
       <Link
         className="cw-back"
-        href={`/account/classrooms${data.serviceSession?.id ? `?serviceSessionId=${data.serviceSession.id}` : ""}`}
+        href={`/account/classrooms${data.serviceSession?.id ? `?serviceSessionId=${data.serviceSession.id}&date=${data.serviceSession.serviceDate}` : ""}`}
       >
         <FiArrowLeft />
         Classrooms
