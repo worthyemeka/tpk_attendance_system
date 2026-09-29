@@ -4,6 +4,7 @@ declare(strict_types=1);
 /* REST API v1. Apply database/v1_migration.sql before using these routes. */
 require_once dirname(__DIR__) . '/config.php';
 require_once __DIR__ . '/classrooms-context.php';
+require_once __DIR__ . '/assembly-context.php';
 
 function api_ok(mixed $data, int $status = 200, ?array $meta = null): never {
     http_response_code($status); header('Content-Type: application/json; charset=utf-8');
@@ -854,6 +855,10 @@ try { $db=api_db();$path=api_path();$method=api_method();
     if($method==='GET'&&$path==='/api/v1/campuses')api_list_campuses($db);
     if(preg_match('#^/api/v1/campuses/(\d+)$#',$path,$m))api_campus($db,(int)$m[1]);
     if($method==='GET'&&$path==='/api/v1/classrooms')api_classrooms_context($db);
+    if($method==='GET'&&$path==='/api/v1/assembly')api_assembly($db);
+    if($method==='POST'&&$path==='/api/v1/assembly/activities')api_assembly_activity($db);
+    if($method==='PATCH'&&preg_match('#^/api/v1/assembly/activities/(\d+)$#',$path,$m))api_assembly_activity($db,(int)$m[1]);
+    if($method==='POST'&&$path==='/api/v1/assembly/notes')api_assembly_note($db);
     if($method==='GET'&&preg_match('#^/api/v1/classrooms/(\d+)$#',$path,$m))api_classroom_detail($db,(int)$m[1]);
     if($method==='POST'&&preg_match('#^/api/v1/classrooms/(\d+)/assignments$#',$path,$m))api_create_classroom_assignment($db,(int)$m[1]);
     if($method==='POST'&&preg_match('#^/api/v1/classrooms/(\d+)/notes$#',$path,$m))api_create_classroom_note($db,(int)$m[1]);

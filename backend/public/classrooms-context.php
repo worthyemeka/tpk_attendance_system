@@ -39,6 +39,11 @@ function api_classroom_context_snapshot(PDO $db, array $actor, ?array $service):
         $params = array_merge($params, $allowed);
     }
     if (($classId = (int)($_GET['classId'] ?? 0)) > 0) { $where[] = 'c.id=?'; $params[] = $classId; }
+    if (($search = trim((string)($_GET['search'] ?? ''))) !== '') {
+        $like = '%'.$search.'%';
+        $where[] = "(c.name LIKE ? OR EXISTS(SELECT 1 FROM children sc WHERE sc.class_id=c.id AND CONCAT(sc.first_name,' ',sc.last_name) LIKE ?) OR EXISTS(SELECT 1 FROM roster_assignments sra JOIN staff_users su ON su.id=sra.user_id WHERE sra.class_id=c.id AND sra.service_session_id=? AND su.name LIKE ?))";
+        $params = array_merge($params, [$like, $like, $sessionId, $like]);
+    }
     $s = $db->prepare('SELECT c.id,c.name,c.age_label AS ageLabel,c.min_age AS minAge,c.max_age AS maxAge,COUNT(ch.id) AS registered FROM classes c LEFT JOIN children ch ON ch.class_id=c.id AND ch.is_active=1 WHERE '.implode(' AND ', $where).' GROUP BY c.id,c.name,c.age_label,c.min_age,c.max_age ORDER BY c.display_order,c.name');
     $s->execute($params);
     $items=[]; $checked=0; $teachers=0; $attention=0;
