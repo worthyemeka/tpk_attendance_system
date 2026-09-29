@@ -28,6 +28,7 @@ import { apiBase, authHeaders, mediaUrl, readTeacherSession } from "@/lib/sessio
 import { printBrandedDocument } from "@/lib/branded-print";
 import { MonthPicker } from "@/components/month-picker";
 import { DataViewToggle, type DataView } from "@/components/data-view-toggle";
+import { useSundayContext } from "@/lib/sunday-context";
 import "./roster-popup.css";
 
 type Teacher = {
@@ -157,6 +158,7 @@ const popupStyles = `.cell-unfilled{display:inline-block;color:#8b95a6;font-size
 
 export default function RosterPage() {
   const session = useMemo(() => readTeacherSession(), []);
+  const sundayContext = useSundayContext();
   const superAdmin = session?.accessLevel === "TPK_SUPER_ADMIN";
   const [monthDate, setMonthDate] = useState(
     () =>
@@ -181,6 +183,14 @@ export default function RosterPage() {
   const monthKey = monthDate.toISOString().slice(0, 7);
   const locked = Boolean(data?.permissions?.locked);
   const readOnly = !superAdmin || locked;
+  useEffect(() => {
+    const year = sundayContext.selectedYear;
+    const month = sundayContext.selectedMonth;
+    if (!year || !month) return;
+    setMonthDate((current) => current.getUTCFullYear() === year && current.getUTCMonth() + 1 === month
+      ? current
+      : new Date(Date.UTC(year, month - 1, 1)));
+  }, [sundayContext.selectedMonth, sundayContext.selectedYear]);
   const load = useCallback(async () => {
     if (!session) return;
     setLoading(true);
@@ -568,7 +578,10 @@ export default function RosterPage() {
       <section className="month-bar">
         <MonthPicker
           value={monthDate}
-          onChange={setMonthDate}
+          onChange={(next) => {
+            setMonthDate(next);
+            sundayContext.selectMonth(`${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}`);
+          }}
           ariaLabel="Choose roster month"
         />
         <span

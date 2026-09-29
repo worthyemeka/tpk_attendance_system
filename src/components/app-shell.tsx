@@ -4,6 +4,7 @@ import { AdminTopbar } from "@/components/admin-topbar";
 import { PagePreloader } from "@/components/page-preloader";
 import { Sidebar } from "@/components/sidebar";
 import { AccountGuard } from "@/components/account-guard";
+import { SundayContextProvider } from "@/lib/sunday-context";
 import { usePathname } from "next/navigation";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -13,7 +14,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <>
       <PagePreloader />
-      {isAccountPage ? <AccountGuard><Sidebar /><main className="content"><AdminTopbar />{children}</main></AccountGuard> : <main className="parent-shell">{children}</main>}
+      {isAccountPage ? <AccountGuard><SundayContextProvider><Sidebar /><main className="content"><AdminTopbar />{children}</main></SundayContextProvider></AccountGuard> : <main className="parent-shell">{children}</main>}
       <style jsx global>{`
         .page-preloader { position: fixed; z-index: 10000; inset: 0; display: grid; place-items: center; background: #fffdf9; animation: page-preloader-fade .2s ease .25s forwards; }
         .page-preloader-mark, .route-loading { display: flex; align-items: end; justify-content: center; gap: 6px; min-height: 46px; }

@@ -13,6 +13,7 @@ import { UserGreeting } from "@/components/user-greeting";
 import { StatCard } from "@/components/stat-card";
 import { apiBase, authHeaders, mediaUrl, readTeacherSession } from "@/lib/session";
 import { subscribeToActiveService } from "@/lib/active-service";
+import { useSundayContext } from "@/lib/sunday-context";
 import "./overview-team.css";
 
 type DashboardClass = {
@@ -91,6 +92,7 @@ function TeacherPhoto({ name, src }: { name: string; src?: string | null }) {
 }
 export default function AccountOverview() {
   const session = readTeacherSession();
+  const sundayContext = useSundayContext();
   const [dashboard, setDashboard] = useState<Dashboard>(empty);
   const [live, setLive] = useState(false);
   const [today, setToday] = useState("");
@@ -98,7 +100,7 @@ export default function AccountOverview() {
     number | undefined
   >();
   useEffect(() => {
-    setToday(new Date().toISOString().slice(0, 10));
+    setToday(new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos" }).format(new Date()));
   }, []);
   useEffect(
     () =>
@@ -122,6 +124,9 @@ export default function AccountOverview() {
       .catch(() => setLive(false));
   }, [serviceSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
   const superAdmin = session?.accessLevel === "TPK_SUPER_ADMIN";
+  const todayInLagos = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos" }).format(new Date());
+  const viewingToday = sundayContext.selectedSundayDate === todayInLagos;
+  const viewingHistorical = Boolean(sundayContext.selectedSundayDate && !viewingToday);
   const { metrics, classes } = dashboard;
   return (
     <div className="overview">
@@ -136,6 +141,7 @@ export default function AccountOverview() {
               ? "Here’s what’s happening across TribePetra Kids."
               : "Here’s what you’re responsible for at TribePetra Kids."}
           </p>
+          {sundayContext.selectedSundayDate && sundayContext.selectedService && <p className="context-indicator">Viewing Sunday, {new Intl.DateTimeFormat("en-NG", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${sundayContext.selectedSundayDate}T12:00:00Z`))} · {sundayContext.selectedService.name}</p>}
         </div>
       </header>
       {dashboard.personalAssignment && (
@@ -182,13 +188,9 @@ export default function AccountOverview() {
         />
         <Metric
           icon={<FiClock />}
-          value={String(metrics.stillPresent)}
-          title="Still Present"
-          sub={
-            dashboard.serviceSession
-              ? "Children currently in class"
-              : "Shown when a service is open"
-          }
+          value={String(viewingHistorical ? metrics.pickedUp : metrics.stillPresent)}
+          title={viewingHistorical ? "Completed Pickups" : "Still Present"}
+          sub={viewingHistorical ? "Children safely collected" : dashboard.serviceSession ? "Children currently in class" : "Shown when a service is open"}
           tone="yellow"
         />
         <Metric
@@ -246,8 +248,8 @@ export default function AccountOverview() {
               <section className="panel team-summary">
                 <div className="panel-heading">
                   <div>
-                    <h2>Today’s Team</h2>
-                    <p>See who is assigned and available for service.</p>
+                    <h2>{viewingToday ? "Today’s Team" : "Service Team"}</h2>
+                    <p>{viewingToday ? "See who is assigned and available for service." : "See who was assigned for this service."}</p>
                   </div>
                   <Link href="/account/roster" className="outline-button">
                     {superAdmin ? "Manage Roster" : "View My Roster"} <FiChevronRight />
@@ -285,8 +287,7 @@ export default function AccountOverview() {
                   </div>
                 ) : (
                   <p className="account-empty">
-                    No roster assignments are scheduled for the current service
-                    date.
+                    No roster assignments are scheduled for this service date.
                   </p>
                 )}
               </section>
@@ -476,6 +477,12 @@ export default function AccountOverview() {
           font-weight: 800;
           text-transform: uppercase;
           letter-spacing: 0.08em;
+        }
+        .context-indicator {
+          margin: 8px 0 0;
+          color: #7b8494;
+          font-size: 11px;
+          font-weight: 700;
         }
         @media (max-width: 590px) {
           .assignment-card {

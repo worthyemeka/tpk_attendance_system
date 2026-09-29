@@ -16,8 +16,14 @@ export function setActiveService(service: ActiveService) {
   window.dispatchEvent(new CustomEvent<ActiveService>("tpk:service", { detail:service }));
 }
 
+export function clearActiveService() {
+  window.localStorage.removeItem("tpk:active-service");
+  window.localStorage.removeItem("tpk:selected-service");
+  window.dispatchEvent(new CustomEvent<ActiveService | null>("tpk:service", { detail:null }));
+}
+
 export function subscribeToActiveService(callback:(service:ActiveService|null)=>void) {
-  const listener = (event:Event) => callback((event as CustomEvent<ActiveService>).detail || readActiveService());
+  const listener = (event:Event) => callback((event as CustomEvent<ActiveService | null>).detail ?? readActiveService());
   callback(readActiveService());
   window.addEventListener("tpk:service", listener);
   return () => window.removeEventListener("tpk:service", listener);
