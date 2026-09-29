@@ -12,17 +12,19 @@ import {
   FiFileText,
   FiFilter,
   FiMessageCircle,
+  FiPlus,
   FiSearch,
   FiUsers,
+  FiX,
 } from "react-icons/fi";
 import { apiBase, authHeaders, mediaUrl, readTeacherSession } from "@/lib/session";
 import { StatCard, type StatCardTone } from "@/components/stat-card";
 import "./classroom-refinements.css";
 import {
-  readActiveService,
-  subscribeToActiveService,
-  type ActiveService,
-} from "@/lib/active-service";
+  useSundayContext,
+  serviceDisplayLabel,
+  type ServiceSessionContext,
+} from "@/lib/sunday-context";
 
 type Teacher = {
   userId: number;
@@ -46,17 +48,24 @@ type Classroom = {
   teachers: Teacher[];
   teacherCount: number;
   status: string;
+  serviceSession?: { id: number; name: string; serviceDate: string; serviceType?: string } | null;
 };
 type Overview = {
   serviceSession?: { id: number; name: string; serviceDate: string } | null;
+  serviceSessions?: { id: number; name: string; serviceDate: string; serviceType?: string }[];
+  mode?: string;
+  groups?: { serviceSession: { id: number; name: string; serviceDate: string; serviceType?: string } | null; summary: Overview["summary"]; items: Classroom[] }[];
   summary: {
     activeClasses: number;
     checkedIn: number;
     teachersAssigned: number;
+    needAttention?: number;
   };
   items: Classroom[];
 };
-type ServiceWeek = { id: number; name: string; serviceType: string; serviceDate: string };
+type AssemblyActivity = { id: number; activityName: string; ledByStaffUserId?: number | null; ledBy?: string | null; notes?: string | null; status: "UPCOMING" | "COMPLETED" | "SKIPPED"; createdAt?: string };
+type AssemblyNote = { id: number; note: string; author: string; createdAt: string };
+type AssemblyGroup = { serviceSession: { id: number; name: string; serviceDate: string; serviceType?: string } | null; childrenInService: number; team: Teacher[]; activities: AssemblyActivity[]; notes: AssemblyNote[]; canManage: boolean; isSuperAdmin: boolean; needAttention: number };
 type Child = {
   id: number;
   firstName: string;
@@ -129,11 +138,7 @@ const formatDate = (value?: string) =>
         year: "numeric",
       }).format(new Date(`${value.slice(0, 10)}T12:00:00`))
     : "—";
-function useService() {
-  const [service, setService] = useState<ActiveService | null>(null);
-  useEffect(() => subscribeToActiveService(setService), []);
-  return service;
-}
+const emptyOverview: Overview = { summary: { activeClasses: 0, checkedIn: 0, teachersAssigned: 0, needAttention: 0 }, items: [] };
 function Avatar({ teacher }: { teacher: Teacher }) {
   const [imageFailed, setImageFailed] = useState(false);
   return teacher.profileImageUrl && !imageFailed ? (
