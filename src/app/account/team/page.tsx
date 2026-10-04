@@ -106,7 +106,6 @@ export default function TeamPage() {
   const [notice, setNotice] = useState("");
   const [tab, setTab] = useState<Tab>("ALL");
   const [query, setQuery] = useState("");
-  const [assignmentMonth, setAssignmentMonth] = useState(() => new Date(Date.UTC(new Date().getFullYear(), new Date().getMonth(), 1)));
   const [assignment, setAssignment] = useState("");
   const [roles, setRoles] = useState<string[]>([]);
   const [sort, setSort] = useState("NAME_ASC");
@@ -141,7 +140,8 @@ export default function TeamPage() {
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams({ month: assignmentMonth.toISOString().slice(0, 7) });
+      const currentMonth = new Date();
+      const params = new URLSearchParams({ month: `${currentMonth.getUTCFullYear()}-${String(currentMonth.getUTCMonth() + 1).padStart(2, "0")}` });
       const response = await fetch(`${apiBase}/api/v1/team?${params}`, {
         headers: authHeaders(session),
       });
@@ -164,7 +164,7 @@ export default function TeamPage() {
     } finally {
       setLoading(false);
     }
-  }, [assignmentMonth, session]);
+  }, [session]);
   useEffect(() => {
     void load();
   }, [load]);
@@ -217,7 +217,7 @@ export default function TeamPage() {
   }, [assignment, members, query, sort, tab]);
   const totalPages = Math.max(1, Math.ceil(shown.length / perPage));
   const pagedMembers = shown.slice((page - 1) * perPage, page * perPage);
-  useEffect(() => setPage(1), [assignment, assignmentMonth, perPage, query, sort, tab]);
+  useEffect(() => setPage(1), [assignment, perPage, query, sort, tab]);
   useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
   function openMember(member: Member) {
     setSelected(member);
@@ -403,7 +403,6 @@ export default function TeamPage() {
               placeholder="Search teacher by name, phone or email…"
             />
           </label>
-          <MonthPicker value={assignmentMonth} onChange={setAssignmentMonth} className="team-month-picker" ariaLabel="Choose assignment month" />
           <select
             value={assignment}
             onChange={(event) => setAssignment(event.target.value)}

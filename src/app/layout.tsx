@@ -6,6 +6,7 @@ import "./responsive-ui.css";
 import "./check-in.css";
 import "./teacher-layout.css";
 import "./loading.css";
+import "../components/admin-topbar-responsive.css";
 import { AppShell } from "@/components/app-shell";
 import { GlobalDropdowns } from "@/components/app-dropdown";
 import { DisplayTypography } from "@/components/display-typography";

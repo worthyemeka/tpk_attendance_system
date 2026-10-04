@@ -139,6 +139,42 @@
 
 .team-page .team-cards--compact{grid-template-columns:repeat(3,minmax(0,1fr));max-width:900px}.team-page .team-month-picker{flex:none;min-width:220px}.team-page .toolbar>select{flex:none;width:210px}.team-page .toolbar .directory-select{flex:none;width:160px}.team-page .team-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;color:#66758c;font-size:11px}.team-page .team-pagination label{display:flex;align-items:center;gap:5px;font-weight:700}.team-page .team-pagination select{height:30px;border:1px solid #d9dfe8;border-radius:7px;background:#fff;padding:0 7px;color:#263550;font:700 11px var(--font-body)}.team-page .team-pagination>div{display:flex;align-items:center;gap:8px}.team-page .team-pagination button{height:30px;border:1px solid #d9dfe8;border-radius:7px;background:#fff;padding:0 9px;color:#263550;font:700 10px var(--font-body);cursor:pointer}.team-page .team-pagination button:disabled{opacity:.45;cursor:default}
 
+/* The team directory is a roster of people, not a month planner. Keep its
+   controls compact and let them reflow before they can push past the card. */
+.team-page .toolbar {
+  grid-template-columns: minmax(220px, 1fr) minmax(150px, 1fr) minmax(135px, 160px) auto auto;
+}
+
+@media (max-width: 1100px) {
+  .team-page .toolbar {
+    grid-template-columns: minmax(0, 1fr) minmax(150px, 1fr) minmax(130px, 160px) auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .team-page .toolbar {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .team-page .toolbar .search {
+    grid-column: 1 / -1;
+  }
+
+  .team-page .toolbar > select,
+  .team-page .toolbar .directory-select,
+  .team-page .toolbar .export-wrap,
+  .team-page .toolbar .data-view-toggle {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 520px) {
+  .team-page .toolbar {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media(max-width:1080px){.team-page .team-cards--compact{max-width:none}.team-page .team-month-picker{min-width:210px}}@media(max-width:650px){.team-page .team-cards--compact{grid-template-columns:repeat(3,minmax(0,1fr))}.team-page .team-month-picker{min-width:100%;flex-basis:100%}.team-page .toolbar>select,.team-page .toolbar .directory-select{width:calc(50% - 5px);flex:1}.team-page .team-pagination{align-items:flex-start;flex-direction:column}.team-page .team-pagination>div{width:100%;justify-content:space-between}}
 
 .teacher-drawer .onboarded-summary{display:flex;gap:12px;padding:18px;border:1px solid #ccebdd;border-radius:12px;background:linear-gradient(135deg,#ecfbf2,#fbfffd)}.teacher-drawer .onboarded-summary>i,.teacher-roster-panel>header>i{width:42px;height:42px;flex:none;display:grid;place-items:center;border-radius:12px;background:#d8f5e4;color:#078b57;font-size:21px;font-style:normal}.teacher-drawer .onboarded-summary h3,.teacher-roster-panel h3{margin:0;color:#172a48;font:800 17px var(--font-display)}.teacher-drawer .onboarded-summary p,.teacher-roster-panel p{margin:5px 0 0;color:#667890;font-size:11px;line-height:1.45}.teacher-drawer .onboarded-summary dl{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:15px 0 0}.teacher-drawer .onboarded-summary dl div{padding:8px;border-radius:8px;background:#fff}.teacher-drawer .onboarded-summary dt{color:#708099;font-size:9px}.teacher-drawer .onboarded-summary dd{margin:4px 0 0;color:#253852;font-size:10px;font-weight:800}.teacher-roster-panel{display:grid;gap:13px}.teacher-roster-panel>header{display:flex;align-items:center;gap:10px;padding:14px;border-radius:11px;background:linear-gradient(135deg,#fff4e7,#fffaf3)}.teacher-roster-panel>header>div:nth-child(2){flex:1}.teacher-roster-panel .tpk-month-picker{justify-self:start}.drawer-export{display:flex;gap:6px}.drawer-export button{height:31px;border:1px solid #d6dee8;border-radius:7px;background:#fff;padding:0 8px;color:#243854;font:800 10px var(--font-body);cursor:pointer}.drawer-export button:first-child{display:flex;align-items:center;gap:4px}.teacher-roster-table{overflow:hidden;border:1px solid #dde5ee;border-radius:10px}.teacher-roster-table table{width:100%;border-collapse:collapse}.teacher-roster-table th{padding:9px;background:#f7f9fc;color:#6a7b94;text-align:left;font-size:9px}.teacher-roster-table td{padding:10px 8px;border-top:1px solid #e8edf3;color:#405675;font-size:10px}.teacher-roster-table td:first-child{color:#1d3454}.roster-status{display:inline-block;padding:4px 6px;border-radius:99px;background:#fff3db;color:#a66400;font-size:9px;font-weight:800}.roster-status.present{background:#e5f8ed;color:#087d51}.roster-status.absent{background:#fff0ed;color:#bb4633}@media(max-width:460px){.teacher-drawer .onboarded-summary dl{grid-template-columns:1fr}.teacher-roster-panel>header{align-items:flex-start;flex-wrap:wrap}.drawer-export{margin-left:52px}.teacher-roster-table{overflow:auto}.teacher-roster-table table{min-width:470px}}

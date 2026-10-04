@@ -49,6 +49,10 @@ function api_actor(PDO $db, bool $super = false): array {
     if (!$user) api_error('SESSION_EXPIRED','Your sign-in session has expired. Please sign in again.',401);
     if (!(bool)$user['is_active'] || $user['account_status'] !== 'VERIFIED' || $user['team_status'] === 'INACTIVE') api_error('UNAUTHENTICATED','Your account is not active. Please contact a TPK Super Admin.',401);
     if ($super && $user['access_level'] !== 'TPK_SUPER_ADMIN') api_error('FORBIDDEN','TPK Super Admin access is required.',403);
+    /* There is no background worker on the PHP VM. On the first authenticated
+       request after Sunday’s 2:00 PM cutoff, queue the idempotent absence tasks
+       so Follow-Up Leads see them without needing a manual “close service” step. */
+    try { api_queue_post_cutoff_followups($db, (int)$user['campus_id']); } catch (Throwable $e) { error_log('[TPK absence follow-up queue] ' . $e->getMessage()); }
     return $user;
 }
 function api_is_followup_lead(array $actor): bool {
@@ -511,7 +515,9 @@ function api_checkin_window_open(PDO $db,int $serviceSessionId): bool {
 }
 function api_can_operate_checkin(PDO $db,array $actor,int $serviceSessionId): bool { return api_checkin_window_open($db,$serviceSessionId)&&api_can_view_checkin($db,$actor,$serviceSessionId); }
 function api_can_assisted_checkin(PDO $db,array $actor,int $serviceSessionId): bool {
-    if (!api_checkin_window_open($db, $serviceSessionId)) return false;
+    /* Desk check-in is an authorised staff data-entry tool. Unlike public
+       parent check-in, it must remain usable on weekdays and after the live
+       Sunday window so staff can register children and repair records. */
     return $actor['access_level'] === 'TPK_SUPER_ADMIN' || api_is_head_of_service($db, $actor, $serviceSessionId);
 }
 /**
@@ -598,7 +604,7 @@ function api_checkins(PDO $db): never {
 function api_assisted_checkin(PDO $db): never {
     $actor=api_actor($db);$v=api_input();$sessionId=(int)($v['serviceSessionId']??0);$guardian=$v['guardian']??[];$children=$v['children']??[];$pickupInput=$v['pickup']??['mode'=>'SELF'];
     if(!$sessionId||!is_array($guardian)||!is_array($children)||!$children)api_error('VALIDATION_ERROR','Choose a service and provide one or more children with their parent or guardian.',422);
-    $session=$db->prepare("SELECT id,campus_id FROM service_sessions WHERE id=? AND campus_id=? AND service_type IN ('FIRST_SERVICE','SECOND_SERVICE')");$session->execute([$sessionId,$actor['campus_id']]);if(!$session->fetch())api_error('SERVICE_SESSION_NOT_FOUND','Choose First Service or Second Service.',422);if(!api_can_assisted_checkin($db,$actor,$sessionId))api_error('FORBIDDEN','Assisted check-in is available only to the Super Admin or the Head/Assistant assigned to this service, after the check-in window opens.',403);
+    $session=$db->prepare("SELECT id,campus_id FROM service_sessions WHERE id=? AND campus_id=? AND service_type IN ('FIRST_SERVICE','SECOND_SERVICE')");$session->execute([$sessionId,$actor['campus_id']]);if(!$session->fetch())api_error('SERVICE_SESSION_NOT_FOUND','Choose First Service or Second Service.',422);if(!api_can_assisted_checkin($db,$actor,$sessionId))api_error('FORBIDDEN','Assisted check-in is available only to the Super Admin or the Head/Assistant assigned to this service.',403);
     $first=trim((string)($guardian['firstName']??''));$last=trim((string)($guardian['lastName']??''));$relationship=trim((string)($guardian['relationship']??''));$phone=api_phone($guardian['phone']??null);$secondary=api_phone($guardian['secondaryPhone']??null);$email=trim((string)($guardian['email']??''));$address=trim((string)($guardian['address']??'') );
     if(!$first||!$last||!$relationship||!$phone||!$address)api_error('VALIDATION_ERROR','Complete the parent or guardian fields, including a valid Nigerian phone number and home address.',422);if($email!==''&&!filter_var($email,FILTER_VALIDATE_EMAIL))api_error('VALIDATION_ERROR','Enter a valid email address or leave it blank.',422);
     $pickupMode=strtoupper((string)($pickupInput['mode']??'SELF'));if(!in_array($pickupMode,['SELF','OTHER'],true))api_error('VALIDATION_ERROR','Choose who will collect the children.',422);$pickerName=trim((string)($pickupInput['fullName']??''));$pickerRelationship=trim((string)($pickupInput['relationship']??''));$pickerPhone=api_phone($pickupInput['phone']??null);if($pickupMode==='OTHER'&&(!$pickerName||!$pickerRelationship||!$pickerPhone))api_error('VALIDATION_ERROR','Complete the authorised pickup person’s details.',422);
@@ -607,8 +613,8 @@ function api_assisted_checkin(PDO $db): never {
         if($existing){$guardianId=(int)$existing['id'];$familyId=(int)$existing['family_id'];$db->prepare('UPDATE guardians SET first_name=?,last_name=?,phone=?,secondary_phone=?,email=?,relationship=?,is_primary=1,is_authorized=1 WHERE id=?')->execute([$first,$last,$phone,$secondary?:null,$email?:null,$relationship,$guardianId]);$db->prepare('UPDATE families SET surname=?,phone=?,email=?,home_address=? WHERE id=?')->execute([$last,$phone,$email?:null,$address,$familyId]);}
         else {$code='';do{$code='TPK-'.date('Y').'-'.strtoupper(bin2hex(random_bytes(3)));$exists=$db->prepare('SELECT 1 FROM families WHERE family_code=?');$exists->execute([$code]);}while($exists->fetchColumn());$db->prepare('INSERT INTO families(campus_id,family_code,surname,phone,email,home_address) VALUES(?,?,?,?,?,?)')->execute([$actor['campus_id'],$code,$last,$phone,$email?:null,$address]);$familyId=(int)$db->lastInsertId();$db->prepare('INSERT INTO guardians(family_id,first_name,last_name,phone,secondary_phone,email,relationship,is_primary,is_authorized) VALUES(?,?,?,?,?,?,?,?,?)')->execute([$familyId,$first,$last,$phone,$secondary?:null,$email?:null,$relationship,1,1]);$guardianId=(int)$db->lastInsertId();}
         if($pickupMode==='OTHER'){[$pickerFirst,$pickerLast]=array_pad(preg_split('/\s+/', $pickerName,2)?:[],2,'');$existingPicker=$db->prepare('SELECT id FROM authorized_pickups WHERE family_id=? AND first_name=? AND last_name=? AND is_active=1 LIMIT 1');$existingPicker->execute([$familyId,$pickerFirst,$pickerLast]);if($pickerId=(int)$existingPicker->fetchColumn())$db->prepare('UPDATE authorized_pickups SET phone=?,relationship=? WHERE id=?')->execute([$pickerPhone,$pickerRelationship,$pickerId]);else $db->prepare('INSERT INTO authorized_pickups(family_id,first_name,last_name,phone,relationship,is_active) VALUES(?,?,?,?,?,1)')->execute([$familyId,$pickerFirst,$pickerLast,$pickerPhone,$pickerRelationship]);}
-        $childIds=[];$checked=[];foreach($children as $index=>$child){if(!is_array($child))api_error('VALIDATION_ERROR','Each child needs a name and date of birth.',422);$childFirst=trim((string)($child['firstName']??''));$childLast=trim((string)($child['lastName']??''));$dob=trim((string)($child['dateOfBirth']??''));$gender=strtoupper(trim((string)($child['gender']??'')));$care=trim((string)($child['careInformation']??''));if(!$childFirst||!$childLast||!preg_match('/^\d{4}-\d{2}-\d{2}$/',$dob)||!in_array($gender,['MALE','FEMALE'],true))api_error('VALIDATION_ERROR','Each child needs a first name, last name, date of birth, and Male or Female gender.',422);$existingChild=$db->prepare('SELECT id,class_id,is_first_visit FROM children WHERE family_id=? AND first_name=? AND last_name=? AND date_of_birth=? LIMIT 1 FOR UPDATE');$existingChild->execute([$familyId,$childFirst,$childLast,$dob]);$saved=$existingChild->fetch();if($saved){$childId=(int)$saved['id'];$classId=(int)$saved['class_id'];$firstVisit=(int)$saved['is_first_visit'];$db->prepare('UPDATE children SET gender=? WHERE id=?')->execute([$gender,$childId]);}else{$birth=new DateTimeImmutable($dob);if($birth>new DateTimeImmutable('today'))api_error('VALIDATION_ERROR','A child date of birth cannot be in the future.',422);$age=$birth->diff(new DateTimeImmutable('today'))->y;$class=$db->prepare('SELECT id FROM classes WHERE campus_id=? AND is_active=1 AND min_age IS NOT NULL AND max_age IS NOT NULL AND ? BETWEEN min_age AND max_age ORDER BY display_order,id LIMIT 1');$class->execute([$actor['campus_id'],$age]);$classId=(int)$class->fetchColumn();if(!$classId)api_error('CLASS_NOT_AVAILABLE','This child’s age does not match an active TPK class. Please review class age ranges.',422);$db->prepare('INSERT INTO children(family_id,class_id,first_name,last_name,date_of_birth,gender,is_active,is_first_visit,class_assignment_required,source_system,source_record_key) VALUES(?,?,?,?,?,?,?,?,?,?,?)')->execute([$familyId,$classId,$childFirst,$childLast,$dob,$gender,1,1,0,'staff-assisted-checkin',date('c').':'.$index]);$childId=(int)$db->lastInsertId();$firstVisit=1;$db->prepare('INSERT INTO child_guardians(child_id,guardian_id,relationship,is_primary,authorised_pickup) VALUES(?,?,?,?,?)')->execute([$childId,$guardianId,$relationship,1,1]);}
-            if($care!=='')$db->prepare('INSERT INTO child_care_profiles(child_id,other_relevant_care_information) VALUES(?,?) ON DUPLICATE KEY UPDATE other_relevant_care_information=VALUES(other_relevant_care_information)')->execute([$childId,$care]);$db->prepare("INSERT INTO attendance(service_session_id,child_id,class_id,status,source,checked_in_by,is_first_visit) VALUES(?,?,?,'CHECKED_IN','ASSISTED',?,?) ON DUPLICATE KEY UPDATE status=status")->execute([$sessionId,$childId,$classId,$actor['id'],$firstVisit]);$childIds[]=$childId;$checked[]=['id'=>$childId,'firstName'=>$childFirst,'lastName'=>$childLast];}
+        $childIds=[];$checked=[];foreach($children as $index=>$child){if(!is_array($child))api_error('VALIDATION_ERROR','Each child needs a name and date of birth.',422);$childFirst=trim((string)($child['firstName']??''));$childLast=trim((string)($child['lastName']??''));$dob=trim((string)($child['dateOfBirth']??''));$gender=strtoupper(trim((string)($child['gender']??'')));$care=trim((string)($child['careInformation']??''));$requestedClassId=(int)($child['classId']??0);if(!$childFirst||!$childLast||!preg_match('/^\d{4}-\d{2}-\d{2}$/',$dob)||!in_array($gender,['MALE','FEMALE'],true))api_error('VALIDATION_ERROR','Each child needs a first name, last name, date of birth, and Male or Female gender.',422);if($requestedClassId){$class=$db->prepare('SELECT id FROM classes WHERE id=? AND campus_id=? AND is_active=1');$class->execute([$requestedClassId,$actor['campus_id']]);if(!$class->fetchColumn())api_error('CLASS_NOT_AVAILABLE','Choose an active TPK class for this child.',422);}$existingChild=$db->prepare('SELECT id,class_id,is_first_visit FROM children WHERE family_id=? AND first_name=? AND last_name=? AND date_of_birth=? LIMIT 1 FOR UPDATE');$existingChild->execute([$familyId,$childFirst,$childLast,$dob]);$saved=$existingChild->fetch();if($saved){$childId=(int)$saved['id'];$classId=$requestedClassId?:($saved['class_id']!==null?(int)$saved['class_id']:0);$firstVisit=(int)$saved['is_first_visit'];$db->prepare('UPDATE children SET gender=?,class_id=CASE WHEN ? > 0 THEN ? ELSE class_id END,class_assignment_required=CASE WHEN ? > 0 THEN 0 ELSE class_assignment_required END WHERE id=?')->execute([$gender,$requestedClassId,$requestedClassId,$requestedClassId,$childId]);}else{$birth=new DateTimeImmutable($dob);if($birth>new DateTimeImmutable('today'))api_error('VALIDATION_ERROR','A child date of birth cannot be in the future.',422);if(!$requestedClassId){$age=$birth->diff(new DateTimeImmutable('today'))->y;$class=$db->prepare('SELECT id FROM classes WHERE campus_id=? AND is_active=1 AND min_age IS NOT NULL AND max_age IS NOT NULL AND ? BETWEEN min_age AND max_age ORDER BY display_order,id LIMIT 1');$class->execute([$actor['campus_id'],$age]);$requestedClassId=(int)$class->fetchColumn();}if(!$requestedClassId)api_error('CLASS_NOT_AVAILABLE','Choose an active TPK class for this child or review the class age ranges.',422);$classId=$requestedClassId;$db->prepare('INSERT INTO children(family_id,class_id,first_name,last_name,date_of_birth,gender,is_active,is_first_visit,class_assignment_required,source_system,source_record_key) VALUES(?,?,?,?,?,?,?,?,?,?,?)')->execute([$familyId,$classId,$childFirst,$childLast,$dob,$gender,1,1,0,'staff-assisted-checkin',date('c').':'.$index]);$childId=(int)$db->lastInsertId();$firstVisit=1;$db->prepare('INSERT INTO child_guardians(child_id,guardian_id,relationship,is_primary,authorised_pickup) VALUES(?,?,?,?,?)')->execute([$childId,$guardianId,$relationship,1,1]);}
+            if(!$classId)api_error('CLASS_ASSIGNMENT_REQUIRED','Choose an active TPK class for this child before saving the desk check-in.',422);if($care!=='')$db->prepare('INSERT INTO child_care_profiles(child_id,other_relevant_care_information) VALUES(?,?) ON DUPLICATE KEY UPDATE other_relevant_care_information=VALUES(other_relevant_care_information)')->execute([$childId,$care]);$db->prepare("INSERT INTO attendance(service_session_id,child_id,class_id,status,source,checked_in_by,is_first_visit) VALUES(?,?,?,'CHECKED_IN','ASSISTED',?,?) ON DUPLICATE KEY UPDATE status=status")->execute([$sessionId,$childId,$classId,$actor['id'],$firstVisit]);$childIds[]=$childId;$checked[]=['id'=>$childId,'firstName'=>$childFirst,'lastName'=>$childLast];}
         $pickup=tpk_issue_pickup_code($db,$sessionId,$familyId,$guardianId);api_audit($db,$actor,'ASSISTED_CHECKIN_COMPLETED','PickupCode',(int)$pickup['id'],['guardianId'=>$guardianId,'childIds'=>$childIds]);$db->commit();api_ok(['familyId'=>$familyId,'guardianId'=>$guardianId,'children'=>$checked,'pickupCode'=>$pickup['code'],'pickupTicketUrl'=>$pickup['ticketUrl']],201);
     }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
 }
@@ -665,6 +671,67 @@ function api_profile_photo(PDO $db): never {
     $actor=api_actor($db);if(empty($_FILES['profilePhoto']))api_error('VALIDATION_ERROR','Choose a profile photo to upload.',422);try{$url=tpk_store_profile_photo($_FILES['profilePhoto'],(int)$actor['id']);}catch(Throwable $e){api_error('PROFILE_PHOTO_INVALID',$e->getMessage(),422);}$db->prepare('UPDATE teacher_profiles SET profile_image_url=? WHERE staff_user_id=?')->execute([$url,$actor['id']]);api_audit($db,$actor,'STAFF_PROFILE_PHOTO_UPDATED','StaffUser',(int)$actor['id']);api_ok(['profileImageUrl'=>$url]);
 }
 function api_remove_profile_photo(PDO $db): never { $actor=api_actor($db);$db->prepare('UPDATE teacher_profiles SET profile_image_url=NULL WHERE staff_user_id=?')->execute([$actor['id']]);api_audit($db,$actor,'STAFF_PROFILE_PHOTO_REMOVED','StaffUser',(int)$actor['id']);api_ok(['profileImageUrl'=>null]); }
+function api_queue_post_cutoff_followups(PDO $db, int $campusId): void {
+    if (!api_table_exists($db, 'follow_up_tasks')) return;
+    $zone = new DateTimeZone('Africa/Lagos');
+    $now = new DateTimeImmutable('now', $zone);
+    if ($now->format('w') !== '0' || $now->format('H:i:s') < '14:00:00') return;
+    $serviceDate = $now->format('Y-m-d');
+
+    /* A child is considered absent only when they did not attend either
+       service on that Sunday. Use the second service as the canonical task
+       session (falling back to first service for campuses that only configure
+       one), so a child who attended First Service is never flagged as absent
+       merely because they were not present in Second Service. */
+    $session = $db->prepare("SELECT id FROM service_sessions WHERE campus_id=? AND service_date=? AND service_type IN ('SECOND_SERVICE','FIRST_SERVICE') ORDER BY service_type='SECOND_SERVICE' DESC, starts_at DESC LIMIT 1");
+    $session->execute([$campusId, $serviceDate]);
+    $sessionId = (int)$session->fetchColumn();
+    if (!$sessionId) return;
+
+    $children = $db->prepare("SELECT c.id,c.class_id
+        FROM children c
+        JOIN families f ON f.id=c.family_id AND f.campus_id=? AND f.is_active=1
+        WHERE c.is_active=1
+          AND NOT EXISTS (
+              SELECT 1
+              FROM attendance a
+              JOIN service_sessions attended ON attended.id=a.service_session_id
+              WHERE a.child_id=c.id
+                AND attended.campus_id=?
+                AND attended.service_date=?
+                AND a.status IN ('CHECKED_IN','PICKUP_REQUESTED','PICKED_UP')
+          )");
+    $children->execute([$campusId, $campusId, $serviceDate]);
+
+    $insert = $db->prepare("INSERT INTO follow_up_tasks
+        (campus_id,child_id,class_id,service_session_id,task_type,priority,due_at,notes)
+        SELECT ?,?,?,?,'MISSED_SERVICE','NORMAL',?,?
+        FROM DUAL
+        WHERE NOT EXISTS (
+            SELECT 1 FROM follow_up_tasks existing
+            JOIN service_sessions existing_session ON existing_session.id=existing.service_session_id
+            WHERE existing.campus_id=?
+              AND existing.child_id=?
+              AND existing.task_type='MISSED_SERVICE'
+              AND existing_session.service_date=?
+              AND existing.status IN ('OPEN','IN_PROGRESS')
+        )");
+    $note = 'No check-in recorded by 2:00 PM on Sunday.';
+    foreach ($children->fetchAll() as $child) {
+        $insert->execute([
+            $campusId,
+            (int)$child['id'],
+            $child['class_id'] !== null ? (int)$child['class_id'] : null,
+            $sessionId,
+            $now->format('Y-m-d H:i:s'),
+            $note,
+            $campusId,
+            (int)$child['id'],
+            $serviceDate,
+        ]);
+    }
+}
+
 function api_followup_sync_cases(PDO $db,int $campusId): void {
     /* Only unresolved absence tasks become cases. Children without a trigger are
        deliberately excluded, even when they share the same family. */

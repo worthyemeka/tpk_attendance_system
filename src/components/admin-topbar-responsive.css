@@ -1,0 +1,93 @@
+/* Keep the shared service controls readable on phones and small tablets. */
+@media (max-width: 760px) {
+  .universal-service-bar {
+    height: auto;
+    display: grid !important;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
+  .universal-meta,
+  .universal-actions {
+    position: static;
+  }
+
+  .universal-meta {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .universal-meta time {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .universal-actions {
+    width: 100%;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+    align-items: stretch;
+    flex-wrap: initial !important;
+  }
+
+  .universal-actions .service-menu,
+  .universal-actions .context-select,
+  .universal-actions .context-service-select {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .universal-actions .context-service-select {
+    grid-column: 1 / -1;
+  }
+
+  .universal-actions .service-menu-trigger,
+  .universal-actions .universal-open,
+  .universal-actions .universal-qr,
+  .universal-actions .universal-assist {
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+
+  .universal-actions .service-menu-trigger {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-inline: 9px;
+    font-size: 10px;
+  }
+
+  .universal-actions .universal-open {
+    padding-inline: 8px;
+  }
+
+  .universal-actions .universal-qr span,
+  .universal-actions .assist-full,
+  .universal-actions .status-full {
+    display: none;
+  }
+
+  .universal-actions .universal-qr,
+  .universal-actions .universal-assist {
+    padding-inline: 8px;
+  }
+
+  .universal-actions .status-compact,
+  .universal-actions .assist-compact {
+    display: inline;
+  }
+}
+
+@media (max-width: 420px) {
+  .universal-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .universal-actions .context-service-select {
+    grid-column: auto;
+  }
+}

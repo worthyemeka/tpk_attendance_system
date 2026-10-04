@@ -6,16 +6,18 @@ import { FiArrowLeft, FiCheckCircle, FiMinus, FiPlus } from "react-icons/fi";
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
 import { readActiveService, subscribeToActiveService } from "@/lib/active-service";
 
-type Child = { firstName: string; lastName: string; dateOfBirth: string; gender: "" | "MALE" | "FEMALE"; careInformation: string };
+type Child = { firstName: string; lastName: string; dateOfBirth: string; gender: "" | "MALE" | "FEMALE"; classId: string; careInformation: string };
+type ClassOption = { id: number; name: string; ageLabel?: string };
 type Service = { id: number; name: string; serviceDate: string; serviceType: "FIRST_SERVICE" | "SECOND_SERVICE"; isOpen: boolean };
 type Guardian = { firstName: string; lastName: string; phone: string; secondaryPhone: string; relationship: string; email: string; address: string };
 type Pickup = { mode: "SELF" | "OTHER"; fullName: string; relationship: string; phone: string };
 
-const blankChild = (): Child => ({ firstName: "", lastName: "", dateOfBirth: "", gender: "", careInformation: "" });
+const blankChild = (): Child => ({ firstName: "", lastName: "", dateOfBirth: "", gender: "", classId: "", careInformation: "" });
 
 export default function AssistedCheckInPage() {
   const session = readTeacherSession();
   const [services, setServices] = useState<Service[]>([]);
+  const [classes, setClasses] = useState<ClassOption[]>([]);
   const [activeServiceId, setActiveServiceId] = useState<number | undefined>();
   const [serviceId, setServiceId] = useState("");
   const [guardian, setGuardian] = useState<Guardian>({ firstName: "", lastName: "", phone: "", secondaryPhone: "", relationship: "", email: "", address: "" });
@@ -39,6 +41,13 @@ export default function AssistedCheckInPage() {
         setServiceId(String(items.find((service: Service) => service.id === activeId)?.id || items.find((service: Service) => service.isOpen)?.id || items[0]?.id || ""));
       })
       .catch((reason) => setError(reason instanceof Error ? reason.message : "We could not load services."));
+    fetch(`${apiBase}/api/v1/classes`, { headers: authHeaders(session) })
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.error?.message || "We could not load classes.");
+        setClasses(result.data || []);
+      })
+      .catch((reason) => setError(reason instanceof Error ? reason.message : "We could not load classes."));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => subscribeToActiveService((service) => setActiveServiceId(service?.id)), []);
@@ -86,14 +95,14 @@ export default function AssistedCheckInPage() {
 
   if (receipt) return <section className="assisted-page"><div className="receipt panel"><FiCheckCircle /><p className="eyebrow">Desk check-in complete</p><h1>Pickup ticket ready</h1><p>The family and child records have been saved and are visible in this service’s live check-in table.</p><b>{receipt.pickupCode}</b><a className="solid-button" href={receipt.pickupTicketUrl} target="_blank" rel="noreferrer">Open ticket / save PDF</a><Link className="outline-button" href={`/account/check-in?serviceSessionId=${serviceId}`}>Return to live check-in</Link></div><style jsx>{receiptStyles}</style></section>;
 
-  if (permissionLoaded && !canOperate) return <section className="assisted-page"><div className="panel access-denied"><p className="eyebrow">Desk check-in</p><h1>Access not available</h1><p>Only the Super Admin or the Head/Assistant assigned to the selected service can use assisted check-in once the service window opens.</p><Link className="outline-button" href="/account/overview">Return to overview</Link></div><style jsx>{receiptStyles}</style></section>;
+  if (permissionLoaded && !canOperate) return <section className="assisted-page"><div className="panel access-denied"><p className="eyebrow">Desk check-in</p><h1>Access not available</h1><p>Only the Super Admin or the Head/Assistant assigned to the selected service can use assisted check-in.</p><Link className="outline-button" href="/account/overview">Return to overview</Link></div><style jsx>{receiptStyles}</style></section>;
 
   return <section className="assisted-page">
-    <header><Link href="/account/check-in"><FiArrowLeft /> Back to check-in</Link><p className="eyebrow">TPK staff tool</p><h1>Desk check-in</h1><p className="intro">Use the same registration details as the parent form when a family needs help at the desk. Saving checks the children in immediately and creates this Sunday’s pickup ticket.</p></header>
+    <header><Link href="/account/check-in"><FiArrowLeft /> Back to check-in</Link><p className="eyebrow">TPK staff tool</p><h1>Desk check-in</h1><p className="intro">Use this any day to register a family, place each child in a class, and record an assisted arrival for the selected service.</p></header>
     <form className="panel assisted-form" onSubmit={submit}>
       {error && <p className="error">{error}</p>}
       <label>Service<select required value={serviceId} onChange={(event) => setServiceId(event.target.value)}><option value="">Choose service</option>{services.map((service) => <option key={service.id} value={service.id}>{service.name} · {service.serviceDate}{service.isOpen ? " · Open" : ""}</option>)}</select></label>
-      {serviceId && !canOperate && <p className="readonly-notice">Read-only today — only the Head of Service and assistants can save a desk check-in for this service.</p>}
+      {serviceId && !canOperate && <p className="readonly-notice">Only the Super Admin or the Head/Assistant assigned to this service can save a desk check-in.</p>}
       <h2>Parent or guardian</h2>
       <div className="grid guardian-grid">
         <label>First name<input required autoComplete="given-name" value={guardian.firstName} onChange={(event) => setGuardian({ ...guardian, firstName: event.target.value })} /></label>
@@ -110,6 +119,7 @@ export default function AssistedCheckInPage() {
         <label>Last name<input required value={child.lastName} onChange={(event) => updateChild(index, "lastName", event.target.value)} /></label>
         <label>Date of birth<input required type="date" value={child.dateOfBirth} onChange={(event) => updateChild(index, "dateOfBirth", event.target.value)} /></label>
         <label>Gender<select required value={child.gender} onChange={(event) => updateChild(index, "gender", event.target.value)}><option value="">Choose gender</option><option value="FEMALE">Female</option><option value="MALE">Male</option></select></label>
+        <label>Class<select value={child.classId} onChange={(event) => updateChild(index, "classId", event.target.value)}><option value="">Auto-assign by age</option>{classes.map((classOption) => <option key={classOption.id} value={classOption.id}>{classOption.name}{classOption.ageLabel ? ` · ${classOption.ageLabel}` : ""}</option>)}</select><small>Choose a class when the age-based suggestion is not suitable.</small></label>
         <label className="wide">Care information <small>Optional — allergies, medical needs or anything the team should know</small><textarea value={child.careInformation} onChange={(event) => updateChild(index, "careInformation", event.target.value)} /></label>
       </div></div>)}
       <section className="pickup-section"><h2>Pickup arrangement</h2><p>Who is expected to collect these children today?</p><div className="pickup-options"><button type="button" className={pickup.mode === "SELF" ? "selected" : ""} onClick={() => setPickup({ ...pickup, mode: "SELF" })}>Parent / guardian</button><button type="button" className={pickup.mode === "OTHER" ? "selected" : ""} onClick={() => setPickup({ ...pickup, mode: "OTHER" })}>Authorised pickup person</button></div>{pickup.mode === "OTHER" && <div className="grid"><label>Full name<input required value={pickup.fullName} onChange={(event) => setPickup({ ...pickup, fullName: event.target.value })} /></label><label>Relationship<select required value={pickup.relationship} onChange={(event) => setPickup({ ...pickup, relationship: event.target.value })}><option value="">Choose relationship</option><option>Family member</option><option>Friend</option><option>Other</option></select></label><label>Phone number<input required inputMode="tel" value={pickup.phone} onChange={(event) => setPickup({ ...pickup, phone: event.target.value })} /></label></div>}</section>
