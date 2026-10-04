@@ -10,15 +10,9 @@ import { useSundayContext, serviceDisplayLabel, type ServiceSessionContext } fro
 
 type ContextMenu = "month" | "sunday" | "service" | null;
 
-function serviceState(service: ServiceSessionContext | null, now: Date | null): "UPCOMING" | "LIVE" | "COMPLETED" | "NONE" {
-  if (!service || !now) return service ? "UPCOMING" : "NONE";
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos" }).format(now);
-  const clock = new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(now);
-  const start = service.startsAt?.includes(" ") ? service.startsAt.split(" ").pop()?.slice(0, 8) : service.startsAt?.split("T").pop()?.slice(0, 8);
-  const end = service.endsAt?.includes(" ") ? service.endsAt.split(" ").pop()?.slice(0, 8) : service.endsAt?.split("T").pop()?.slice(0, 8);
-  if (service.serviceDate < today || (!service.isOpen && service.serviceDate <= today) || (end && service.serviceDate === today && clock >= end)) return "COMPLETED";
-  if (service.serviceDate === today && start && clock >= start) return "LIVE";
-  return "UPCOMING";
+function serviceState(service: ServiceSessionContext | null): "UPCOMING" | "LIVE" | "COMPLETED" | "NONE" {
+  if (!service) return "NONE";
+  return service.isOpen === false ? "COMPLETED" : "LIVE";
 }
 
 function dateTime(now: Date) {
@@ -70,8 +64,8 @@ export function AdminTopbar() {
     return () => { cancelled = true; };
   }, [context.selectedServiceSessionId, session?.staffUserId, session?.sessionToken]);
 
-  const state = serviceState(context.selectedService, now);
-  const stateLabel = state === "LIVE" ? "Check-in open" : state === "COMPLETED" ? "Service completed" : state === "UPCOMING" ? "Upcoming service · Opens Sunday 6:00 AM" : "No service configured";
+  const state = serviceState(context.selectedService);
+  const stateLabel = state === "LIVE" ? "Check-in open" : state === "COMPLETED" ? "Service closed" : "No service configured";
   const link = typeof window === "undefined" ? "/check-in/parent" : `${window.location.origin}/check-in/parent`;
   const isPickupPage = pathname === "/account/pick-up";
   const selectedMonthKey = context.selectedYear && context.selectedMonth ? `${context.selectedYear}-${String(context.selectedMonth).padStart(2, "0")}` : "";

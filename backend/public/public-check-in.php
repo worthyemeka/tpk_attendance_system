@@ -17,11 +17,19 @@ if(($_SERVER['REQUEST_METHOD']??'GET')==='OPTIONS') checkin_response(null,204);
 if(($_SERVER['REQUEST_METHOD']??'GET')!=='POST') checkin_error('METHOD_NOT_ALLOWED','Use POST for check-in.',405);
 try {
     $db=db(); $payload=checkin_input(); $phone=checkin_phone($payload['phone']??null); $sessionId=(int)($payload['serviceSessionId']??0); $childIds=array_values(array_unique(array_map('intval',(array)($payload['childIds']??[]))));
-    if(!$phone||!$sessionId||!$childIds) checkin_error('VALIDATION_ERROR','Provide a valid phone number, service session and at least one child.',422);
-    $session=$db->prepare("SELECT id,campus_id,service_type FROM service_sessions WHERE id=? AND service_date=CURDATE() AND service_type IN ('FIRST_SERVICE','SECOND_SERVICE')");$session->execute([$sessionId]);$session=$session->fetch();
+    if(!$phone||!$childIds) checkin_error('VALIDATION_ERROR','Provide a valid phone number and at least one child.',422);
     $now=new DateTimeImmutable('now',new DateTimeZone('Africa/Lagos'));
-    $activeType=$now->format('H:i:s')>='10:30:00'?'SECOND_SERVICE':'FIRST_SERVICE';
-    if(!$session||$now->format('w')!=='0'||$now->format('H:i:s')<'06:00:00'||$session['service_type']!==$activeType)checkin_error('SERVICE_SESSION_NOT_OPEN','Check-in is not open for the selected service right now. Please refresh and try again.',409);
+    if($now->format('w')!=='0') checkin_error('SERVICE_SESSION_NOT_OPEN','Check-in is available on Sunday services only. Please ask a TPK team member for help.',409);
+    tpk_ensure_sunday_sessions($db, (int)($db->query('SELECT id FROM campuses ORDER BY id LIMIT 1')->fetchColumn()), $now);
+    $serviceStay=strtoupper(trim((string)($payload['serviceStay']??'')));
+    $session=null;
+    if(in_array($serviceStay,['FIRST_SERVICE','SECOND_SERVICE'],true)){
+        $lookup=$db->prepare("SELECT id,campus_id,service_type FROM service_sessions WHERE service_type=? AND service_date=? AND is_open=1 LIMIT 1");$lookup->execute([$serviceStay,$now->format('Y-m-d')]);$session=$lookup->fetch()?:null;
+    }
+    if(!$session&&$sessionId){$lookup=$db->prepare("SELECT id,campus_id,service_type FROM service_sessions WHERE id=? AND service_date=? AND is_open=1 AND service_type IN ('FIRST_SERVICE','SECOND_SERVICE') LIMIT 1");$lookup->execute([$sessionId,$now->format('Y-m-d')]);$session=$lookup->fetch()?:null;}
+    if(!$session){$lookup=$db->prepare("SELECT id,campus_id,service_type FROM service_sessions WHERE service_date=? AND is_open=1 AND service_type IN ('FIRST_SERVICE','SECOND_SERVICE') ORDER BY starts_at ASC,id ASC LIMIT 1");$lookup->execute([$now->format('Y-m-d')]);$session=$lookup->fetch()?:null;}
+    if(!$session)checkin_error('SERVICE_SESSION_NOT_OPEN','No service is currently available for check-in. Please ask a TPK team member for help.',409);
+    $sessionId=(int)$session['id'];
     $guardian=checkin_guardian($db,$phone);if(!$guardian)checkin_error('REGISTRATION_NOT_FOUND','We could not find a registration for that phone number.',404);
     $marks=implode(',',array_fill(0,count($childIds),'?'));
     $children=$db->prepare("SELECT c.id,c.class_id,c.first_name,c.last_name FROM children c JOIN child_guardians cg ON cg.child_id=c.id WHERE cg.guardian_id=? AND c.id IN ($marks) AND c.is_active=1");$children->execute(array_merge([(int)$guardian['id']],$childIds));$rows=$children->fetchAll();if(count($rows)!==count($childIds))checkin_error('CHILD_NOT_AUTHORISED','One or more selected children are not linked to this registration.',403);

@@ -43,12 +43,30 @@ function public_split_name(string $name): array {
 }
 function public_current_session(PDO $db, int $campusId): ?array {
     $now = new DateTimeImmutable('now', new DateTimeZone('Africa/Lagos'));
-    if ($now->format('w') !== '0' || $now->format('H:i:s') < '06:00:00') return null;
+    if ($now->format('w') !== '0') return null;
     tpk_ensure_sunday_sessions($db, $campusId, $now);
-    $serviceType = $now->format('H:i:s') >= '10:30:00' ? 'SECOND_SERVICE' : 'FIRST_SERVICE';
-    $statement = $db->prepare("SELECT id,campus_id,service_date,service_type,starts_at,ends_at FROM service_sessions WHERE campus_id=? AND service_date=? AND service_type=? LIMIT 1");
-    $statement->execute([$campusId, $now->format('Y-m-d'), $serviceType]);
+    $statement = $db->prepare("SELECT id,campus_id,service_date,service_type,starts_at,ends_at FROM service_sessions WHERE campus_id=? AND service_date=? AND service_type IN ('FIRST_SERVICE','SECOND_SERVICE') AND is_open=1 ORDER BY starts_at ASC,id ASC LIMIT 1");
+    $statement->execute([$campusId, $now->format('Y-m-d')]);
     return $statement->fetch() ?: null;
+}
+
+function public_session_for_request(PDO $db, int $campusId, int $requestedId, ?string $requestedType = null): ?array {
+    $now = new DateTimeImmutable('now', new DateTimeZone('Africa/Lagos'));
+    if ($now->format('w') !== '0') return null;
+    tpk_ensure_sunday_sessions($db, $campusId, $now);
+    $type = strtoupper(trim((string)$requestedType));
+    if ($type !== 'FIRST_SERVICE' && $type !== 'SECOND_SERVICE') $type = '';
+    if ($type !== '') {
+        $selected = $db->prepare("SELECT id,campus_id,service_date,service_type,starts_at,ends_at FROM service_sessions WHERE campus_id=? AND service_date=? AND service_type=? AND is_open=1 LIMIT 1");
+        $selected->execute([$campusId, $now->format('Y-m-d'), $type]);
+        if ($row = $selected->fetch()) return $row;
+    }
+    if ($requestedId) {
+        $selected = $db->prepare("SELECT id,campus_id,service_date,service_type,starts_at,ends_at FROM service_sessions WHERE id=? AND campus_id=? AND service_date=? AND service_type IN ('FIRST_SERVICE','SECOND_SERVICE') AND is_open=1 LIMIT 1");
+        $selected->execute([$requestedId, $campusId, $now->format('Y-m-d')]);
+        if ($row = $selected->fetch()) return $row;
+    }
+    return public_current_session($db, $campusId);
 }
 function public_campus(PDO $db): array {
     $row = $db->query('SELECT id,name,code,timezone FROM campuses ORDER BY id LIMIT 1')->fetch();
@@ -81,8 +99,16 @@ function public_family_code(PDO $db): string {
 }
 function public_session_endpoint(PDO $db): never {
     $campus = public_campus($db);
-    $session = public_current_session($db, (int)$campus['id']);
-    public_reply($session ? ['id' => (int)$session['id'], 'serviceDate' => $session['service_date'], 'serviceType' => $session['service_type'], 'startsAt' => $session['starts_at'], 'endsAt' => $session['ends_at']] : null);
+    $now = new DateTimeImmutable('now', new DateTimeZone('Africa/Lagos'));
+    $services = [];
+    if ($now->format('w') === '0') {
+        tpk_ensure_sunday_sessions($db, (int)$campus['id'], $now);
+        $available = $db->prepare("SELECT id,service_date AS serviceDate,service_type AS serviceType,name,starts_at AS startsAt,ends_at AS endsAt FROM service_sessions WHERE campus_id=? AND service_date=? AND service_type IN ('FIRST_SERVICE','SECOND_SERVICE') AND is_open=1 ORDER BY starts_at ASC,id ASC");
+        $available->execute([(int)$campus['id'], $now->format('Y-m-d')]);
+        $services = $available->fetchAll();
+    }
+    $session = $services[0] ?? null;
+    public_reply($session ? ['id' => (int)$session['id'], 'serviceDate' => $session['serviceDate'], 'serviceType' => $session['serviceType'], 'startsAt' => $session['startsAt'], 'endsAt' => $session['endsAt'], 'services' => $services] : null);
 }
 function public_registration(PDO $db): never {
     $payload = public_input();
@@ -96,8 +122,7 @@ function public_registration(PDO $db): never {
     $secondaryPhone = empty($guardian['secondaryPhone']) ? null : public_phone($guardian['secondaryPhone']);
     if (!empty($guardian['secondaryPhone']) && !$secondaryPhone) public_error('INVALID_PHONE', 'Enter a valid Nigerian secondary phone number.', 422);
     $sessionId = isset($payload['serviceSessionId']) ? (int)$payload['serviceSessionId'] : 0;
-    $session = public_current_session($db, (int)$campus['id']);
-    if ($session && $sessionId && (int)$session['id'] !== $sessionId) public_error('SERVICE_SESSION_CHANGED', 'The active service has changed. Please refresh the form and submit again.', 409);
+    $session = public_session_for_request($db, (int)$campus['id'], $sessionId, (string)($payload['serviceStay'] ?? ''));
     if (!$session) public_error('SERVICE_SESSION_NOT_OPEN', 'Check-in is not open right now. Please ask a TPK team member for help.', 409);
     $db->beginTransaction();
     try {

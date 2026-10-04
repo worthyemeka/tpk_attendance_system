@@ -99,20 +99,11 @@ function monthOptions(items: ServiceSessionContext[], selectedDate?: string | nu
   });
 }
 
-function pickService(items: ServiceSessionContext[], date: string, preferredId?: number, preferredType?: string, now = new Date()) {
+function pickService(items: ServiceSessionContext[], date: string, preferredId?: number, preferredType?: string) {
   const choices = items.filter((item) => item.serviceDate === date && (item.serviceType === "FIRST_SERVICE" || item.serviceType === "SECOND_SERVICE")).sort((left, right) => (left.startsAt || "").localeCompare(right.startsAt || ""));
   if (!choices.length) return null;
   const byId = choices.find((item) => item.id === preferredId);
   if (byId) return byId;
-  const today = currentLagosDate();
-  const weekday = new Intl.DateTimeFormat("en-US", { timeZone: TIME_ZONE, weekday: "short" }).format(now);
-  if (date === today && weekday === "Sun") {
-    const parts = new Intl.DateTimeFormat("en-GB", { timeZone: TIME_ZONE, hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(now);
-    const hour = Number(parts.find((part) => part.type === "hour")?.value || 0);
-    const minute = Number(parts.find((part) => part.type === "minute")?.value || 0);
-    const timed = choices.find((item) => item.serviceType === (hour > 10 || (hour === 10 && minute >= 30) ? "SECOND_SERVICE" : "FIRST_SERVICE"));
-    if (timed) return timed;
-  }
   return choices.find((item) => item.serviceType === preferredType) || choices[0];
 }
 
