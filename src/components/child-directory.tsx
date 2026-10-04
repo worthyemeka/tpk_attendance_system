@@ -81,6 +81,31 @@ type Summary = {
   currentSundayDate?: string;
 };
 type ClassItem = { id: number; name: string };
+type AttendanceReportChild = {
+  id: number;
+  firstName: string;
+  lastName: string;
+  className: string;
+  guardianName: string;
+  status: "PRESENT" | "ABSENT";
+};
+type AttendanceReportClass = {
+  id: number | null;
+  name: string;
+  registered: number;
+  present: number;
+  absent: number;
+  presentChildren: AttendanceReportChild[];
+  absentChildren: AttendanceReportChild[];
+};
+type AttendanceReport = {
+  serviceDate?: string | null;
+  serviceSession?: { name?: string; serviceType?: string } | null;
+  summary: { registered: number; present: number; absent: number };
+  present: AttendanceReportChild[];
+  absent: AttendanceReportChild[];
+  classes: AttendanceReportClass[];
+};
 
 const initials = (first: string, last: string) =>
   `${first[0] || ""}${last[0] || ""}`.toUpperCase();
@@ -102,6 +127,45 @@ const date = (value?: string) =>
     : "Not yet attended";
 const safe = (value?: string) =>
   value && value.trim() ? value : "Not recorded";
+const reportValue = (value: unknown) =>
+  String(value ?? "—").replace(
+    /[&<>"']/g,
+    (character) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        character
+      ] || character,
+  );
+const reportChildName = (child: AttendanceReportChild) =>
+  `${child.firstName} ${child.lastName}`.trim();
+
+function openChildrenAttendanceReport(report: AttendanceReport, target?: Window | null) {
+  const reportWindow = target || window.open("", "_blank");
+  if (!reportWindow) return false;
+  const service = report.serviceSession?.name || "Sunday attendance";
+  const dateLabel = report.serviceDate ? date(report.serviceDate) : "No completed Sunday recorded";
+  const childTable = (children: AttendanceReportChild[]) =>
+    children.length
+      ? children
+          .map(
+            (child) =>
+              `<tr><td>${reportValue(reportChildName(child))}</td><td>${reportValue(child.className)}</td><td>${reportValue(child.guardianName)}</td></tr>`,
+          )
+          .join("")
+      : `<tr><td colspan="3" class="empty">No children in this section.</td></tr>`;
+  const classTable = report.classes
+    .map(
+      (item) =>
+        `<tr><td>${reportValue(item.name)}</td><td>${item.registered}</td><td>${item.present}</td><td>${item.absent}</td><td>${reportValue(item.presentChildren.map(reportChildName).join(" · ") || "—")}</td><td>${reportValue(item.absentChildren.map(reportChildName).join(" · ") || "—")}</td></tr>`,
+    )
+    .join("");
+  reportWindow.document.write(
+    `<!doctype html><html><head><title>TPK Children Attendance Report</title><style>body{font:13px Arial,sans-serif;color:#172b4d;padding:30px}h1{font-size:24px;margin:0 0 5px}h2{font-size:16px;margin:28px 0 10px;color:#e65331}p{color:#667793;margin:0 0 18px}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0}.summary div{border:1px solid #dfe5ec;border-radius:8px;padding:12px;background:#f8fafc}.summary b{display:block;font-size:20px;color:#152644}.summary span{font-size:11px;color:#687995}table{width:100%;border-collapse:collapse;margin-bottom:20px}th,td{text-align:left;border:1px solid #dfe4eb;padding:8px;vertical-align:top}th{background:#f6f1ea;font-size:10px;text-transform:uppercase;letter-spacing:.04em}td{font-size:11px}.empty{text-align:center;color:#78869b;padding:18px}@media print{body{padding:0}.summary{break-inside:avoid}h2{break-after:avoid}table{break-inside:auto}tr{break-inside:avoid;break-after:auto}}</style></head><body><h1>TPK Children Attendance Report</h1><p>${reportValue(service)} · ${reportValue(dateLabel)}</p><div class="summary"><div><b>${report.summary.registered}</b><span>Registered children</span></div><div><b>${report.summary.present}</b><span>Present</span></div><div><b>${report.summary.absent}</b><span>Absent</span></div></div><h2>Present children</h2><table><thead><tr><th>Child</th><th>Class</th><th>Guardian</th></tr></thead><tbody>${childTable(report.present)}</tbody></table><h2>Absent children</h2><table><thead><tr><th>Child</th><th>Class</th><th>Guardian</th></tr></thead><tbody>${childTable(report.absent)}</tbody></table><h2>Attendance by class</h2><table><thead><tr><th>Class</th><th>Registered</th><th>Present</th><th>Absent</th><th>Present children</th><th>Absent children</th></tr></thead><tbody>${classTable || `<tr><td colspan="6" class="empty">No classes found.</td></tr>`}</tbody></table></body></html>`,
+  );
+  reportWindow.document.close();
+  reportWindow.focus();
+  reportWindow.setTimeout(() => reportWindow.print(), 80);
+  return true;
+}
 
 export function ChildDirectory() {
   const session = useMemo<Session>(() => readTeacherSession(), []);
@@ -123,6 +187,7 @@ export function ChildDirectory() {
   const [page, setPage] = useState(1),
     [total, setTotal] = useState(0),
     [loading, setLoading] = useState(true),
+    [exporting, setExporting] = useState(false),
     [error, setError] = useState(""),
     [selected, setSelected] = useState<Detail | null>(null),
     [tab, setTab] = useState<
@@ -301,6 +366,33 @@ export function ChildDirectory() {
     URL.revokeObjectURL(url);
     setExports(false);
   };
+  const exportAttendancePdf = async () => {
+    setExports(false);
+    if (!session || exporting) return;
+    const reportWindow = window.open("", "_blank");
+    if (!reportWindow) {
+      setError("Allow pop-ups for this site to print the attendance PDF.");
+      return;
+    }
+    reportWindow.document.write("<!doctype html><title>Preparing attendance report…</title><p style=\"font:14px Arial;padding:24px\">Preparing attendance report…</p>");
+    setExporting(true);
+    setError("");
+    try {
+      const response = await fetch(`${apiBase}/api/v1/children/attendance-report`, {
+        headers: authHeaders(session),
+        cache: "no-store",
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success)
+        throw new Error(result.error?.message || "We could not prepare the attendance report.");
+      openChildrenAttendanceReport(result.data as AttendanceReport, reportWindow);
+    } catch (e) {
+      reportWindow.close();
+      setError(e instanceof Error ? e.message : "We could not prepare the attendance report.");
+    } finally {
+      setExporting(false);
+    }
+  };
   const pages = Math.max(1, Math.ceil(total / 25));
   const clear = () => {
     setQuery("");
@@ -409,13 +501,8 @@ export function ChildDirectory() {
             </button>
             {exports && (
               <div>
-                <button
-                  onClick={() => {
-                    setExports(false);
-                    window.print();
-                  }}
-                >
-                  PDF
+                <button onClick={() => void exportAttendancePdf()} disabled={exporting}>
+                  {exporting ? "Preparing…" : "Attendance PDF"}
                 </button>
                 <button onClick={exportCsv}>CSV</button>
               </div>

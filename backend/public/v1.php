@@ -86,6 +86,34 @@ function api_children_summary(PDO $db): never {
     $sql="SELECT COUNT(*) AS registeredChildren,SUM(c.is_active=1) AS active,SUM(c.gender='MALE') AS male,SUM(c.gender='FEMALE') AS female FROM children c JOIN families f ON f.id=c.family_id$filter";
     $s=$db->prepare($sql);$s->execute($params);$row=$s->fetch()?:[];$registered=(int)($row['registeredChildren']??0);$currentSunday=api_latest_completed_sunday($db,(int)$actor['campus_id']);$present=0;if($currentSunday){$presence=$db->prepare("SELECT COUNT(DISTINCT a.child_id) FROM attendance a JOIN service_sessions ss ON ss.id=a.service_session_id JOIN children c ON c.id=a.child_id JOIN families f ON f.id=c.family_id WHERE f.campus_id=? AND ss.service_date=? AND a.status IN ('CHECKED_IN','PICKUP_REQUESTED','PICKED_UP')");$presence->execute([$actor['campus_id'],$currentSunday]);$present=(int)$presence->fetchColumn();}api_ok(['registeredChildren'=>$registered,'active'=>(int)($row['active']??0),'presentThisSunday'=>$present,'male'=>(int)($row['male']??0),'female'=>(int)($row['female']??0),'currentSundayDate'=>$currentSunday]);
 }
+function api_children_attendance_report(PDO $db): never {
+    $actor=api_actor($db);
+    $requested=trim((string)($_GET['date']??''));
+    if($requested!==''&&!preg_match('/^\d{4}-\d{2}-\d{2}$/',$requested))api_error('VALIDATION_ERROR','Choose a valid attendance date.',422);
+    $serviceDate=$requested!==''?$requested:api_latest_completed_sunday($db,(int)$actor['campus_id']);
+    $service=null;
+    if($serviceDate){
+        $session=$db->prepare("SELECT MIN(id) AS id,MIN(name) AS name,MIN(service_type) AS serviceType,service_date AS serviceDate FROM service_sessions WHERE campus_id=? AND service_date=? AND service_type IN ('FIRST_SERVICE','SECOND_SERVICE') GROUP BY service_date");
+        $session->execute([(int)$actor['campus_id'],$serviceDate]);$service=$session->fetch()?:null;
+    }
+    $presentIds=[];
+    if($serviceDate){
+        $presence=$db->prepare("SELECT DISTINCT a.child_id FROM attendance a JOIN service_sessions ss ON ss.id=a.service_session_id WHERE ss.campus_id=? AND ss.service_date=? AND a.status IN ('CHECKED_IN','PICKUP_REQUESTED','PICKED_UP')");
+        $presence->execute([(int)$actor['campus_id'],$serviceDate]);
+        foreach($presence->fetchAll() as $row)$presentIds[(int)$row['child_id']]=true;
+    }
+    $where=['f.campus_id=?','c.is_active=1'];$params=[(int)$actor['campus_id']];
+    if($serviceDate){$where[]='(c.joined_at IS NULL OR c.joined_at<=?)';$params[]=$serviceDate;}
+    $sql="SELECT c.id,c.first_name AS firstName,c.last_name AS lastName,c.class_id AS classId,cl.name AS className,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',pg.first_name,pg.last_name)),''),'Not recorded') AS guardianName FROM children c JOIN families f ON f.id=c.family_id LEFT JOIN classes cl ON cl.id=c.class_id LEFT JOIN child_guardians pcg ON pcg.child_id=c.id AND pcg.is_primary=1 LEFT JOIN guardians pg ON pg.id=pcg.guardian_id WHERE ".implode(' AND ',$where)." ORDER BY COALESCE(cl.display_order,9999),cl.name,c.last_name,c.first_name";
+    $rows=$db->prepare($sql);$rows->execute($params);$children=[];$present=[];$absent=[];
+    foreach($rows->fetchAll() as $row){$child=['id'=>(int)$row['id'],'firstName'=>$row['firstName'],'lastName'=>$row['lastName'],'classId'=>$row['classId']!==null?(int)$row['classId']:null,'className'=>$row['className']?:'Unassigned','guardianName'=>$row['guardianName'],'status'=>isset($presentIds[(int)$row['id']])?'PRESENT':'ABSENT'];$children[]=$child;if($child['status']==='PRESENT')$present[]=$child;else$absent[]=$child;}
+    $classRows=$db->prepare('SELECT id,name FROM classes WHERE campus_id=? ORDER BY display_order,name');$classRows->execute([(int)$actor['campus_id']]);$classes=[];
+    foreach($classRows->fetchAll() as $class){$key=(string)(int)$class['id'];$classKeys[$key]=true;$classes[$key]=['id'=>(int)$class['id'],'name'=>$class['name'],'registered'=>0,'present'=>0,'absent'=>0,'presentChildren'=>[],'absentChildren'=>[]];}
+    $classes['unassigned']=['id'=>null,'name'=>'Unassigned','registered'=>0,'present'=>0,'absent'=>0,'presentChildren'=>[],'absentChildren'=>[]];
+    foreach($children as $child){$key=$child['classId']!==null?(string)$child['classId']:'unassigned';if(!isset($classes[$key]))$classes[$key]=['id'=>$child['classId'],'name'=>$child['className'],'registered'=>0,'present'=>0,'absent'=>0,'presentChildren'=>[],'absentChildren'=>[]];$classes[$key]['registered']++;if($child['status']==='PRESENT'){$classes[$key]['present']++;$classes[$key]['presentChildren'][]=$child;}else{$classes[$key]['absent']++;$classes[$key]['absentChildren'][]=$child;}}
+    if(!$classes['unassigned']['registered'])unset($classes['unassigned']);
+    api_ok(['serviceDate'=>$serviceDate,'serviceSession'=>$service?:null,'summary'=>['registered'=>count($children),'present'=>count($present),'absent'=>count($absent)],'present'=>$present,'absent'=>$absent,'classes'=>array_values($classes)]);
+}
 function api_directory_month(): array {
     $month=trim((string)($_GET['month']??''));
     if (!preg_match('/^\d{4}-\d{2}$/',$month)) $month=(new DateTimeImmutable('now',new DateTimeZone('Africa/Lagos')))->format('Y-m');
@@ -944,6 +972,7 @@ try { $db=api_db();$path=api_path();$method=api_method();
     if($method==='GET'&&preg_match('#^/api/v1/classes/(\d+)/children$#',$path,$m)){$_GET['classId']=$m[1];api_list_children($db);}
     if($method==='GET'&&$path==='/api/v1/children')api_list_children($db);
     if($method==='GET'&&$path==='/api/v1/children/summary')api_children_summary($db);
+    if($method==='GET'&&$path==='/api/v1/children/attendance-report')api_children_attendance_report($db);
     if($method==='POST'&&$path==='/api/v1/children')api_create_child($db);
     if($method==='GET'&&preg_match('#^/api/v1/children/(\d+)/attendance$#',$path,$m))api_child_attendance($db,(int)$m[1]);
     if($method==='GET'&&preg_match('#^/api/v1/children/(\d+)/follow-ups$#',$path,$m))api_child_followups($db,(int)$m[1]);
