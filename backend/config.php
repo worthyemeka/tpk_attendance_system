@@ -58,6 +58,12 @@ function tpk_ensure_sunday_sessions(PDO $db, int $campusId, ?DateTimeImmutable $
         ['First Service', 'FIRST_SERVICE', 1, '08:30:00', '10:15:00'],
         ['Second Service', 'SECOND_SERVICE', 2, '10:30:00', '12:15:00'],
     ];
+    /* Some Sundays are intentionally configured as a single-service Sunday.
+       Keep this as deployment configuration so a one-off schedule correction
+       is not overwritten the next time the Sunday-session guard runs. */
+    $configuredSingleServiceDates = getenv('TPK_SINGLE_SERVICE_DATES');
+    $singleServiceDates = array_values(array_filter(array_map('trim', explode(',', $configuredSingleServiceDates === false ? '2026-10-04' : $configuredSingleServiceDates))));
+    if (in_array($date->format('Y-m-d'), $singleServiceDates, true)) $specifications = array_slice($specifications, 0, 1);
     $prepared = [];
     foreach ($specifications as [$name, $type, $order, $start, $end]) {
         $existing = $db->prepare('SELECT id FROM service_sessions WHERE campus_id=? AND service_date=? AND service_type=? LIMIT 1');

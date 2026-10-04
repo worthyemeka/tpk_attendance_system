@@ -16,13 +16,18 @@ const initials = (first: string, last: string) => `${first[0] || ""}${last[0] ||
 const dayLabel = (date?: string) => date ? new Intl.DateTimeFormat("en-NG", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date(`${date}T12:00:00`)) : "Sunday service";
 const printValue = (value: unknown) => String(value ?? "—").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] || character);
 function openPickupPrintReport(title: string, rows: string[][]) {
-  const report = window.open("", "_blank", "noopener,noreferrer");
-  if (!report) return;
+  const report = window.open("", "_blank");
+  if (!report) {
+    window.alert("Please allow pop-ups for this site to export the pickup table.");
+    return;
+  }
   const body = rows.map((row) => `<tr>${row.map((cell) => `<td>${printValue(cell)}</td>`).join("")}</tr>`).join("");
   report.document.write(`<!doctype html><html><head><title>${printValue(title)}</title><style>body{font:14px Arial,sans-serif;color:#1c2d4d;padding:32px}h1{font-size:22px;margin:0 0 6px}p{color:#697792;margin:0 0 22px}table{width:100%;border-collapse:collapse}th,td{text-align:left;border:1px solid #dfe4eb;padding:9px}th{background:#f6f1ea;font-size:11px;text-transform:uppercase;letter-spacing:.04em}td{font-size:12px}@media print{body{padding:0}}</style></head><body><h1>${printValue(title)}</h1><p>Exported ${printValue(new Intl.DateTimeFormat("en-NG", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Lagos" }).format(new Date()))}</p><table><thead><tr><th>#</th><th>Child</th><th>Class</th><th>Guardian</th><th>Pickup code</th><th>Time</th><th>Status</th></tr></thead><tbody>${body}</tbody></table></body></html>`);
   report.document.close();
-  report.focus();
-  report.print();
+  window.setTimeout(() => {
+    report.focus();
+    report.print();
+  }, 250);
 }
 
 export function PickupDashboard() {
