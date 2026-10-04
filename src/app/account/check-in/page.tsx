@@ -107,6 +107,14 @@ export default function AccountCheckInPage() {
 
   useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 180); return () => window.clearTimeout(timer); }, [load]);
   useEffect(() => { void loadRequests(); const timer = window.setInterval(() => { void loadRequests(); }, 7_500); return () => window.clearInterval(timer); }, [loadRequests]);
+  useEffect(() => {
+    setItems([]);
+    setRequests([]);
+    setCanOperate(false);
+    setCanApprove(false);
+    setError("");
+    setRequestError("");
+  }, [serviceSessionId]);
 
   const approve = async (requestId: number) => {
     if (!session) return;

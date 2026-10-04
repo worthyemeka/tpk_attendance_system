@@ -4,7 +4,7 @@ import Link from "next/link";
 import { type FormEvent, useEffect, useState } from "react";
 import { FiArrowLeft, FiCheckCircle, FiMinus, FiPlus } from "react-icons/fi";
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
-import { readActiveService, subscribeToActiveService } from "@/lib/active-service";
+import { readActiveService, subscribeToActiveService, type ActiveService } from "@/lib/active-service";
 
 type Child = { firstName: string; lastName: string; dateOfBirth: string; gender: "" | "MALE" | "FEMALE"; classId: string; careInformation: string };
 type ClassOption = { id: number; name: string; ageLabel?: string };
@@ -18,7 +18,7 @@ export default function AssistedCheckInPage() {
   const session = readTeacherSession();
   const [services, setServices] = useState<Service[]>([]);
   const [classes, setClasses] = useState<ClassOption[]>([]);
-  const [activeServiceId, setActiveServiceId] = useState<number | undefined>();
+  const [activeService, setActiveService] = useState<ActiveService | null | undefined>();
   const [serviceId, setServiceId] = useState("");
   const [guardian, setGuardian] = useState<Guardian>({ firstName: "", lastName: "", phone: "", secondaryPhone: "", relationship: "", email: "", address: "" });
   const [children, setChildren] = useState<Child[]>([blankChild()]);
@@ -37,8 +37,18 @@ export default function AssistedCheckInPage() {
         if (!response.ok || !result.success) throw new Error(result.error?.message || "We could not load services.");
         const items = (result.data || []).filter((service: Service) => service.serviceType === "FIRST_SERVICE" || service.serviceType === "SECOND_SERVICE");
         setServices(items);
-        const activeId = readActiveService()?.id;
-        setServiceId(String(items.find((service: Service) => service.id === activeId)?.id || items.find((service: Service) => service.isOpen)?.id || items[0]?.id || ""));
+        const selected = readActiveService();
+        const matching = selected?.id ? items.find((service: Service) => service.id === selected.id) : undefined;
+        if (matching) {
+          setServiceId(String(matching.id));
+          return;
+        }
+        /* Never guess from the first open row: the API returns future Sundays
+           too, which made the desk form jump away from the top-bar service.
+           The current endpoint is only a fallback for direct page visits. */
+        const currentResponse = await fetch(`${apiBase}/api/v1/service-sessions/current`, { headers: authHeaders(session), cache: "no-store" });
+        const currentResult = await currentResponse.json();
+        if (currentResponse.ok && currentResult.success && currentResult.data?.id) setServiceId(String(currentResult.data.id));
       })
       .catch((reason) => setError(reason instanceof Error ? reason.message : "We could not load services."));
     fetch(`${apiBase}/api/v1/classes`, { headers: authHeaders(session) })
@@ -50,11 +60,13 @@ export default function AssistedCheckInPage() {
       .catch((reason) => setError(reason instanceof Error ? reason.message : "We could not load classes."));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => subscribeToActiveService((service) => setActiveServiceId(service?.id)), []);
+  useEffect(() => subscribeToActiveService((service) => setActiveService(service)), []);
 
   useEffect(() => {
-    if (activeServiceId && services.some((service) => service.id === activeServiceId)) setServiceId(String(activeServiceId));
-  }, [activeServiceId, services]);
+    if (!activeService?.id) return;
+    const matching = services.find((service) => service.id === activeService.id);
+    if (matching) setServiceId(String(matching.id));
+  }, [activeService, services]);
 
   useEffect(() => {
     if (!session || !serviceId) { setCanOperate(false); setPermissionLoaded(false); return; }
@@ -101,7 +113,7 @@ export default function AssistedCheckInPage() {
     <header><Link href="/account/check-in"><FiArrowLeft /> Back to check-in</Link><p className="eyebrow">TPK staff tool</p><h1>Desk check-in</h1><p className="intro">Use this any day to register a family, place each child in a class, and record an assisted arrival for the selected service.</p></header>
     <form className="panel assisted-form" onSubmit={submit}>
       {error && <p className="error">{error}</p>}
-      <label>Service<select required value={serviceId} onChange={(event) => setServiceId(event.target.value)}><option value="">Choose service</option>{services.map((service) => <option key={service.id} value={service.id}>{service.name} · {service.serviceDate}{service.isOpen ? " · Open" : ""}</option>)}</select></label>
+      <label>Service<select required value={serviceId} onChange={(event) => { setCanOperate(false); setPermissionLoaded(false); setServiceId(event.target.value); }}><option value="">Choose service</option>{services.map((service) => <option key={service.id} value={service.id}>{service.name} · {service.serviceDate}{service.isOpen ? " · Open" : " · Closed"}</option>)}</select></label>
       {serviceId && !canOperate && <p className="readonly-notice">Only the Super Admin or the Head/Assistant assigned to this service can save a desk check-in.</p>}
       <h2>Parent or guardian</h2>
       <div className="grid guardian-grid">
