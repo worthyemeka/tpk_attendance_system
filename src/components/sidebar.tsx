@@ -129,6 +129,11 @@ export function Sidebar() {
       setPeopleDirectoryVisible(true);
       return;
     }
+    if (session.accessLevel === "TPK_FOLLOW_UP_ADMIN") {
+      setCheckinVisible(false);
+      setPeopleDirectoryVisible(true);
+      return;
+    }
     let cancelled = false;
     const headers = authHeaders(session);
     Promise.all([
