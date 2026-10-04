@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { FiArrowLeft, FiCheckCircle, FiMinus, FiPlus } from "react-icons/fi";
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
 import { readActiveService, subscribeToActiveService, type ActiveService } from "@/lib/active-service";
@@ -11,6 +11,7 @@ type ClassOption = { id: number; name: string; ageLabel?: string };
 type Service = { id: number; name: string; serviceDate: string; serviceType: "FIRST_SERVICE" | "SECOND_SERVICE"; isOpen: boolean };
 type Guardian = { firstName: string; lastName: string; phone: string; secondaryPhone: string; relationship: string; email: string; address: string };
 type Pickup = { mode: "SELF" | "OTHER"; fullName: string; relationship: string; phone: string };
+type RegisteredFamily = { id: number; familyName: string; familyCode: string; phone: string; email?: string; homeAddress?: string; children: Array<{ id: number; firstName: string; lastName: string; dateOfBirth: string; gender?: "MALE" | "FEMALE"; classId?: number | null }>; guardians: Array<{ firstName: string; lastName: string; primaryPhone: string; secondaryPhone?: string; email?: string; relationship?: string; primaryGuardian?: boolean }> };
 
 const blankChild = (): Child => ({ firstName: "", lastName: "", dateOfBirth: "", gender: "", classId: "", careInformation: "" });
 
@@ -23,11 +24,37 @@ export default function AssistedCheckInPage() {
   const [guardian, setGuardian] = useState<Guardian>({ firstName: "", lastName: "", phone: "", secondaryPhone: "", relationship: "", email: "", address: "" });
   const [children, setChildren] = useState<Child[]>([blankChild()]);
   const [pickup, setPickup] = useState<Pickup>({ mode: "SELF", fullName: "", relationship: "", phone: "" });
+  const [registeredPhone, setRegisteredPhone] = useState("");
+  const [registeredFamily, setRegisteredFamily] = useState<RegisteredFamily | null>(null);
+  const [registeredBusy, setRegisteredBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [canOperate, setCanOperate] = useState(false);
   const [permissionLoaded, setPermissionLoaded] = useState(false);
   const [error, setError] = useState("");
   const [receipt, setReceipt] = useState<{ pickupCode: string; pickupTicketUrl: string } | null>(null);
+
+  async function loadRegisteredFamily() {
+    if (!session || !registeredPhone.trim()) return;
+    setRegisteredBusy(true); setError(""); setRegisteredFamily(null);
+    try {
+      const search = new URLSearchParams({ search: registeredPhone.trim(), limit: "10" });
+      const matchesResponse = await fetch(`${apiBase}/api/v1/families?${search}`, { headers: authHeaders(session) });
+      const matches = await matchesResponse.json();
+      if (!matchesResponse.ok || !matches.success || !matches.data?.length) throw new Error("No registered family was found with that phone number.");
+      const familyResponse = await fetch(`${apiBase}/api/v1/families/${matches.data[0].id}`, { headers: authHeaders(session) });
+      const familyResult = await familyResponse.json();
+      if (!familyResponse.ok || !familyResult.success) throw new Error(familyResult.error?.message || "We could not load that family.");
+      const family = familyResult.data as RegisteredFamily;
+      const primary = family.guardians.find((item) => item.primaryGuardian) || family.guardians[0];
+      if (!primary || !family.children.length) throw new Error("That family does not have a linked guardian and child yet.");
+      setRegisteredFamily(family);
+      setGuardian({ firstName: primary.firstName, lastName: primary.lastName, phone: primary.primaryPhone || family.phone, secondaryPhone: primary.secondaryPhone || "", relationship: primary.relationship || "Guardian", email: primary.email || family.email || "", address: family.homeAddress || "" });
+      setChildren(family.children.map((child) => ({ firstName: child.firstName, lastName: child.lastName, dateOfBirth: child.dateOfBirth, gender: child.gender || "", classId: child.classId ? String(child.classId) : "", careInformation: "" })));
+      setPickup({ mode: "SELF", fullName: "", relationship: "", phone: "" });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "We could not find that registered family.");
+    } finally { setRegisteredBusy(false); }
+  }
 
   useEffect(() => {
     if (!session) return;
@@ -60,12 +87,27 @@ export default function AssistedCheckInPage() {
       .catch((reason) => setError(reason instanceof Error ? reason.message : "We could not load classes."));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => subscribeToActiveService((service) => setActiveService(service)), []);
+  useEffect(() => subscribeToActiveService((service) => {
+    setActiveService(service);
+    if (service?.id) setServiceId(String(service.id));
+  }), []);
 
   useEffect(() => {
     if (!activeService?.id) return;
     const matching = services.find((service) => service.id === activeService.id);
     if (matching) setServiceId(String(matching.id));
+  }, [activeService, services]);
+
+  const serviceOptions = useMemo(() => {
+    if (!activeService?.id || services.some((service) => service.id === activeService.id)) return services;
+    const fallbackType = activeService.serviceType === "FIRST_SERVICE" ? "FIRST_SERVICE" : "SECOND_SERVICE";
+    return [{
+      id: activeService.id,
+      name: activeService.label,
+      serviceDate: activeService.serviceDate || "",
+      serviceType: fallbackType,
+      isOpen: true,
+    }, ...services];
   }, [activeService, services]);
 
   useEffect(() => {
@@ -113,8 +155,9 @@ export default function AssistedCheckInPage() {
     <header><Link href="/account/check-in"><FiArrowLeft /> Back to check-in</Link><p className="eyebrow">TPK staff tool</p><h1>Desk check-in</h1><p className="intro">Use this any day to register a family, place each child in a class, and record an assisted arrival for the selected service.</p></header>
     <form className="panel assisted-form" onSubmit={submit}>
       {error && <p className="error">{error}</p>}
-      <label>Service<select required value={serviceId} onChange={(event) => { setCanOperate(false); setPermissionLoaded(false); setServiceId(event.target.value); }}><option value="">Choose service</option>{services.map((service) => <option key={service.id} value={service.id}>{service.name} · {service.serviceDate}{service.isOpen ? " · Open" : " · Closed"}</option>)}</select></label>
+      <label>Service<select required value={serviceId} onChange={(event) => { setCanOperate(false); setPermissionLoaded(false); setServiceId(event.target.value); }}><option value="">Choose service</option>{serviceOptions.map((service) => <option key={service.id} value={service.id}>{service.name}{service.serviceDate ? ` · ${service.serviceDate}` : ""}{service.isOpen ? " · Open" : " · Closed"}</option>)}</select></label>
       {serviceId && !canOperate && <p className="readonly-notice">Only the Super Admin or the Head/Assistant assigned to this service can save a desk check-in.</p>}
+      <section className="registered-lookup"><div><h2>Returning family</h2><p>Already registered? Find the family by guardian phone and load its children into this check-in.</p></div><div className="registered-lookup-form"><input inputMode="tel" placeholder="Guardian phone number" value={registeredPhone} onChange={(event) => setRegisteredPhone(event.target.value)} /><button type="button" className="outline-button" onClick={() => void loadRegisteredFamily()} disabled={registeredBusy || !registeredPhone.trim()}>{registeredBusy ? "Finding…" : "Find registered family"}</button></div>{registeredFamily && <p className="registered-result">Loaded {registeredFamily.familyName} family · {registeredFamily.children.length} child{registeredFamily.children.length === 1 ? "" : "ren"}. Review the details below before saving.</p>}</section>
       <h2>Parent or guardian</h2>
       <div className="grid guardian-grid">
         <label>First name<input required autoComplete="given-name" value={guardian.firstName} onChange={(event) => setGuardian({ ...guardian, firstName: event.target.value })} /></label>
@@ -141,4 +184,4 @@ export default function AssistedCheckInPage() {
 }
 
 const receiptStyles = `.assisted-page{max-width:760px}.receipt,.access-denied{display:grid;justify-items:center;gap:13px;padding:40px;text-align:center}.receipt>svg{font-size:52px;color:#12965f}.receipt h1,.access-denied h1{margin:0;font-family:var(--font-display),Georgia,serif;font-size:40px}.receipt p,.access-denied p{max-width:480px;margin:0;color:var(--muted);line-height:1.55}.receipt>b{margin:10px 0;padding:16px 24px;border:1px dashed var(--orange);border-radius:10px;color:var(--orange);font:700 36px var(--font-display),Georgia,serif}.receipt a,.access-denied a{width:min(100%,360px);justify-content:center}`;
-const styles = `.assisted-page{max-width:1100px}.assisted-page header{margin-bottom:22px}.assisted-page header>a{display:inline-flex;align-items:center;gap:6px;margin-bottom:17px;color:#546b93;font-size:12px;font-weight:800;text-decoration:none}.assisted-page h1,.assisted-page h2{font-family:var(--font-display),Georgia,serif}.assisted-page h1{margin:0}.assisted-page h2{margin:22px 0 7px;font-size:23px}.assisted-form{display:grid;gap:14px}.assisted-form label{display:grid;gap:6px;color:#5d574f;font-size:11px;font-weight:800}.assisted-form small{font-weight:500;color:var(--muted)}.assisted-form input,.assisted-form select,.assisted-form textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:0 10px;background:#fffdfa;color:var(--ink);font:13px var(--font-body)}.assisted-form input,.assisted-form select{height:42px}.assisted-form textarea{min-height:76px;padding-top:10px;resize:vertical}.readonly-notice{margin:0;padding:11px 13px;border:1px solid #f0dfb6;border-radius:10px;background:#fff9e9;color:#896515;font-size:12px;line-height:1.45}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.guardian-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.wide{grid-column:span 2}.children-heading{display:flex;justify-content:space-between;align-items:end;margin-top:4px}.children-heading h2{margin-bottom:2px}.children-heading p,.pickup-section>p{margin:0;color:var(--muted);font-size:12px}.children-heading button{display:inline-flex;align-items:center;gap:5px;height:36px}.child-card{padding:15px;border:1px solid var(--line);border-radius:10px;background:#fff}.child-label{display:flex;justify-content:space-between;margin-bottom:12px;font-size:12px}.remove{border:0;background:transparent;color:#bd472f;font:800 11px var(--font-body);cursor:pointer;display:inline-flex;gap:4px;align-items:center}.pickup-section{border-top:1px solid var(--line);padding-top:4px}.pickup-section h2{margin-bottom:3px}.pickup-options{display:flex;gap:10px;margin:14px 0}.pickup-options button{min-height:40px;padding:0 14px;border:1px solid var(--line);border-radius:8px;background:#fff;font:700 12px var(--font-body);color:var(--ink);cursor:pointer}.pickup-options .selected{border-color:var(--orange);background:#fff4ef;color:var(--orange)}.submit{min-height:48px;justify-content:center;margin-top:4px}.error{margin:0;color:#bf422a;font-size:12px}@media(max-width:860px){.grid,.guardian-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.wide{grid-column:span 2}}@media(max-width:500px){.grid,.guardian-grid{grid-template-columns:1fr}.wide{grid-column:auto}.children-heading{align-items:start;gap:12px}.children-heading button{white-space:nowrap}.pickup-options{display:grid}.pickup-options button{width:100%}}`;
+const styles = `.assisted-page{max-width:1100px}.assisted-page header{margin-bottom:22px}.assisted-page header>a{display:inline-flex;align-items:center;gap:6px;margin-bottom:17px;color:#546b93;font-size:12px;font-weight:800;text-decoration:none}.assisted-page h1,.assisted-page h2{font-family:var(--font-display),Georgia,serif}.assisted-page h1{margin:0}.assisted-page h2{margin:22px 0 7px;font-size:23px}.assisted-form{display:grid;gap:14px}.assisted-form label{display:grid;gap:6px;color:#5d574f;font-size:11px;font-weight:800}.assisted-form small{font-weight:500;color:var(--muted)}.assisted-form input,.assisted-form select,.assisted-form textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:0 10px;background:#fffdfa;color:var(--ink);font:13px var(--font-body)}.assisted-form input,.assisted-form select{height:42px}.assisted-form textarea{min-height:76px;padding-top:10px;resize:vertical}.readonly-notice{margin:0;padding:11px 13px;border:1px solid #f0dfb6;border-radius:10px;background:#fff9e9;color:#896515;font-size:12px;line-height:1.45}.registered-lookup{display:grid;gap:10px;padding:15px;border:1px solid #f1d8c8;border-radius:10px;background:#fff8f3}.registered-lookup h2{margin:0;font-size:19px}.registered-lookup p{margin:3px 0 0;color:var(--muted);font-size:12px;line-height:1.45}.registered-lookup-form{display:flex;gap:9px}.registered-lookup input{height:40px;min-width:0;flex:1;border:1px solid var(--line);border-radius:8px;padding:0 10px;background:#fff;font:12px var(--font-body)}.registered-lookup button{white-space:nowrap}.registered-result{color:#087a4b!important;font-weight:800}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.guardian-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.wide{grid-column:span 2}.children-heading{display:flex;justify-content:space-between;align-items:end;margin-top:4px}.children-heading h2{margin-bottom:2px}.children-heading p,.pickup-section>p{margin:0;color:var(--muted);font-size:12px}.children-heading button{display:inline-flex;align-items:center;gap:5px;height:36px}.child-card{padding:15px;border:1px solid var(--line);border-radius:10px;background:#fff}.child-label{display:flex;justify-content:space-between;margin-bottom:12px;font-size:12px}.remove{border:0;background:transparent;color:#bd472f;font:800 11px var(--font-body);cursor:pointer;display:inline-flex;gap:4px;align-items:center}.pickup-section{border-top:1px solid var(--line);padding-top:4px}.pickup-section h2{margin-bottom:3px}.pickup-options{display:flex;gap:10px;margin:14px 0}.pickup-options button{min-height:40px;padding:0 14px;border:1px solid var(--line);border-radius:8px;background:#fff;font:700 12px var(--font-body);color:var(--ink);cursor:pointer}.pickup-options .selected{border-color:var(--orange);background:#fff4ef;color:var(--orange)}.submit{min-height:48px;justify-content:center;margin-top:4px}.error{margin:0;color:#bf422a;font-size:12px}@media(max-width:860px){.grid,.guardian-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.wide{grid-column:span 2}}@media(max-width:500px){.grid,.guardian-grid{grid-template-columns:1fr}.wide{grid-column:auto}.children-heading{align-items:start;gap:12px}.children-heading button{white-space:nowrap}.pickup-options{display:grid}.pickup-options button{width:100%}.registered-lookup-form{display:grid}.registered-lookup button{width:100%;justify-content:center}}`;

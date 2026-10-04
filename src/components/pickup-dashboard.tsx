@@ -9,7 +9,7 @@ type Child = { attendanceId: number; firstName: string; lastName: string; classN
 type Dashboard = { service?: { id: number; name: string; serviceDate: string } | null; canOperate?: boolean; checkedIn: number; pickedUp: number; stillPresent: number; items: Child[]; queue: "PRESENT" | "COMPLETED" };
 type Pickup = { id: number; pickupCode: string; surname: string; serviceName: string; pickupTicketUrl?: string | null; children: Child[] };
 type VerificationMethod = "PICKUP_CODE" | "QR_CODE" | "ASSISTED_BIRTH_DATE";
-type Scope = "CURRENT" | "MONTH" | "YEAR";
+type Scope = "CURRENT";
 
 const stamp = (value?: string) => value ? new Intl.DateTimeFormat("en-NG", { hour: "numeric", minute: "2-digit", timeZone: "Africa/Lagos" }).format(new Date(value)) : "—";
 const initials = (first: string, last: string) => `${first[0] || ""}${last[0] || ""}`.toUpperCase();
@@ -34,39 +34,31 @@ export function PickupDashboard() {
   const session = useMemo(() => readTeacherSession(), []);
   const [dashboard, setDashboard] = useState<Dashboard>({ checkedIn: 0, pickedUp: 0, stillPresent: 0, items: [], queue: "PRESENT" });
   const [queue, setQueue] = useState<"PRESENT" | "COMPLETED">("PRESENT");
-  const [historyMonth, setHistoryMonth] = useState("");
-  const [historyYear, setHistoryYear] = useState(String(new Date().getFullYear()));
   const [query, setQuery] = useState(""); const [classId, setClassId] = useState(""); const [classes, setClasses] = useState<{ id: number; name: string }[]>([]);
   const [code, setCode] = useState(""); const [pickup, setPickup] = useState<Pickup | null>(null); const [verificationMethod, setVerificationMethod] = useState<VerificationMethod>("PICKUP_CODE"); const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false); const [assisted, setAssisted] = useState(false); const [assistedValues, setAssistedValues] = useState({ firstName: "", lastName: "", dateOfBirth: "" });
   const initialServiceId = useMemo(() => readActiveService()?.id, []);
   const [serviceSessionId, setServiceSessionId] = useState<number | undefined>(initialServiceId);
   const lastServiceId = useRef<number | undefined>(initialServiceId);
   const loadSequence = useRef(0);
-  const [historyYears, setHistoryYears] = useState<string[]>([String(new Date().getFullYear())]);
-  const months = useMemo(() => Array.from({length:12},(_,index)=>({value:String(index+1).padStart(2,"0"),label:new Intl.DateTimeFormat("en-NG",{month:"long"}).format(new Date(2026,index,1))})), []);
-  // Both queues use the same selected Sunday by default. History filters are
-  // opt-in, so switching Still Present/Completed never changes the day or
-  // silently replaces a current service with an entire year.
-  const scope:Scope=historyMonth?"MONTH":"CURRENT";
+  // Both queues always use the same selected Sunday/service context.
+  const scope:Scope="CURRENT";
 
   const load = useCallback(async () => {
-    if (!session || (scope === "CURRENT" && !serviceSessionId) || !historyYear) return;
+    if (!session || !serviceSessionId) return;
     const sequence = ++loadSequence.current;
     try {
       const params = new URLSearchParams({ status: queue, scope });
       if (scope === "CURRENT" && serviceSessionId) params.set("serviceSessionId", String(serviceSessionId));
-      if (scope === "MONTH") params.set("month", `${historyYear}-${historyMonth}`);
       if (query) params.set("search", query); if (classId) params.set("classId", classId);
       const response = await fetch(`${apiBase}/api/v1/pickup-dashboard?${params}`, { headers: { ...authHeaders(session), "Cache-Control": "no-cache" }, cache: "no-store" }); const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.error?.message || "We could not load the pickup queue.");
       if (sequence === loadSequence.current) setDashboard(result.data);
     } catch (reason) { if (sequence === loadSequence.current) setMessage(reason instanceof Error ? reason.message : "We could not load the pickup queue."); }
-  }, [classId, historyMonth, historyYear, query, queue, scope, serviceSessionId, session]);
+  }, [classId, query, queue, scope, serviceSessionId, session]);
 
   useEffect(() => { const timer = window.setTimeout(() => void load(), query ? 160 : 0); return () => window.clearTimeout(timer); }, [load, query]);
   useEffect(() => { if (scope !== "CURRENT") return; const timer = window.setInterval(() => void load(), 5000); return () => window.clearInterval(timer); }, [load, scope]);
   useEffect(() => { if (!session) return; void fetch(`${apiBase}/api/v1/classes`, { headers: authHeaders(session) }).then((response) => response.json()).then((result) => { if (result.success) setClasses(result.data || []); }).catch(() => undefined); }, [session]);
-  useEffect(() => { if (!session) return; void fetch(`${apiBase}/api/v1/service-sessions`, { headers: authHeaders(session) }).then((response) => response.json()).then((result) => { if (!result.success) return; const years=new Set<string>([String(new Date().getFullYear())]); (result.data||[]).forEach((item:{serviceDate?:string;serviceType?:string})=>{if((item.serviceType==="FIRST_SERVICE"||item.serviceType==="SECOND_SERVICE")&&item.serviceDate)years.add(item.serviceDate.slice(0,4));});setHistoryYears([...years].sort((a,b)=>Number(b)-Number(a))); }).catch(()=>undefined); }, [session]);
   useEffect(() => subscribeToActiveService((service) => {
     const nextId = service?.id;
     const changed = lastServiceId.current !== undefined && lastServiceId.current !== nextId;
@@ -95,7 +87,7 @@ export function PickupDashboard() {
     <section className="pickup-workspace"><article className="code-card"><div className="card-title"><i><FiSearch /></i><div><h2>Enter Pickup Code</h2><p>Enter the code given to the parent after check-in.</p></div></div><form onSubmit={lookup}><label><FiSearch /><input autoFocus value={code} onChange={(event) => setCode(event.target.value)} placeholder="e.g. TPK-A-001" /></label><button className="solid-button" disabled={busy || !code.trim()}>{busy ? "Finding…" : "Find Children"}</button></form>{dashboard.service && !dashboard.canOperate && <p className="readonly-notice">Read-only today — only the Head of Service and assistants can verify assisted pickup or complete a release.</p>}<div className="assist"><FiHelpCircle /><span>Can&apos;t access the pickup code?</span><button type="button" disabled={!dashboard.canOperate} onClick={() => setAssisted((value) => !value)}>Start Assisted Pick-Up <FiChevronRight /></button></div>{assisted && <form className="assisted" onSubmit={assistedLookup}><input required placeholder="Child first name" value={assistedValues.firstName} onChange={(event) => setAssistedValues({ ...assistedValues, firstName: event.target.value })} /><input required placeholder="Child last name" value={assistedValues.lastName} onChange={(event) => setAssistedValues({ ...assistedValues, lastName: event.target.value })} /><input required type="date" value={assistedValues.dateOfBirth} onChange={(event) => setAssistedValues({ ...assistedValues, dateOfBirth: event.target.value })} /><button className="outline-button" disabled={busy || !dashboard.canOperate}>Verify child</button></form>}</article>
       <article className="details-card"><div className="card-title"><i><FiUsers /></i><h2>Pickup Details</h2></div>{pickup ? <div className="pickup-details"><span className="code-pill">{pickup.pickupCode}</span><h3>{pickup.surname} Family</h3><p>{pickup.serviceName}</p><div className="release-list">{pickup.children.map((child) => <div key={child.attendanceId}><i>{initials(child.firstName, child.lastName)}</i><span><b>{child.firstName} {child.lastName}</b><small>{child.className || "Class pending"}</small></span><em>Present</em></div>)}</div>{pickup.pickupTicketUrl&&<a className="outline-button ticket-print" href={pickup.pickupTicketUrl} target="_blank" rel="noreferrer"><FiDownload />Open / save pickup PDF</a>}<button className="solid-button complete" onClick={complete} disabled={busy || !dashboard.canOperate}>{busy ? "Completing…" : "Complete Pick-Up"}</button></div> : <div className="empty-details"><FiUsers /><b>No pickup selected</b><p>Enter a pickup code to view the children and expected pickup person.</p></div>}</article></section>
     {message && <p className="pickup-message" role="status">{message}</p>}
-    <section className="queue-panel"><div className="queue-head"><div className="queue-tabs"><button className={queue === "PRESENT" ? "active" : ""} onClick={() => setQueue("PRESENT")}>Still Present ({dashboard.stillPresent})</button><button className={queue === "COMPLETED" ? "active" : ""} onClick={() => setQueue("COMPLETED")}>Completed Pickups ({dashboard.pickedUp})</button></div><div className="queue-actions"><button className="outline-button export-button" type="button" onClick={exportPdf} disabled={!dashboard.items.length}><FiDownload /> Export PDF</button><div className="queue-filters"><label><FiSearch /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search child or guardian…" /></label><span className="app-dropdown-host"><select value={classId} onChange={(event) => setClassId(event.target.value)}><option value="">All Classes</option>{classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></span>{queue==="COMPLETED"&&<><span className="app-dropdown-host"><select aria-label="Pickup history month" value={historyMonth} onChange={(event) => setHistoryMonth(event.target.value)}><option value="">Selected Sunday</option>{months.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}</select></span>{historyMonth&&<span className="app-dropdown-host"><select aria-label="Pickup history year" value={historyYear} onChange={(event) => setHistoryYear(event.target.value)}>{historyYears.map((year) => <option key={year} value={year}>{year}</option>)}</select></span>}</>}</div></div></div>
+    <section className="queue-panel"><div className="queue-head"><div className="queue-tabs"><button className={queue === "PRESENT" ? "active" : ""} onClick={() => setQueue("PRESENT")}>Still Present ({dashboard.stillPresent})</button><button className={queue === "COMPLETED" ? "active" : ""} onClick={() => setQueue("COMPLETED")}>Completed Pickups ({dashboard.pickedUp})</button></div><div className="queue-actions"><button className="outline-button export-button" type="button" onClick={exportPdf} disabled={!dashboard.items.length}><FiDownload /> Export PDF</button><div className="queue-filters"><label><FiSearch /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search child or guardian…" /></label><span className="app-dropdown-host"><select value={classId} onChange={(event) => setClassId(event.target.value)}><option value="">All Classes</option>{classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></span></div></div></div>
       <p className="queue-count">{count} children {queue === "PRESENT" ? "still present" : "picked up"}{scope !== "CURRENT" ? " in this history view" : ""}</p>
       <div className="table-wrap"><table><thead><tr><th>#</th><th>Child</th><th>Class</th><th>Guardian</th><th>Pickup code</th><th>{queue === "PRESENT" ? "Checked In" : "Picked Up"}</th><th>Status</th><th /></tr></thead><tbody><QueueRows items={dashboard.items} queue={queue} grouped={scope !== "CURRENT"} />{!dashboard.items.length && <tr><td colSpan={8} className="empty">No children in this pickup queue yet.</td></tr>}</tbody></table></div>
     </section><style jsx>{styles}</style></section>;
