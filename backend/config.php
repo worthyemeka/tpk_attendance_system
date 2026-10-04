@@ -47,6 +47,24 @@ function db(): PDO {
 }
 
 /**
+ * Sundays that intentionally run as one combined service. Keeping this in
+ * deployment configuration lets the service-session guard and operational
+ * reports apply the same rule without hardcoding a second service in either
+ * layer.
+ */
+function tpk_single_service_dates(): array {
+    static $dates = null;
+    if (is_array($dates)) return $dates;
+    $configured = getenv('TPK_SINGLE_SERVICE_DATES');
+    $dates = array_values(array_filter(array_map('trim', explode(',', $configured === false ? '2026-10-04' : $configured))));
+    return $dates;
+}
+
+function tpk_is_single_service_date(?string $date): bool {
+    return is_string($date) && in_array($date, tpk_single_service_dates(), true);
+}
+
+/**
  * Ensure both Sunday service rows exist before current-service flows read them.
  * This is idempotent and safe to call when no scheduler is available.
  */
@@ -61,9 +79,7 @@ function tpk_ensure_sunday_sessions(PDO $db, int $campusId, ?DateTimeImmutable $
     /* Some Sundays are intentionally configured as a single-service Sunday.
        Keep this as deployment configuration so a one-off schedule correction
        is not overwritten the next time the Sunday-session guard runs. */
-    $configuredSingleServiceDates = getenv('TPK_SINGLE_SERVICE_DATES');
-    $singleServiceDates = array_values(array_filter(array_map('trim', explode(',', $configuredSingleServiceDates === false ? '2026-10-04' : $configuredSingleServiceDates))));
-    if (in_array($date->format('Y-m-d'), $singleServiceDates, true)) $specifications = array_slice($specifications, 0, 1);
+    if (tpk_is_single_service_date($date->format('Y-m-d'))) $specifications = array_slice($specifications, 0, 1);
     $prepared = [];
     foreach ($specifications as [$name, $type, $order, $start, $end]) {
         $existing = $db->prepare('SELECT id FROM service_sessions WHERE campus_id=? AND service_date=? AND service_type=? LIMIT 1');
