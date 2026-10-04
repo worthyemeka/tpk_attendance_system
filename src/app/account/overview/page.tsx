@@ -30,6 +30,15 @@ type Attention = {
   actionLabel: string;
   actionDestination: string;
 };
+type PersonalAssignment = {
+  assignmentId?: number;
+  assignmentDate: string;
+  serviceSessionId?: number | null;
+  dutyName: string;
+  className?: string;
+  serviceName?: string;
+  serviceType?: string;
+};
 type Dashboard = {
   serviceSession: { serviceType?: string; name?: string } | null;
   metrics: {
@@ -39,12 +48,8 @@ type Dashboard = {
     activeClasses: number;
   };
   classes: DashboardClass[];
-  personalAssignment: {
-    assignmentDate: string;
-    dutyName: string;
-    className?: string;
-    serviceName?: string;
-  } | null;
+  personalAssignment: PersonalAssignment | null;
+  personalAssignments: PersonalAssignment[];
   todayTeam: {
     assignmentId: number;
     userId: number;
@@ -68,6 +73,7 @@ const empty: Dashboard = {
   metrics: { checkedIn: 0, pickedUp: 0, stillPresent: 0, activeClasses: 0 },
   classes: [],
   personalAssignment: null,
+  personalAssignments: [],
   todayTeam: [],
   needsAttention: [],
   childrenRelations: { total: 0, contacted: 0, pending: 0 },
@@ -128,6 +134,11 @@ export default function AccountOverview() {
   const viewingToday = sundayContext.selectedSundayDate === todayInLagos;
   const viewingHistorical = Boolean(sundayContext.selectedSundayDate && !viewingToday);
   const { metrics, classes } = dashboard;
+  const personalAssignments = dashboard.personalAssignments?.length
+    ? dashboard.personalAssignments
+    : dashboard.personalAssignment
+      ? [dashboard.personalAssignment]
+      : [];
   return (
     <div className="overview">
       <header className="overview-header">
@@ -144,23 +155,23 @@ export default function AccountOverview() {
           {sundayContext.selectedSundayDate && sundayContext.selectedService && <p className="context-indicator">Viewing Sunday, {new Intl.DateTimeFormat("en-NG", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${sundayContext.selectedSundayDate}T12:00:00Z`))} · {sundayContext.selectedService.name}</p>}
         </div>
       </header>
-      {dashboard.personalAssignment && (
+      {personalAssignments.length > 0 && (
         <section className="panel assignment-card">
           <div>
             <p className="eyebrow">
-              {today && dashboard.personalAssignment.assignmentDate === today
+              {today && personalAssignments.some((assignment) => assignment.assignmentDate === today)
                 ? "You’re Serving Today"
-                : "Your Next Assignment"}
+                : "Your Assignment"}
             </p>
-            <h2>{dashboard.personalAssignment.dutyName}</h2>
-            <p>
-              {[
-                dashboard.personalAssignment.serviceName,
-                dashboard.personalAssignment.className,
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-            </p>
+            <h2>{personalAssignments.length === 1 ? personalAssignments[0].dutyName : "Today’s roles"}</h2>
+            <div className="assignment-list">
+              {personalAssignments.map((assignment, index) => (
+                <div className="assignment-row" key={assignment.assignmentId ?? `${assignment.assignmentDate}-${assignment.dutyName}-${assignment.serviceSessionId ?? index}`}>
+                  <b>{assignment.dutyName}</b>
+                  <span>{[assignment.serviceName, assignment.className].filter(Boolean).join(" · ") || "Service assignment"}</span>
+                </div>
+              ))}
+            </div>
           </div>
           <Link className="outline-button" href="/account/roster">
             View My Roster <FiChevronRight />
@@ -412,6 +423,23 @@ export default function AccountOverview() {
           margin: 5px 0 0;
           color: #687184;
           font-size: 12px;
+        }
+        .assignment-list {
+          display: grid;
+          gap: 6px;
+          margin-top: 8px;
+        }
+        .assignment-row {
+          display: flex;
+          align-items: baseline;
+          flex-wrap: wrap;
+          gap: 5px 10px;
+          color: #687184;
+          font-size: 12px;
+        }
+        .assignment-row b {
+          color: #243655;
+          font-size: 13px;
         }
         .summary-list {
           display: grid;
