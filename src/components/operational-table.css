@@ -1,0 +1,56 @@
+/* Check-in and pickup reuse the directory table palette and badge components. */
+:is(.staff-checkin.staff-checkin,.pickup-dashboard.pickup-dashboard) .operations-table-frame{min-width:0;max-width:100%;overflow-x:auto;border:1px solid #e6e0d8;border-radius:16px;background:#fff;box-shadow:0 3px 14px #33220e04}
+:is(.staff-checkin.staff-checkin,.pickup-dashboard.pickup-dashboard) table.operations-table.operations-table{width:100%;min-width:980px;border-collapse:collapse;background:#fff;text-align:left}
+:is(.staff-checkin.staff-checkin,.pickup-dashboard.pickup-dashboard) .operations-table.operations-table th{padding:16px;background:#fcf9f4;color:#69788d;font:800 10px/1.5 var(--font-body);letter-spacing:.025em;text-transform:uppercase;border-bottom:1px solid #e9e3db;white-space:nowrap}
+:is(.staff-checkin.staff-checkin,.pickup-dashboard.pickup-dashboard) .operations-table.operations-table td{padding:17px 16px;border-top:1px solid #edf0f3;color:#50617c;font:500 12px/1.55 var(--font-body);vertical-align:middle}
+:is(.staff-checkin.staff-checkin,.pickup-dashboard.pickup-dashboard) .operations-table.operations-table tbody tr:nth-child(even){background:#fdfcf9}
+:is(.staff-checkin.staff-checkin,.pickup-dashboard.pickup-dashboard) .operations-table.operations-table tbody tr:hover td{background:#fff6ee}
+:is(.staff-checkin.staff-checkin,.pickup-dashboard.pickup-dashboard) .operational-child{display:flex;align-items:center;gap:12px;min-width:180px;max-width:290px}
+:is(.staff-checkin.staff-checkin,.pickup-dashboard.pickup-dashboard) .operational-child i{display:grid;place-items:center;flex:none;width:40px;height:40px;border:1px solid #e8dccb;border-radius:50%;background:#f5efe5;color:#795b38;font:700 11px var(--font-body);font-style:normal}
+:is(.staff-checkin.staff-checkin,.pickup-dashboard.pickup-dashboard) .operational-child b{color:#23354e;font:700 13px/1.55 var(--font-body);overflow-wrap:anywhere}
+:is(.staff-checkin.staff-checkin,.pickup-dashboard.pickup-dashboard) .operations-table.operations-table .record-badge{white-space:nowrap;flex-wrap:nowrap;font-size:11px}
+:is(.staff-checkin.staff-checkin,.pickup-dashboard.pickup-dashboard) .operations-table.operations-table .operational-ticket{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:38px;width:fit-content;padding:0 10px;border:1px solid #eee0d4;border-radius:9px;background:#fffaf5;color:#ad4c2c;font:700 11px/1.4 var(--font-body);text-decoration:none;white-space:nowrap}
+:is(.staff-checkin.staff-checkin,.pickup-dashboard.pickup-dashboard) .operational-ticket:hover{background:#ffede2;border-color:#edbea7}
+:is(.staff-checkin.staff-checkin,.pickup-dashboard.pickup-dashboard) :is(.operational-ticket,.queue-tabs button):focus-visible{outline:3px solid #ffcbb8;outline-offset:2px}
+:is(.staff-checkin.staff-checkin,.pickup-dashboard.pickup-dashboard) .operations-table.operations-table .operational-time{font-variant-numeric:tabular-nums;white-space:nowrap;color:#405776}
+:is(.staff-checkin.staff-checkin,.pickup-dashboard.pickup-dashboard) .operations-table.operations-table .empty{padding:40px 20px!important;text-align:center!important;color:#71809a;line-height:1.7}
+.pickup-dashboard.pickup-dashboard .queue-panel{padding:24px;background:#fff;border-radius:16px;border-color:#e6e0d8;box-shadow:0 3px 14px #33220e04}
+.pickup-dashboard.pickup-dashboard .pickup-register-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px;padding-bottom:22px;border-bottom:1px solid #e9e3db}
+.pickup-dashboard.pickup-dashboard .pickup-register-heading .eyebrow{margin:0 0 6px;font-size:10px}
+.pickup-dashboard.pickup-dashboard .pickup-register-heading h2{margin:0;font:700 23px/1.3 var(--font-body);letter-spacing:-.02em;color:#23354e}
+.pickup-dashboard.pickup-dashboard .pickup-register-heading p:not(.eyebrow){margin:7px 0 0;color:#6d7d91;font-size:13px;line-height:1.6}
+.pickup-dashboard.pickup-dashboard .pickup-register-heading>b{flex:none;padding:7px 11px;border-radius:20px;background:#eff5fb;color:#4e7099;font:700 11px/1.5 var(--font-body)}
+.pickup-dashboard.pickup-dashboard .queue-head{display:grid;grid-template-columns:1fr;padding:0;gap:18px}
+.pickup-dashboard.pickup-dashboard .queue-tabs{display:flex;gap:22px;border-bottom:1px solid #e9e3db;flex-wrap:wrap}
+.pickup-dashboard.pickup-dashboard .queue-tabs button{padding:0 2px;min-height:46px;border:0;border-bottom:3px solid transparent;background:transparent;color:#69788d;font:700 12px var(--font-body);cursor:pointer}
+.pickup-dashboard.pickup-dashboard .queue-tabs button.active{color:#c84b2d;border-bottom-color:#ff5b34}
+.pickup-dashboard.pickup-dashboard .queue-actions{display:flex;flex:none;width:100%;gap:12px;margin:0}
+.pickup-dashboard.pickup-dashboard .queue-filters{flex:1;grid-template-columns:minmax(160px,1fr) minmax(150px,.4fr)}
+.pickup-dashboard.pickup-dashboard .queue-filters label{height:46px;border-color:#dce3ec;border-radius:10px}
+.pickup-dashboard.pickup-dashboard .queue-filters .app-dropdown-host{height:46px}
+.pickup-dashboard.pickup-dashboard .queue-count{margin:18px 0 14px;font:600 12px/1.6 var(--font-body);color:#71809a}
+.pickup-dashboard.pickup-dashboard .ticket{display:grid;gap:7px;align-items:start}
+.pickup-dashboard.pickup-dashboard .ticket>b{font:700 11px/1.5 var(--font-body);color:#405776;letter-spacing:.015em}
+.pickup-dashboard.pickup-dashboard .operations-table.operations-table td:first-child{color:#8591a1;font-size:11px;width:32px}
+@media(max-width:700px){
+ :is(.staff-checkin.staff-checkin,.pickup-dashboard.pickup-dashboard) .operations-table-frame{border:0;overflow:visible;box-shadow:none;background:transparent;border-radius:0;padding:0}
+ :is(.staff-checkin.staff-checkin,.pickup-dashboard.pickup-dashboard) table.operations-table.operations-table{display:block;min-width:0;width:100%;background:transparent}
+ :is(.staff-checkin.staff-checkin,.pickup-dashboard.pickup-dashboard) .operations-table.operations-table thead{display:none}
+ :is(.staff-checkin.staff-checkin,.pickup-dashboard.pickup-dashboard) .operations-table.operations-table tbody{display:grid;gap:14px}
+ :is(.staff-checkin.staff-checkin,.pickup-dashboard.pickup-dashboard) .operations-table.operations-table tbody tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;padding:18px;border:1px solid #e6e0d8;border-radius:14px;background:#fff}
+ :is(.staff-checkin.staff-checkin,.pickup-dashboard.pickup-dashboard) .operations-table.operations-table td[data-label]{display:block;min-width:0;width:auto;padding:0;border:0!important;background:transparent!important;text-align:left;font-size:12px;white-space:normal;overflow-wrap:anywhere}
+ :is(.staff-checkin.staff-checkin,.pickup-dashboard.pickup-dashboard) .operations-table.operations-table td[data-label]::before{display:block;content:attr(data-label);margin-bottom:7px;color:#7a8799;font:600 10px/1.5 var(--font-body);text-align:left;letter-spacing:0;text-transform:none}
+ :is(.staff-checkin.staff-checkin,.pickup-dashboard.pickup-dashboard) .operations-table.operations-table td[data-label="Child"]{grid-column:1/-1;padding:0 0 14px;border-bottom:1px solid #eee8df!important}
+ :is(.staff-checkin.staff-checkin,.pickup-dashboard.pickup-dashboard) .operations-table.operations-table td[data-label="Child"]::before{display:none}
+ :is(.staff-checkin.staff-checkin,.pickup-dashboard.pickup-dashboard) .operational-child{min-width:0;max-width:none}
+ :is(.staff-checkin.staff-checkin,.pickup-dashboard.pickup-dashboard) .operations-table.operations-table .record-badge{white-space:normal}
+ :is(.staff-checkin.staff-checkin,.pickup-dashboard.pickup-dashboard) .operations-table.operations-table td.empty{grid-column:1/-1;display:block;border:0}
+ .pickup-dashboard.pickup-dashboard .operations-table.operations-table td[data-label="#"]{display:none}
+ .pickup-dashboard.pickup-dashboard .queue-panel{padding:18px}
+ .pickup-dashboard.pickup-dashboard .pickup-register-heading{flex-wrap:wrap;padding-bottom:18px}
+ .pickup-dashboard.pickup-dashboard .queue-actions{flex-wrap:wrap}
+ .pickup-dashboard.pickup-dashboard .queue-filters{flex-basis:100%;grid-template-columns:1fr}
+ .pickup-dashboard.pickup-dashboard .queue-actions>.export-button{order:1}
+ .pickup-dashboard.pickup-dashboard .queue-tabs{gap:16px}
+}
+@media(max-width:360px){:is(.staff-checkin.staff-checkin,.pickup-dashboard.pickup-dashboard) .operations-table.operations-table tbody tr{grid-template-columns:1fr}}
