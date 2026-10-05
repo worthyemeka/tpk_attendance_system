@@ -174,11 +174,9 @@ export function FollowupWorkspace() {
       const lastPage = Math.max(1, Math.ceil(Number(ar.meta?.total || 0) / pageSize));
       if (page > lastPage) setPage(lastPage);
       setError("");
-    } catch (e) {
+    } catch {
       if (current !== request.current || signal?.aborted) return;
-      setError(
-        e instanceof Error ? e.message : "We could not load follow-ups.",
-      );
+      setError("We couldn’t load follow-ups. Please try again.");
     } finally {
       if (current === request.current && !signal?.aborted) setLoading(false);
     }
