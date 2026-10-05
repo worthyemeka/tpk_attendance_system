@@ -4,7 +4,7 @@ import Image from "next/image";
 import localFont from "next/font/local";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   FiBarChart2,
   FiBookOpen,
@@ -119,6 +119,8 @@ export function Sidebar() {
   const pathname = usePathname();
   const [session, setSession] = useState<TeacherSession | null>(null);
   const [open, setOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
+  const accountTriggerRef = useRef<HTMLButtonElement>(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [mobileNavScrolled, setMobileNavScrolled] = useState(false);
   const [activeService, setActiveService] = useState<ActiveService | null>(null);
@@ -178,6 +180,26 @@ export function Sidebar() {
     setMobileNavOpen(false);
     setOpen(false);
   }, [pathname]);
+  useEffect(() => {
+    if (!open) return;
+    accountMenuRef.current?.querySelector<HTMLAnchorElement>(".profile-menu a")?.focus({ preventScroll: true });
+    const dismissOutside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !accountMenuRef.current?.contains(event.target)) setOpen(false);
+    };
+    const dismissWithEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      setOpen(false);
+      accountTriggerRef.current?.focus({ preventScroll: true });
+    };
+    document.addEventListener("pointerdown", dismissOutside);
+    document.addEventListener("keydown", dismissWithEscape, true);
+    return () => {
+      document.removeEventListener("pointerdown", dismissOutside);
+      document.removeEventListener("keydown", dismissWithEscape, true);
+    };
+  }, [open]);
   useEffect(() => {
     if (!mobileNavOpen) return;
     const resize = () => { if (!window.matchMedia("(max-width: 590px)").matches) setMobileNavOpen(false); };
@@ -309,11 +331,15 @@ export function Sidebar() {
           </nav>
         </div>
         <div className="sidebar-bottom">
-          <div className="sidebar-footer-wrap">
+          <div className={`sidebar-footer-wrap${open ? " account-open" : ""}`} ref={accountMenuRef}>
             <button
               className="sidebar-footer"
+              ref={accountTriggerRef}
+              type="button"
               onClick={() => setOpen((value) => !value)}
               aria-expanded={open}
+              aria-controls={open ? "sidebar-account-menu" : undefined}
+              aria-label={`Account options for ${[session.title, session.firstName, session.lastName].filter(Boolean).join(" ")}`}
             >
               {session.profileImageUrl && !profileImageFailed ? (
                 <img
@@ -328,7 +354,7 @@ export function Sidebar() {
                   <i />
                 </div>
               )}
-              <div>
+              <div className="sidebar-account-copy">
                 <b>
                   {session.title} {session.firstName}
                 </b>
@@ -341,28 +367,29 @@ export function Sidebar() {
               <FiChevronRight />
             </button>
             {open && (
-              <div className="profile-menu">
+              <nav className="profile-menu" id="sidebar-account-menu" aria-label="Your account">
+                <p className="profile-menu-label">Your account</p>
                 <Link
                   className="profile-menu-item"
                   href="/account/profile"
                   onClick={() => setOpen(false)}
                 >
-                  <FiUser />
-                  My Profile
+                  <i className="profile-menu-icon"><FiUser /></i>
+                  <span><b>My profile</b><small>Manage your details</small></span>
                 </Link>
                 <Link
                   className="profile-menu-item"
                   href="/account/settings"
                   onClick={() => setOpen(false)}
                 >
-                  <FiSettings />
-                  Account Settings
+                  <i className="profile-menu-icon"><FiSettings /></i>
+                  <span><b>Account settings</b><small>Preferences and access</small></span>
                 </Link>
-                <button className="profile-menu-item" onClick={signOut}>
-                  <FiLogOut />
-                  Sign Out
-                </button>
-              </div>
+                <div className="profile-menu-signout"><button type="button" className="profile-menu-item" onClick={signOut}>
+                  <i className="profile-menu-icon"><FiLogOut /></i>
+                  <span><b>Sign out</b></span>
+                </button></div>
+              </nav>
             )}
           </div>
           <p className="sidebar-tagline">
@@ -380,45 +407,6 @@ export function Sidebar() {
           }
           .sidebar-bottom {
             flex: none;
-          }
-          .sidebar-footer-wrap {
-            position: relative;
-          }
-          .sidebar-footer {
-            width: 100%;
-            border: 0;
-            background: transparent;
-            color: inherit;
-            text-align: left;
-            cursor: pointer;
-          }
-          .profile-menu {
-            position: absolute;
-            z-index: 9;
-            bottom: 77px;
-            left: 0;
-            right: 0;
-            padding: 6px;
-            background: #292a29;
-            border: 1px solid #464746;
-            border-radius: 9px;
-            box-shadow: 0 12px 24px #0005;
-          }
-          .profile-menu-item {
-            display: block;
-            width: 100%;
-            padding: 9px;
-            border: 0;
-            background: transparent;
-            color: #fff !important;
-            text-align: left;
-            text-decoration: none !important;
-            border-radius: 6px;
-            font: 700 11px var(--font-body);
-            cursor: pointer;
-          }
-          .profile-menu-item:hover {
-            background: #3b3c3b;
           }
           .avatar-image {
             object-fit: cover;

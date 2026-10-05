@@ -6,8 +6,33 @@
 .sidebar .side-group a{position:relative;min-height:43px;padding:0 10px;border:1px solid transparent;border-radius:9px;color:#e8e7e1;gap:11px;transition:background .18s ease,border-color .18s ease,transform .18s ease}
 .sidebar .side-group a:hover{background:#ffffff0c;border-color:#ffffff12;transform:translateX(2px)}.sidebar .side-group a.active{background:linear-gradient(90deg,#ffffff19,#ffffff11);border-color:#ffffff13;box-shadow:inset 3px 0 #ff643c,0 7px 18px #0000002e}
 .sidebar .side-icon{width:27px;height:27px;display:grid;place-items:center;border:1px solid #ffffff13;border-radius:8px;background:#ffffff08;color:#f6f4ed;font-style:normal}.sidebar .side-icon svg{font-size:16px;stroke-width:2}.sidebar .side-group a.active .side-icon{border-color:#ff8a6b66;background:#ff5d3420;color:#ff8a6b}.sidebar .side-group a:hover .side-icon{background:#ffffff12;color:#fff}
-.sidebar .sidebar-footer-wrap{margin:0 1px;padding:7px;border:1px solid #ffffff13;border-radius:13px;background:linear-gradient(135deg,#ffffff0d,#ffffff05)}.sidebar .sidebar-footer{min-height:58px;padding:2px;align-items:center;border-radius:9px;transition:background .18s ease}.sidebar .sidebar-footer:hover{background:#ffffff0d}.sidebar .sidebar-footer>svg{padding:5px;border-radius:7px;background:#ffffff0d;color:#dedbd4}.sidebar .sidebar-footer b{font-size:12px}.sidebar .sidebar-footer small{color:#bab9b2}.sidebar .sidebar-footer em{margin-top:5px;color:#d5d5ce}.sidebar .sidebar-tagline{margin-top:18px;color:#8e908c;font-size:7px;letter-spacing:2.8px}
-.sidebar .profile-menu{bottom:76px;padding:7px;border-radius:12px;background:#222422;border-color:#484946;box-shadow:0 18px 38px #0009}.sidebar .profile-menu-item{display:flex;align-items:center;gap:9px;padding:10px;border-radius:8px;color:#f5f2eb!important}.sidebar .profile-menu-item svg{color:#ff8a6b;font-size:15px}.sidebar .profile-menu-item:hover{background:#ffffff0d}
+.sidebar .sidebar-footer-wrap{position:relative;margin:0 1px;padding:4px;border:1px solid #ffffff1c;border-radius:12px;background:#ffffff06}
+.sidebar .sidebar-footer{width:100%;min-height:76px;margin:0;padding:10px 8px;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer;align-items:center;gap:10px;border-radius:8px;transition:background .18s ease;font-family:var(--font-body),Arial,sans-serif}
+.sidebar .sidebar-footer:hover,.sidebar .account-open .sidebar-footer{background:#ffffff0a}
+.sidebar .sidebar-footer .avatar{width:38px;height:38px;flex:none}
+.sidebar .sidebar-account-copy{min-width:0;flex:1}
+.sidebar .sidebar-footer>svg{width:20px;height:20px;flex:none;padding:3px;border-radius:6px;color:#aaaFA9;transition:transform .18s ease}
+.sidebar .account-open .sidebar-footer>svg{transform:rotate(-90deg);color:#ff9676}
+.sidebar .sidebar-footer b{font-size:12px;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sidebar .sidebar-footer small{font-size:10px;line-height:1.4;color:#b7bcb4}
+.sidebar .sidebar-footer em{font-size:10px;line-height:1.4;margin-top:5px;color:#c8cdc5}
+.sidebar .sidebar-footer em i{width:6px;height:6px;margin-right:6px;box-shadow:none}
+.sidebar .sidebar-tagline{margin-top:18px;color:#8e908c;font-size:7px;letter-spacing:2.8px}
+.sidebar .profile-menu{position:absolute;z-index:20;bottom:calc(100% + 8px);left:0;right:auto;width:max(100%,236px);max-width:calc(100vw - 32px);max-height:calc(100dvh - 132px);overflow:auto;padding:7px;border:1px solid #41463f;border-radius:12px;background:#222520;box-shadow:none;font-family:var(--font-body),Arial,sans-serif}
+.sidebar .profile-menu-label{margin:5px 9px 7px;color:#a8b0a3;font-size:9px;font-weight:700;line-height:1.5;letter-spacing:1.1px;text-transform:uppercase}
+.sidebar .profile-menu a.profile-menu-item,.sidebar .profile-menu button.profile-menu-item{width:100%;min-height:54px;display:flex;align-items:center;gap:11px;margin:0;padding:9px;border:0;border-radius:8px;background:transparent;color:#f3f4ef!important;text-decoration:none!important;text-align:left;font:500 12px/1.4 var(--font-body),Arial,sans-serif;cursor:pointer;box-shadow:none;transition:background .15s ease}
+.sidebar .profile-menu-item>span{display:grid;gap:3px;min-width:0}
+.sidebar .profile-menu-item b{font-size:12px;font-weight:700;line-height:1.4}
+.sidebar .profile-menu-item small{color:#adb5a6;font-size:10px;font-weight:400;line-height:1.5}
+.sidebar .profile-menu-icon{width:32px;height:32px;flex:none;display:grid;place-items:center;border-radius:8px;background:#ffffff07;color:#e2e8da;font-style:normal}
+.sidebar .profile-menu-item .profile-menu-icon svg{width:17px;height:17px;stroke-width:1.8;color:inherit}
+.sidebar .profile-menu a.profile-menu-item:hover,.sidebar .profile-menu button.profile-menu-item:hover{background:#ffffff0a}
+.sidebar .profile-menu-signout{margin-top:7px;padding-top:7px;border-top:1px solid #ffffff16}
+.sidebar .profile-menu-signout button.profile-menu-item{min-height:46px;color:#ffa98d!important}
+.sidebar .profile-menu-signout .profile-menu-icon{background:#ff795416;color:#ffa98d}
+.sidebar .profile-menu-item:focus-visible,.sidebar .sidebar-footer:focus-visible{outline:2px solid #ff9676;outline-offset:-2px;background:#ffffff0a}
+@media(prefers-reduced-motion:reduce){.sidebar .sidebar-footer,.sidebar .sidebar-footer>svg,.sidebar .profile-menu-item{transition:none}}
 .content select{appearance:none!important;-webkit-appearance:none!important;padding-right:35px!important;background-color:#fff!important;background-image:linear-gradient(45deg,transparent 50%,#677591 50%),linear-gradient(135deg,#677591 50%,transparent 50%)!important;background-position:calc(100% - 16px) 50%,calc(100% - 11px) 50%!important;background-size:5px 5px,5px 5px!important;background-repeat:no-repeat!important;box-shadow:0 1px 1px #24304d08;cursor:pointer;transition:border-color .18s ease,box-shadow .18s ease}.content select:hover,.content select:focus{border-color:#ff8a6b!important;box-shadow:0 0 0 3px #ff5d3412!important;outline:none}
 @media(max-width:780px){.sidebar .brand:after{display:none}.sidebar .side-icon{width:31px;height:31px}.sidebar .side-group a{padding:0;justify-content:center}.sidebar .side-group{border-bottom:0}.sidebar .sidebar-footer-wrap{border:0;background:transparent;padding:0}}
 @media(min-width:591px) and (max-width:780px){.sidebar .brand{align-items:center}.sidebar .brand-logos .tpk-logo{display:none}.sidebar .brand-logos{gap:0}}
+@media(min-width:591px) and (max-width:780px){.sidebar .sidebar-footer{min-height:52px;padding:6px}.sidebar .profile-menu{width:236px}}
