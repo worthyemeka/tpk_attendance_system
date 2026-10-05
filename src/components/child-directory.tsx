@@ -1,5 +1,6 @@
 "use client";
 
+import { AppSelect } from "@/components/app-dropdown";
 import Link from "next/link";
 import {useProfileDialog} from "@/components/use-profile-dialog";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -475,7 +476,7 @@ export function ChildDirectory() {
             />
           </label>
           <span className="app-dropdown-host">
-            <select
+            <AppSelect
               aria-label="Filter children by class"
               value={classId}
               onChange={(e) => reset(() => setClassId(e.target.value))}
@@ -486,10 +487,10 @@ export function ChildDirectory() {
                   {c.name}
                 </option>
               ))}
-            </select>
+            </AppSelect>
           </span>
           <span className="app-dropdown-host">
-            <select
+            <AppSelect
               aria-label="Filter children by gender"
               value={gender}
               onChange={(e) => reset(() => setGender(e.target.value))}
@@ -497,7 +498,7 @@ export function ChildDirectory() {
               <option value="">All genders</option>
               <option value="MALE">Male</option>
               <option value="FEMALE">Female</option>
-            </select>
+            </AppSelect>
           </span>
           <div className="child-export">
             <button onClick={() => setExports((v) => !v)}>
@@ -519,14 +520,14 @@ export function ChildDirectory() {
           <div><p className="children-count" role="status">{loading ? "Updating children…" : `${total} ${total === 1 ? "child" : "children"}`}</p><p className="directory-results-note">Open a profile to see family details and attendance.</p></div>
           <div className="directory-view-controls">
             {(query || classId || gender) && <button type="button" className="directory-clear" onClick={clear}>Clear filters</button>}
-            <label className="directory-sort"><span>Sort by</span><select aria-label="Sort children" value={`${sort}:${order}`} onChange={(event) => { const [field, direction] = event.target.value.split(":"); setSort(field); setOrder(direction); setPage(1); }}>
+            <label className="directory-sort"><span>Sort by</span><AppSelect aria-label="Sort children" value={`${sort}:${order}`} onChange={(event) => { const [field, direction] = event.target.value.split(":"); setSort(field); setOrder(direction); setPage(1); }}>
               <option value="name:asc">Name: A–Z</option><option value="name:desc">Name: Z–A</option>
               <option value="age:asc">Age: youngest first</option><option value="age:desc">Age: oldest first</option>
               <option value="class:asc">Class: A–Z</option><option value="class:desc">Class: Z–A</option>
               <option value="gender:asc">Gender: A–Z</option><option value="gender:desc">Gender: Z–A</option>
               <option value="guardian:asc">Guardian: A–Z</option><option value="guardian:desc">Guardian: Z–A</option>
               <option value="lastAttended:desc">Last attended: newest</option><option value="lastAttended:asc">Last attended: oldest</option>
-            </select></label>
+            </AppSelect></label>
             <DataViewToggle value={display} onChange={setChildDisplay} gridLabel="View children as cards" listLabel="View children as a list" />
           </div>
         </div>
@@ -1017,7 +1018,7 @@ function ChildEditForm({
         </fieldset>
         <label>
           Class
-          <select
+          <AppSelect
             value={classId}
             onChange={(event) => setClassId(event.target.value)}
           >
@@ -1027,7 +1028,7 @@ function ChildEditForm({
                 {item.name}
               </option>
             ))}
-          </select>
+          </AppSelect>
         </label>
         <label>
           School Grade

@@ -8,7 +8,7 @@ export function useProfileDialog(close:()=>void,selector:string,enabled=true){
     const panel=document.querySelector<HTMLElement>(selector);if(!panel)return;
     const previous=document.activeElement as HTMLElement|null;
     const overflow=document.body.style.overflow;document.body.style.overflow="hidden";
-    const focusable=()=>Array.from(panel.querySelectorAll<HTMLElement>('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex="0"]')).filter(el=>el.getClientRects().length);
+    const focusable=()=>Array.from(panel.querySelectorAll<HTMLElement>('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex="0"]')).filter(el=>el.getClientRects().length&&!el.matches('[tabindex="-1"],[aria-hidden="true"]'));
     focusable()[0]?.focus({preventScroll:true});
     const keydown=(event:KeyboardEvent)=>{
       if(event.key==="Escape"){event.preventDefault();closeRef.current();return;}

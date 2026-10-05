@@ -1,5 +1,6 @@
 "use client";
 
+import { AppSelect } from "@/components/app-dropdown";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {useProfileDialog} from "@/components/use-profile-dialog";
@@ -410,7 +411,7 @@ export default function TeamPage() {
               placeholder="Search teacher by name, phone or email…"
             />
           </label>
-          <select
+          <AppSelect
             value={assignment}
             onChange={(event) => setAssignment(event.target.value)}
           >
@@ -418,16 +419,16 @@ export default function TeamPage() {
             {roles.map((item) => (
               <option key={item}>{item}</option>
             ))}
-          </select>
+          </AppSelect>
           <label className="directory-select">
             <span>Sort team</span>
-            <select value={sort} onChange={(event) => setSort(event.target.value)}>
+            <AppSelect value={sort} onChange={(event) => setSort(event.target.value)}>
               <option value="NAME_ASC">Name: A–Z</option>
               <option value="NAME_DESC">Name: Z–A</option>
               <option value="GENDER">Gender</option>
               {isSuper && <option value="DOB_ASC">Date of birth: oldest first</option>}
               {isSuper && <option value="DOB_DESC">Date of birth: youngest first</option>}
-            </select>
+            </AppSelect>
           </label>
           <div className="export-wrap">
               <button
@@ -528,7 +529,7 @@ export default function TeamPage() {
           Showing {shown.length ? `${(page - 1) * perPage + 1}–${Math.min(page * perPage, shown.length)}` : "0"} of {shown.length} team members
         </p>
         <div className="team-pagination">
-          <label>Show <select value={perPage} onChange={(event) => setPageSizeOverride(Number(event.target.value))}>{[5, 10, 12, 20, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}</select> teachers</label>
+          <label>Show <AppSelect value={perPage} onChange={(event) => setPageSizeOverride(Number(event.target.value))}>{[5, 10, 12, 20, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}</AppSelect> teachers</label>
           <div><button disabled={page === 1} onClick={() => setPage((current) => current - 1)}>Previous</button><span>{page} of {totalPages}</span><button disabled={page === totalPages} onClick={() => setPage((current) => current + 1)}>Next</button></div>
         </div>
       </section>
@@ -862,14 +863,14 @@ function TeacherDrawer({
                   </p>
                   <label>
                     Extend by
-                    <select
+                    <AppSelect
                       value={extendWeeks}
                       onChange={(event) => setExtendWeeks(event.target.value)}
                     >
                       <option value="1">1 week</option>
                       <option value="2">2 weeks</option>
                       <option value="3">3 weeks</option>
-                    </select>
+                    </AppSelect>
                   </label>
                   <label>
                     Reason
@@ -936,7 +937,7 @@ function TeacherDrawer({
                 )}
                 <label className="access-control">
                   Access level
-                  <select
+                  <AppSelect
                     value={member.accessLevel || "TPK_ADMIN"}
                     disabled={saving || member.id === undefined}
                     onChange={(event) =>
@@ -948,7 +949,7 @@ function TeacherDrawer({
                     <option value="TPK_ADMIN">TPK Admin</option>
                     <option value="TPK_FOLLOW_UP_ADMIN">Follow-Up Lead</option>
                     <option value="TPK_SUPER_ADMIN">TPK Super Admin</option>
-                  </select>
+                  </AppSelect>
                 </label>
               </div>
             )}
@@ -1188,7 +1189,7 @@ function ProbationLog({ member }: { member: Member }) {
           </label>
           <label>
             Service taught
-            <select
+            <AppSelect
               value={week.serviceType || ""}
               disabled={!week.canStaffSign}
               onChange={(event) =>
@@ -1198,7 +1199,7 @@ function ProbationLog({ member }: { member: Member }) {
               <option value="">Select service</option>
               <option value="FIRST_SERVICE">First Service · 8:30 AM</option>
               <option value="SECOND_SERVICE">Second Service · 10:30 AM</option>
-            </select>
+            </AppSelect>
           </label>
           <label>
             Tribe / age group

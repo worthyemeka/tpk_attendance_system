@@ -1,5 +1,6 @@
 "use client";
 
+import { AppSelect } from "@/components/app-dropdown";
 import Link from "next/link";
 import { TeacherQuickView, type TeacherQuickTarget } from "@/components/dashboard-quick-views";
 import { useSearchParams } from "next/navigation";
@@ -327,10 +328,10 @@ export function ClassroomsOverview() {
             placeholder="Search classroom, child or teacher..."
           />
         </label>
-        <select aria-label="Classroom service filter" value={localScope} onChange={(event) => setLocalScope(event.target.value)} disabled={!serviceOptions.length}>
+        <AppSelect aria-label="Classroom service filter" value={localScope} onChange={(event) => setLocalScope(event.target.value)} disabled={!serviceOptions.length}>
           {serviceOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-        </select>
-        <select
+        </AppSelect>
+        <AppSelect
           value={classId}
           onChange={(event) => setClassId(event.target.value)}
         >
@@ -340,8 +341,8 @@ export function ClassroomsOverview() {
               {item.name}
             </option>
           ))}
-        </select>
-        <select
+        </AppSelect>
+        <AppSelect
           value={status}
           onChange={(event) => setStatus(event.target.value)}
         >
@@ -349,8 +350,8 @@ export function ClassroomsOverview() {
           <option value="RUNNING_SMOOTHLY">Running Smoothly</option>
           <option value="NEEDS_ATTENTION">Needs Attention</option>
           <option value="NO_TEACHER_ASSIGNED">No Teacher Assigned</option>
-        </select>
-        <select aria-label="Sort classrooms" value={sort} onChange={(event) => setSort(event.target.value)}><option value="name">Class name A–Z</option><option value="attendance">Highest attendance</option></select>
+        </AppSelect>
+        <AppSelect aria-label="Sort classrooms" value={sort} onChange={(event) => setSort(event.target.value)}><option value="name">Class name A–Z</option><option value="attendance">Highest attendance</option></AppSelect>
       </section>
       {error && <p className="cw-error">{error}</p>}
       <div className="cw-list-heading"><h2>Classrooms ({classes.length})</h2><span>{selectedService ? `${selectedService.name} · ${formatDate(serviceDate)}` : "Choose a service"}</span></div>
@@ -498,7 +499,7 @@ function AssemblyView({ groups, loading, isSuperAdmin, onRefresh }: { groups: As
   if (loading) return <p className="cw-empty">Loading Assembly…</p>;
   if (!groups.length) return <section className="assembly-empty"><FiUsers /><h2>No Assembly data configured</h2><p>There is no Assembly team or programme recorded for this Sunday and service.</p></section>;
   return <section className="assembly-view">
-    <div className="assembly-intro"><div><p className="eyebrow">Service ministry</p><h2>Assembly</h2><p>View the team, activities and notes for assembly during the selected service.</p></div>{groups.length > 1 && <select value={selectedGroup} onChange={(e) => setSelectedGroup(Number(e.target.value))}>{groups.map((item, index) => <option key={item.serviceSession?.id || index} value={index}>{item.serviceSession?.name || "Service"} · {formatDate(item.serviceSession?.serviceDate)}</option>)}</select>}</div>
+    <div className="assembly-intro"><div><p className="eyebrow">Service ministry</p><h2>Assembly</h2><p>View the team, activities and notes for assembly during the selected service.</p></div>{groups.length > 1 && <AppSelect value={selectedGroup} onChange={(e) => setSelectedGroup(Number(e.target.value))}>{groups.map((item, index) => <option key={item.serviceSession?.id || index} value={index}>{item.serviceSession?.name || "Service"} · {formatDate(item.serviceSession?.serviceDate)}</option>)}</AppSelect>}</div>
     <section className="assembly-metrics"><Metric icon={<FiUsers />} value={children} title="Children in Service" text="Existing service attendance" tone="green" /><Metric icon={<FiUsers />} value={team} title="Assembly Team" text="Assigned for this service" tone="purple" /><Metric icon={<FiClipboard />} value={activities} title="Activities" text="Programme records" /><Metric icon={<FiAlertTriangle />} value={attention} title="Need Attention" text="Items needing review" tone="red" /></section>
     {groups.length > 1 && <div className="assembly-groups">{groups.map((item, index) => <button key={item.serviceSession?.id || index} className={index === selectedGroup ? "selected" : ""} onClick={() => setSelectedGroup(index)}>{item.serviceSession?.name || "Service"}<small>{formatDate(item.serviceSession?.serviceDate)}</small></button>)}</div>}
     <section className="assembly-panel"><header><div><p className="eyebrow">Assigned teachers</p><h3>Assembly Team</h3></div>{isSuperAdmin && <Link href="/account/roster">Manage in Team &amp; Roster <FiChevronRight /></Link>}</header><div className="assembly-team">{group.team.map((teacher) => <article key={teacher.userId}><Avatar teacher={teacher} /><div><b>{teacher.name}</b><small>{teacher.dutyName || "Assembly"}</small></div></article>)}{!group.team.length && <p className="cw-empty">No Assembly team assigned.</p>}</div></section>
@@ -515,7 +516,7 @@ function AssemblyView({ groups, loading, isSuperAdmin, onRefresh }: { groups: As
       <button className="modal-close" disabled={saving} onClick={() => setShowActivity(false)} aria-label="Close activity form"><FiX /></button>
       <p className="eyebrow">Assembly Programme</p><h2 id="assembly-activity-title">Add Activity</h2>
       <label>Activity Name<input disabled={saving} maxLength={180} value={activityName} onChange={(e) => setActivityName(e.target.value)} placeholder="e.g. Opening prayer" /></label>
-      <label>Led By<select disabled={saving} value={leaderId} onChange={(e) => setLeaderId(e.target.value)}><option value="">Choose a teacher (optional)</option>{(group.leaders || group.team).map((teacher) => <option key={teacher.userId} value={teacher.userId}>{teacher.name}</option>)}</select></label>
+      <label>Led By<AppSelect disabled={saving} value={leaderId} onChange={(e) => setLeaderId(e.target.value)}><option value="">Choose a teacher (optional)</option>{(group.leaders || group.team).map((teacher) => <option key={teacher.userId} value={teacher.userId}>{teacher.name}</option>)}</AppSelect></label>
       <label>Notes <small>(optional)</small><textarea disabled={saving} value={activityNotes} onChange={(e) => setActivityNotes(e.target.value)} placeholder="Add context for the team…" /></label>
       <div className="media-picker"><label htmlFor="assembly-activity-media">Attach pictures or videos</label><small>Optional · up to 6 files. Pictures: 5 MB each. Videos: 20 MB each. Maximum 25 MB total. Use Trim video for a shorter clip before uploading. Only share media suitable for the authorised team.</small><input id="assembly-activity-media" disabled={saving || Boolean(trimming)} type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" multiple onChange={(e) => { setAttachments(Array.from(e.target.files || [])); setMessage(""); e.target.value = ""; }} />{attachments.length > 0 && <><ul className="media-selected">{attachments.map((file, index) => <li key={`${file.name}-${index}`}><span>{file.name} · {(file.size / 1024 / 1024).toFixed(1)} MB</span><div className="media-file-actions">{(file.type.startsWith("video/") || /\.(mp4|mov|webm)$/i.test(file.name)) && <button type="button" disabled={saving || Boolean(trimming)} onClick={() => setTrimming(file)}>Trim video<span className="sr-only">: {file.name}</span></button>}<button type="button" disabled={saving || Boolean(trimming)} aria-label={`Remove ${file.name}`} onClick={() => setAttachments((files) => files.filter((_, i) => i !== index))}>Remove</button></div></li>)}</ul><p className={`media-total ${attachments.reduce((sum, file) => sum + file.size, 0) > TOTAL_UPLOAD_BYTES ? "over-limit" : ""}`}>{(attachments.reduce((sum, file) => sum + file.size, 0) / 1024 / 1024).toFixed(1)} MB of 25 MB total{attachments.reduce((sum, file) => sum + file.size, 0) > TOTAL_UPLOAD_BYTES ? " · Trim a video or remove an attachment before saving." : ""}</p></>}</div>
       {message && <p role="alert" className="interaction-error">{message}</p>}
@@ -747,14 +748,14 @@ export function ClassroomDetail({ classId }: { classId: number }) {
                 placeholder="Search child by name..."
               />
             </label>
-            <select
+            <AppSelect
               value={attendanceFilter}
               onChange={(event) => setAttendanceFilter(event.target.value)}
             >
               <option value="">All Attendance</option>
               <option value="PRESENT">Present</option>
               <option value="ABSENT">Absent</option>
-            </select>
+            </AppSelect>
           </div>
           <ChildrenTable rows={visible} />
         </section>
@@ -866,7 +867,7 @@ function WeeklyReviews({
             </div>
             <label className="review-session">
               <span>Sunday service</span>
-              <select
+              <AppSelect
                 value={reviewSessionId}
                 disabled={saving}
                 onChange={(event) => setReviewSessionId(event.target.value)}
@@ -878,7 +879,7 @@ function WeeklyReviews({
                     {item.name || data.serviceSession?.name || "Service"}
                   </option>
                 ))}
-              </select>
+              </AppSelect>
             </label>
           </div>
           <div className="review-fields">
@@ -1026,7 +1027,7 @@ function Attendance({ data, month, setMonth }: {
         <div><p className="eyebrow">Class register</p><h2>Attendance</h2><p>{historyLoading ? "Loading this month’s register…" : visibleSessions.length ? `${counts.present} present · ${counts.absent} absent${visibleSessions.length > 1 ? " across the services shown" : " for this service"}.` : "No recorded services in this month."}</p></div>
         <div className="class-attendance-filters">
           <div><span>Review month</span><MonthPicker value={new Date(`${month}-01T12:00:00Z`)} onChange={(value) => setMonth(value.toISOString().slice(0, 7))} ariaLabel="Choose attendance month" /></div>
-          <label><span>Sunday</span><select value={effectiveSunday} onChange={(event) => setSunday(event.target.value)} aria-label="Choose attendance Sunday"><option value="">All Sundays</option>{dates.map((date) => <option key={date} value={date}>Sunday, {formatDate(date)}</option>)}</select></label>
+          <label><span>Sunday</span><AppSelect value={effectiveSunday} onChange={(event) => setSunday(event.target.value)} aria-label="Choose attendance Sunday"><option value="">All Sundays</option>{dates.map((date) => <option key={date} value={date}>Sunday, {formatDate(date)}</option>)}</AppSelect></label>
         </div>
       </header>
       {historyLoading ? <div className="class-attendance-empty" role="status">Loading attendance…</div> : visibleSessions.length ? <>

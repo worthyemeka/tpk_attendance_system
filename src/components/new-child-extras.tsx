@@ -1,5 +1,6 @@
 "use client";
 
+import { AppSelect } from "@/components/app-dropdown";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { FiInfo, FiPlus, FiTrash2, FiUsers } from "react-icons/fi";
@@ -30,6 +31,6 @@ export function NewChildExtras() {
     {moreChildren.map((child, index) => <section className="new-extra-child" key={child.id}><header><b>Additional child {index + 2}</b><button aria-label={`Remove additional child ${index + 2}`} onClick={() => setMoreChildren((items) => items.filter((item) => item.id !== child.id))} type="button"><FiTrash2 /> Remove</button></header><div className="new-extra-child-grid"><label>Child’s First Name *<input placeholder="e.g. Sarah" /></label><label>Child’s Last Name *<input placeholder="e.g. Adebayo" /></label><label>Date of Birth *<input type="date" /></label><label>Gender *<span><button type="button">Male</button><button type="button">Female</button></span></label><label className="new-extra-full">Anything we should know?<textarea placeholder="Important care information — allergies, medical needs or accessibility needs (optional)" rows={3} /></label></div></section>)}
     <button className="new-add-child" onClick={() => setMoreChildren((items) => [...items, { id: Date.now() }])} type="button"><FiPlus /> Add another child</button>
   </>, host);
-  if (screen === "pickup" && otherPicker) return createPortal(<section className="new-other-picker"><h3><FiUsers /> Picker’s Details</h3><p>Please enter the details of the authorised person collecting your child.</p><div><label>Full Name<input placeholder="e.g. Michael Adebayo" /></label><label>Relationship to Child<select defaultValue=""><option disabled value="">Select relationship</option><option>Father</option><option>Mother</option><option>Guardian</option><option>Other</option></select></label><label>Phone Number<input inputMode="tel" placeholder="0805 123 4567" /></label></div><small><FiInfo />This person must be an authorised guardian. We’ll verify their details at pickup.</small></section>, host);
+  if (screen === "pickup" && otherPicker) return createPortal(<section className="new-other-picker"><h3><FiUsers /> Picker’s Details</h3><p>Please enter the details of the authorised person collecting your child.</p><div><label>Full Name<input placeholder="e.g. Michael Adebayo" /></label><label>Relationship to Child<AppSelect defaultValue=""><option disabled value="">Select relationship</option><option>Father</option><option>Mother</option><option>Guardian</option><option>Other</option></AppSelect></label><label>Phone Number<input inputMode="tel" placeholder="0805 123 4567" /></label></div><small><FiInfo />This person must be an authorised guardian. We’ll verify their details at pickup.</small></section>, host);
   return null;
 }

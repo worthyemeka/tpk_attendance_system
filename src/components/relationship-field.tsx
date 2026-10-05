@@ -1,5 +1,6 @@
 "use client";
 
+import { AppSelect } from "@/components/app-dropdown";
 import { useId, useState } from "react";
 import "./relationship-field.css";
 
@@ -14,14 +15,14 @@ export function RelationshipField({ value, onChange, label = "Relationship to ch
   const custom = other || Boolean(value && !["Father", "Mother"].includes(value));
   return <div className="relationship-field">
     <label htmlFor={id}>{label}{required ? " *" : ""}</label>
-    <select id={id} data-dropdown-native value={custom ? "Other" : value} required={required} onChange={event => {
+    <AppSelect id={id} value={custom ? "Other" : value} required={required} onChange={event => {
       const choice = event.target.value;
       setOther(choice === "Other");
       onChange(choice === "Other" ? "" : choice);
     }}>
       <option value="">Select relationship</option>
       <option>Father</option><option>Mother</option><option>Other</option>
-    </select>
+    </AppSelect>
     {custom && <div className="relationship-custom">
       <label htmlFor={`${id}-other`}>Your relationship to the child</label>
       <input id={`${id}-other`} required={required} maxLength={60} autoComplete="off" placeholder="e.g. Sister, aunt or grandfather" value={value === "Other" ? "" : value} onChange={event => onChange(event.target.value)} />

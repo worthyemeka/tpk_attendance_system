@@ -1,5 +1,6 @@
 "use client";
 
+import { AppSelect } from "@/components/app-dropdown";
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   FiAlertTriangle,
@@ -739,7 +740,7 @@ function ArchiveView({
           />
         </label>
         <span className="app-dropdown-host">
-          <select
+          <AppSelect
             value={year}
             onChange={(event) => setYear(event.target.value)}
           >
@@ -747,10 +748,10 @@ function ArchiveView({
             {[2026, 2025, 2024].map((value) => (
               <option key={value}>{value}</option>
             ))}
-          </select>
+          </AppSelect>
         </span>
         <span className="app-dropdown-host">
-          <select
+          <AppSelect
             value={type}
             onChange={(event) => setType(event.target.value)}
           >
@@ -761,7 +762,7 @@ function ArchiveView({
             <option value="FOLLOW_UP_RECORDS">Follow-Up Records</option>
             <option value="TEAM_ROSTER">Team / Roster</option>
             <option value="OTHER">Other</option>
-          </select>
+          </AppSelect>
         </span>
       </section>
       <p className="archive-count">
@@ -905,18 +906,18 @@ function ArchiveUpload({
         </label>
         <label>
           Record Type *
-          <select name="recordType" defaultValue="ATTENDANCE">
+          <AppSelect name="recordType" defaultValue="ATTENDANCE">
             <option value="ATTENDANCE">Attendance</option>
             <option value="CHILDREN_RECORDS">Children Records</option>
             <option value="REGISTRATION_RECORDS">Registration Records</option>
             <option value="FOLLOW_UP_RECORDS">Follow-Up Records</option>
             <option value="TEAM_ROSTER">Team / Roster</option>
             <option value="OTHER">Other</option>
-          </select>
+          </AppSelect>
         </label>
         <label>
           Period Covered *
-          <select
+          <AppSelect
             name="periodType"
             value={periodType}
             onChange={(event) => setPeriodType(event.target.value)}
@@ -924,7 +925,7 @@ function ArchiveUpload({
             <option value="SINGLE_MONTH">Single Month</option>
             <option value="DATE_RANGE">Date Range</option>
             <option value="FULL_YEAR">Full Year</option>
-          </select>
+          </AppSelect>
         </label>
         <div className="period-fields">
           {periodType === "DATE_RANGE" ? (

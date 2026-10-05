@@ -1,101 +1,114 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type SelectHTMLAttributes } from "react";
 import { createPortal } from "react-dom";
 import { FiCheck, FiChevronDown } from "react-icons/fi";
+import "./app-dropdown.css";
 
 type Choice = { label: string; value: string; disabled: boolean };
 
-function Dropdown({ select }: { select: HTMLSelectElement }) {
+/** Native select remains the form/validation authority. Explicit mounting is safe
+ * in streamed pages and drawers, without inserting portals into React's DOM. */
+export const AppSelect = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(function AppSelect(props, forwardedRef) {
+  const { children, onChange, onInvalid, onFocus, ...attributes } = props;
+  const select = useRef<HTMLSelectElement | null>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const id = useId();
   const [open, setOpen] = useState(false);
-  const [value, setValue] = useState(select.value);
-  const root = useRef<HTMLDivElement>(null);
-  const choices: Choice[] = Array.from(select.options).map((option) => ({ label: option.text, value: option.value, disabled: option.disabled }));
+  const [choices, setChoices] = useState<Choice[]>([]);
+  const [value, setValue] = useState("");
+  const [label, setLabel] = useState("");
+  const [active, setActive] = useState(0);
+  const [fieldStyle, setFieldStyle] = useState<CSSProperties>({});
+  const [position, setPosition] = useState<CSSProperties>({});
+  const typeahead = useRef({ text: "", at: 0 });
 
-  useEffect(() => {
-    const sync = () => setValue(select.value);
-    const close = (event: MouseEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false); };
-    select.addEventListener("change", sync);
-    document.addEventListener("mousedown", close);
-    return () => { select.removeEventListener("change", sync); document.removeEventListener("mousedown", close); };
-  }, [select]);
-
-  const choose = (next: string) => {
-    select.value = next;
-    select.dispatchEvent(new Event("input", { bubbles: true }));
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-    setValue(next);
-    setOpen(false);
-  };
-  const current = choices.find((choice) => choice.value === value)?.label || choices[0]?.label || "Select an option";
-
-  return <div className="app-dropdown" ref={root}>
-    <button aria-expanded={open} aria-haspopup="listbox" className="app-dropdown-trigger" onClick={() => setOpen((shown) => !shown)} type="button"><span>{current}</span><FiChevronDown /></button>
-    {open && <div className="app-dropdown-menu" role="listbox">{choices.map((choice) => <button aria-selected={choice.value === value} className={choice.value === value ? "selected" : ""} disabled={choice.disabled} key={`${choice.value}-${choice.label}`} onClick={() => choose(choice.value)} role="option" type="button"><span>{choice.label}</span>{choice.value === value && <FiCheck />}</button>)}</div>}
-  </div>;
-}
-
-/** Turns every ordinary select into the same accessible in-app menu. Add data-dropdown-native to opt out. */
-export function GlobalDropdowns() {
-  const [selects, setSelects] = useState<HTMLSelectElement[]>([]);
-  const known = useRef(new WeakSet<HTMLSelectElement>());
-
-  useEffect(() => {
-    let observer: MutationObserver | null = null;
-    const discover = () => {
-      const next = Array.from(document.querySelectorAll<HTMLSelectElement>("select:not([data-dropdown-native])"))
-        // Teacher registration is a streamed Suspense boundary. Do not insert a
-        // portal into it while React is hydrating; native selects are reliable
-        // and keep the country-code control accessible on every device.
-        .filter((select) => !select.closest(".teacher-auth-page"))
-        // A portal can only share the select's exact field container.  Mounting
-        // it into a layout row (such as the pick-up toolbar) creates a full-row
-        // overlay that hides the screen beneath it.
-        .filter((select) => select.parentElement?.matches("label, .app-dropdown-host"))
-        .filter((select) => select.isConnected && !known.current.has(select));
-      if (!next.length) return;
-      next.forEach((select) => { known.current.add(select); select.dataset.appDropdown = "true"; });
-      setSelects((current) => [...current.filter((select) => select.isConnected), ...next]);
+  useLayoutEffect(() => {
+    const field = select.current;
+    if (!field) return;
+    const next = Array.from(field.options).map(option => ({ label: option.text, value: option.value, disabled: option.disabled || (option.parentElement instanceof HTMLOptGroupElement && option.parentElement.disabled) }));
+    setChoices(current => JSON.stringify(current) === JSON.stringify(next) ? current : next);
+    setValue(field.value);
+    setLabel(props["aria-label"] || Array.from(field.labels || []).map(item => {
+      const copy = item.cloneNode(true) as HTMLElement;
+      copy.querySelectorAll("select,button,input,textarea,.app-dropdown-trigger").forEach(control => control.remove());
+      return copy.textContent?.trim();
+    }).filter(Boolean).join(" ") || field.name || "Select an option");
+    const resize = () => {
+      const css = getComputedStyle(field);
+      const nextStyle = { height: field.offsetHeight, font: css.font, borderRadius: css.borderRadius, paddingLeft: css.paddingLeft, marginTop: css.marginTop, marginBottom: css.marginBottom };
+      setFieldStyle(current => JSON.stringify(current) === JSON.stringify(nextStyle) ? current : nextStyle);
     };
-    const timer = window.setTimeout(() => {
-      discover();
-      observer = new MutationObserver(discover);
-      observer.observe(document.body, { childList: true, subtree: true });
-    }, 0);
-    return () => { window.clearTimeout(timer); observer?.disconnect(); };
-  }, []);
+    resize();
+    const observer = new ResizeObserver(resize);
+    observer.observe(field);
+    return () => observer.disconnect();
+  }, [props]);
 
-  return <>{selects.map((select, index) => select.parentElement && createPortal(<Dropdown key={`${select.name}-${index}`} select={select} />, select.parentElement))}
-    <style jsx global>{`
-      select[data-app-dropdown="true"]{opacity:0!important;pointer-events:none!important}
-      label:has(>select[data-app-dropdown="true"]),.app-dropdown-host{position:relative}
-      .app-dropdown{position:absolute;inset:auto 0 0;z-index:12;height:calc(100% - 20px);min-height:42px}
-      .app-dropdown-host{position:relative;display:block}.app-dropdown-host>.app-dropdown{inset:0;height:auto;min-height:0}
-      .app-dropdown-trigger{width:100%;height:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid #cfd7e3;border-radius:9px;padding:0 13px;background:#fff;color:#10213d;font:inherit;text-align:left;cursor:pointer}
-      /* Keep the Relations directory filters at the same compact density as the approved internal toolbar. */
-      .followup>.tools{align-items:center}
-      .followup>.tools>label,.followup>.tools>.more{box-sizing:border-box;height:44px!important;min-height:44px!important}
-      .followup>.tools>label{padding:0 13px!important}
-      .followup>.tools>label svg{flex:none;font-size:16px}
-      .followup>.tools>label input{min-width:0;font:600 12px/1 var(--font-body)!important}
-      .followup>.tools>.more{display:flex;align-items:center;justify-content:center;gap:8px;padding:0 14px!important;white-space:nowrap;cursor:pointer}
-      .followup .app-dropdown-host{height:44px!important}
-      .followup .app-dropdown-host>.app-dropdown{height:44px!important;min-height:44px!important}
-      .followup .app-dropdown-host .app-dropdown-trigger{height:44px!important;min-height:44px!important;padding:0 12px!important;border-color:#dbe0e9!important;border-radius:8px!important;color:#26354d!important;font:800 11px/1 var(--font-body)!important;white-space:nowrap}
-      .followup .app-dropdown-host .app-dropdown-trigger span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-      .followup .app-dropdown-host .app-dropdown-menu button{padding:9px 10px!important;font:700 11px/1.3 var(--font-body)!important}
-      @media (min-width:481px){.followup>.tools{display:flex!important;flex-wrap:nowrap!important;gap:11px}.followup>.tools>label{flex:1 1 300px!important;min-width:0}.followup>.tools>.app-dropdown-host{flex:0 1 155px!important;min-width:130px}.followup>.tools>.more-wrap{flex:0 0 auto!important}.followup>.tools>.more-wrap>.more{width:auto!important}}
-      .app-dropdown-trigger svg{flex:0 0 auto;color:#557098;transition:transform .16s ease}
-      .app-dropdown:has([aria-expanded="true"]) .app-dropdown-trigger{border-color:#ef4c29;box-shadow:0 0 0 3px rgba(239,76,41,.1)}
-      .app-dropdown:has([aria-expanded="true"]) .app-dropdown-trigger svg{transform:rotate(180deg)}
-      .app-dropdown-menu{position:absolute;z-index:50;top:calc(100% + 7px);right:0;left:0;display:grid;overflow:auto;max-height:230px;border:1px solid #d6deea;border-radius:10px;padding:5px;background:#fff;box-shadow:0 14px 32px rgba(12,29,58,.18)}
-      .app-dropdown-menu button{display:flex;align-items:center;justify-content:space-between;gap:12px;border:0;border-radius:7px;padding:10px 11px;background:transparent;color:#132642;font:inherit;text-align:left;cursor:pointer}
-      .app-dropdown-menu button:hover,.app-dropdown-menu button.selected{background:#fff1ec;color:#e54829}.app-dropdown-menu button:disabled{opacity:.48;cursor:not-allowed}
-      /* Directory toolbars stay compact even when their page styles are still loading. */
-      .children-directory .app-dropdown-trigger,.guardian-directory .app-dropdown-trigger{min-height:42px!important;padding:0 12px!important;font:800 11px/1 var(--font-body)!important;white-space:nowrap}
-      .children-directory .app-dropdown-trigger span,.guardian-directory .app-dropdown-trigger span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-      .children-directory .app-dropdown-menu button,.guardian-directory .app-dropdown-menu button{padding:9px 10px!important;font:700 11px/1.25 var(--font-body)!important}
-    `}</style></>;
-}
+  useEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const box = trigger.current?.getBoundingClientRect();
+      if (!box) return;
+      const below = window.innerHeight - box.bottom - 14, above = box.top - 14;
+      const upwards = below < 180 && above > below;
+      const width = Math.min(Math.max(box.width, 180), window.innerWidth - 24);
+      setPosition({ position: "fixed", width, left: Math.max(12, Math.min(box.left, window.innerWidth - width - 12)), maxHeight: Math.max(80, Math.min(280, upwards ? above : below)), ...(upwards ? { bottom: window.innerHeight - box.top + 6 } : { top: box.bottom + 6 }) });
+    };
+    const outside = (event: PointerEvent) => { if (!trigger.current?.contains(event.target as Node) && !menu.current?.contains(event.target as Node)) setOpen(false); };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    document.addEventListener("pointerdown", outside);
+    return () => { window.removeEventListener("resize", place); window.removeEventListener("scroll", place, true); document.removeEventListener("pointerdown", outside); };
+  }, [open]);
+  useEffect(() => { if (open) optionRefs.current[active]?.focus(); }, [open, active]);
+  useEffect(() => { if (props.disabled) setOpen(false); }, [props.disabled]);
 
+  const choose = (index: number) => {
+    const choice = choices[index], field = select.current;
+    if (!field || !choice || choice.disabled || field.disabled) return;
+    field.value = choice.value;
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+    field.dispatchEvent(new Event("change", { bubbles: true }));
+    setValue(field.value);
+    setOpen(false);
+    trigger.current?.focus();
+  };
+  const move = (direction: number) => {
+    let next = active;
+    for (let n = 0; n < choices.length; n++) { next = (next + direction + choices.length) % choices.length; if (!choices[next].disabled) { setActive(next); break; } }
+  };
+  const reveal = () => {
+    setActive(Math.max(0, choices.findIndex(choice => choice.value === value && !choice.disabled)));
+    setOpen(true);
+  };
+  const selected = choices.find(choice => choice.value === value)?.label || "Choose an option";
+  return <span className={`app-select${props.disabled ? " is-disabled" : ""}`}>
+    <select {...attributes} ref={node => { select.current = node; if (typeof forwardedRef === "function") forwardedRef(node); else if (forwardedRef) forwardedRef.current = node; }} data-app-dropdown="true" tabIndex={-1} aria-hidden="true"
+      onChange={event => { setValue(event.currentTarget.value); onChange?.(event); }}
+      onInvalid={event => { onInvalid?.(event); event.preventDefault(); trigger.current?.focus(); reveal(); }}
+      onFocus={event => { onFocus?.(event); trigger.current?.focus(); }}
+    >{children}</select>
+    <button ref={trigger} type="button" role="combobox" className="app-dropdown-trigger" style={fieldStyle} aria-label={label} aria-labelledby={props["aria-labelledby"]} aria-describedby={props["aria-describedby"]} aria-expanded={open} aria-controls={`${id}-options`} aria-haspopup="listbox" aria-required={props.required} disabled={props.disabled}
+      onClick={() => open ? setOpen(false) : reveal()}
+      onKeyDown={event => { if (["ArrowDown", "ArrowUp", "Enter", " "].includes(event.key)) { event.preventDefault(); reveal(); } }}
+    ><span>{selected}</span><FiChevronDown aria-hidden="true" /></button>
+    {open && createPortal(<div ref={menu} id={`${id}-options`} className="app-dropdown-menu" role="listbox" aria-label={label} style={position}
+      onKeyDown={event => {
+        if (event.key !== "Tab") event.stopPropagation();
+        if (event.key === "Escape") { event.preventDefault(); setOpen(false); trigger.current?.focus(); }
+        else if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); move(event.key === "ArrowDown" ? 1 : -1); }
+        else if (event.key === "Home" || event.key === "End") { event.preventDefault(); const enabled = choices.map((choice, i) => choice.disabled ? -1 : i).filter(i => i >= 0); setActive(event.key === "Home" ? enabled[0] : enabled[enabled.length - 1]); }
+        else if (event.key === "Tab") { setOpen(false); trigger.current?.focus(); }
+        else if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && event.key !== " ") { const now = Date.now(); typeahead.current = { text: (now - typeahead.current.at < 700 ? typeahead.current.text : "") + event.key.toLowerCase(), at: now }; const next = choices.findIndex(choice => !choice.disabled && choice.label.toLowerCase().startsWith(typeahead.current.text)); if (next >= 0) setActive(next); }
+      }}
+    >{choices.map((choice, index) => <button ref={node => { optionRefs.current[index] = node; }} key={`${choice.value}-${index}`} type="button" role="option" aria-selected={choice.value === value} disabled={choice.disabled} tabIndex={index === active ? 0 : -1} className={choice.value === value ? "selected" : ""} onClick={() => choose(index)}><span>{choice.label}</span>{choice.value === value && <FiCheck aria-hidden="true" />}</button>)}</div>, document.body)}
+  </span>;
+});
+
+// Compatibility export for older layouts. Fields now mount their own controls.
+export function GlobalDropdowns() { return null; }
 export const TeacherDropdownUpgrade = GlobalDropdowns;

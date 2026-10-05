@@ -1,5 +1,6 @@
 "use client";
 
+import { AppSelect } from "@/components/app-dropdown";
 import {
   type FormEvent,
   useCallback,
@@ -668,7 +669,7 @@ export default function RosterPage() {
               placeholder="Search teacher by name…"
             />
           </label>
-          <select
+          <AppSelect
             value={sundayFilter}
             onChange={(event) => setSundayFilter(event.target.value)}
           >
@@ -678,8 +679,8 @@ export default function RosterPage() {
                 {formatDate(date)}
               </option>
             ))}
-          </select>
-          <select
+          </AppSelect>
+          <AppSelect
             value={dutyFilter}
             onChange={(event) => setDutyFilter(event.target.value)}
           >
@@ -695,8 +696,8 @@ export default function RosterPage() {
                   {item.name}
                 </option>
               ))}
-          </select>
-          <select
+          </AppSelect>
+          <AppSelect
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
           >
@@ -704,7 +705,7 @@ export default function RosterPage() {
             <option value="ASSIGNED">Assigned</option>
             <option value="PRESENT">Present</option>
             <option value="ABSENT">Absent</option>
-          </select>
+          </AppSelect>
           <div className="export-wrap">
             <button
               className="export-button"
@@ -1446,7 +1447,7 @@ function AssignModal({
               <div className="pair">
                 <label>
                   Service
-                  <select
+                  <AppSelect
                     value={modal.serviceType}
                     onChange={(event) =>
                       setModal({
@@ -1458,11 +1459,11 @@ function AssignModal({
                   >
                     {!serviceOptions.length&&<option value="">No service configured</option>}
                     {serviceOptions.map(item=><option key={item.id} value={item.serviceType}>{item.name}</option>)}
-                  </select>
+                  </AppSelect>
                 </label>
                 <label>
                   Duty
-                  <select
+                  <AppSelect
                     required
                     value={modal.dutyId}
                     onChange={(event) =>
@@ -1479,14 +1480,14 @@ function AssignModal({
                         {item.name}
                       </option>
                     ))}
-                  </select>
+                  </AppSelect>
                 </label>
               </div>
             )}
             {modal.type === "NON_TEACHING" && (
               <label>
                 Duty
-                <select
+                <AppSelect
                   required
                   value={modal.dutyId}
                   onChange={(event) =>
@@ -1499,13 +1500,13 @@ function AssignModal({
                       {item.name}
                     </option>
                   ))}
-                </select>
+                </AppSelect>
               </label>
             )}
             {selectedDuty?.requiresClass && (
               <label>
                 Class
-                <select
+                <AppSelect
                   required
                   value={modal.classId}
                   onChange={(event) =>
@@ -1518,7 +1519,7 @@ function AssignModal({
                       {item.name}
                     </option>
                   ))}
-                </select>
+                </AppSelect>
               </label>
             )}
             <label>Assign Teacher(s)</label>

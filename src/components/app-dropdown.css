@@ -1,0 +1,12 @@
+.app-select{position:relative;display:inline-grid;vertical-align:middle;min-width:0;max-width:100%;width:100%;grid-template-columns:minmax(0,1fr);align-items:stretch}
+.app-select>select{grid-area:1/1;box-sizing:border-box;width:100%;min-width:0;opacity:0!important;pointer-events:none!important}
+.app-select>.app-dropdown-trigger{grid-area:1/1;z-index:1;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-width:0;min-height:42px;border:1px solid #d8dee8;border-radius:10px;padding:0 12px;background:#fff;color:#26354d;font:600 12px/1.4 var(--font-body),sans-serif;text-align:left;cursor:pointer}
+.app-dropdown-trigger>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.app-dropdown-trigger>svg{flex:none;font-size:16px;color:#6a7891;transition:transform .16s ease}.app-dropdown-trigger[aria-expanded=true]>svg{transform:rotate(180deg)}
+.app-select>.app-dropdown-trigger:hover{border-color:#aebbd0}.app-select>.app-dropdown-trigger:focus-visible,.app-select>.app-dropdown-trigger[aria-expanded=true]{outline:none;border-color:#ff7a59;box-shadow:0 0 0 3px rgb(255 93 52 / 12%)}
+.app-select>.app-dropdown-trigger:disabled{opacity:.6;cursor:not-allowed;background:#f7f6f3}
+.app-dropdown-menu{z-index:1000;box-sizing:border-box;display:grid;gap:2px;overflow:auto;padding:6px;border:1px solid #d8dee8;border-radius:11px;background:#fffdfa;box-shadow:0 14px 32px rgb(12 29 58 / 16%);font:600 12px/1.4 var(--font-body),sans-serif;overscroll-behavior:contain}
+.app-dropdown-menu>button{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:42px;border:0;border-radius:7px;padding:10px 12px;background:transparent;color:#26354d;font:inherit;text-align:left;cursor:pointer}.app-dropdown-menu>button>span{overflow-wrap:anywhere}.app-dropdown-menu>button>svg{flex:none}
+.app-dropdown-menu>button:hover,.app-dropdown-menu>button:focus-visible,.app-dropdown-menu>button.selected{outline:none;background:#fff1ec;color:#c84a2e}.app-dropdown-menu>button:disabled{opacity:.45;cursor:not-allowed}
+.teacher-phone-control>.app-select{width:102px;flex:none}.relationship-field>.app-select>select{height:48px;padding:10px 13px;font:500 14px var(--font-body)}
+.team-page .toolbar>.app-select{flex:none;width:210px}.team-pagination .app-select{width:65px}.team-pagination .app-dropdown-trigger{min-height:32px}.app-dropdown-host>.app-select{height:100%}
+@media(max-width:650px){.team-page .toolbar>.app-select{width:calc(50% - 5px);flex:1}.app-dropdown-menu>button{min-height:44px}}

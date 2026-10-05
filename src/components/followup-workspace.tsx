@@ -1,7 +1,8 @@
 "use client";
 /* The dynamic status labels mirror the API vocabulary exactly. */
 /* eslint-disable react/no-unescaped-entities */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { AppSelect } from "@/components/app-dropdown";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FiAlertTriangle,
   FiCheckCircle,
@@ -16,6 +17,9 @@ import {
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
 import { StatCard, type StatCardTone } from "@/components/stat-card";
 import { DataViewToggle, type DataView } from "@/components/data-view-toggle";
+import { ClassBadge, RecordBadge } from "@/components/record-badge";
+import { useProfileDialog } from "@/components/use-profile-dialog";
+import "./followup-refinements.css";
 type Case = {
   id: number;
   familyId: number;
@@ -33,7 +37,7 @@ type Case = {
   ownerName: string;
   followUpSentBy?: string | null;
 };
-type Detail = Case & {
+type Detail = Omit<Case, "children"> & {
   reason?: string;
   notes?: string;
   expectedBack?: string;
@@ -105,11 +109,16 @@ export function FollowupWorkspace() {
     [classId, setClassId] = useState(""),
     [missed, setMissed] = useState(""),
     [month, setMonth] = useState(""),
-    [year, setYear] = useState(String(new Date().getFullYear())),
+    [year, setYear] = useState(""),
+    [ownerId, setOwnerId] = useState(""),
+    [status, setStatus] = useState(""),
     [assignees, setAssignees] = useState<Assignee[]>([]),
     [followupRecipients, setFollowupRecipients] = useState<FollowupRecipient[]>([]),
     [page, setPage] = useState(1),
+    [pageSize, setPageSize] = useState(10),
     [total, setTotal] = useState(0),
+    [childrenTotal, setChildrenTotal] = useState(0),
+    [loading, setLoading] = useState(true),
     [detail, setDetail] = useState<Detail | null>(null),
     [drawerTab, setDrawerTab] = useState<"children" | "contact" | "history">(
       "children",
@@ -120,6 +129,7 @@ export function FollowupWorkspace() {
     [expectedBack, setExpectedBack] = useState(""),
     [error, setError] = useState(""),
     [display, setDisplay] = useState<DataView>("LIST");
+  const request = useRef(0);
   useEffect(() => {
     const saved = window.localStorage.getItem("tpk:followups-display");
     if (saved === "GRID" || saved === "LIST") setDisplay(saved);
@@ -129,38 +139,54 @@ export function FollowupWorkspace() {
     setDisplay(value);
     window.localStorage.setItem("tpk:followups-display", value);
   };
-  const load = useCallback(async () => {
-    if (!session) return;
+  const load = useCallback(async (signal?: AbortSignal) => {
+    if (!session) { setLoading(false); return; }
+    const current = ++request.current;
+    setLoading(true); setError("");
     try {
-      const p = new URLSearchParams({ tab, page: String(page), limit: "25" });
+      const p = new URLSearchParams({ tab, page: String(page), limit: String(pageSize) });
       if (query) p.set("search", query);
       if (classId) p.set("classId", classId);
       if (missed) p.set("missed", missed);
-      if (month) { p.set("month", month); p.set("year", year); }
+      if (month) p.set("month", month);
+      if (year) p.set("year", year);
+      if (ownerId) p.set("ownerId", ownerId);
+      if (status) p.set("status", status);
       const [a, b] = await Promise.all([
         fetch(`${apiBase}/api/v1/follow-ups?${p}`, {
           headers: authHeaders(session),
+          signal, cache: "no-store",
         }),
         fetch(`${apiBase}/api/v1/follow-ups/summary`, {
           headers: authHeaders(session),
+          signal, cache: "no-store",
         }),
       ]);
       const ar = await a.json(),
         br = await b.json();
-      if (!ar.success)
-        throw new Error(ar.error?.message || "We could not load follow-ups.");
+      if (!a.ok || !ar.success || !b.ok || !br.success)
+        throw new Error("We couldn’t load follow-ups. Please try again.");
+      if (current !== request.current || signal?.aborted) return;
       setRows(ar.data || []);
-      setTotal(ar.meta?.total || 0);
+      setTotal(Number(ar.meta?.total || 0));
+      setChildrenTotal(Number(ar.meta?.childrenTotal || 0));
       if (br.success) setSummary(br.data);
+      const lastPage = Math.max(1, Math.ceil(Number(ar.meta?.total || 0) / pageSize));
+      if (page > lastPage) setPage(lastPage);
       setError("");
     } catch (e) {
+      if (current !== request.current || signal?.aborted) return;
       setError(
         e instanceof Error ? e.message : "We could not load follow-ups.",
       );
+    } finally {
+      if (current === request.current && !signal?.aborted) setLoading(false);
     }
-  }, [session, tab, page, query, classId, missed, month, year]);
+  }, [session, tab, page, pageSize, query, classId, missed, month, year, ownerId, status]);
   useEffect(() => {
-    void load();
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => void load(controller.signal), query ? 180 : 0);
+    return () => { window.clearTimeout(timer); controller.abort(); };
   }, [load]);
   useEffect(() => {
     if (!session) return;
@@ -234,9 +260,14 @@ export function FollowupWorkspace() {
     ["contacted", `Contacted (${summary.contacted})`],
     ["leadership", `Follow-Up Report Sent (${summary.needsLeadership})`],
   ];
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const hasFilters = Boolean(query || classId || missed || month || year || ownerId || status);
+  const clearFilters = () => { setQuery(""); setClassId(""); setMissed(""); setMonth(""); setYear(""); setOwnerId(""); setStatus(""); setPage(1); };
+  const rangeStart = total ? (page - 1) * pageSize + 1 : 0;
+  const rangeEnd = Math.min(page * pageSize, total);
   return (
     <>
-      <section className="followup">
+      <section className="followup followup-refined">
         <header>
           <p className="eyebrow">Petra Wuse</p>
           <h1>Relations &amp; Follow-Up</h1>
@@ -248,14 +279,14 @@ export function FollowupWorkspace() {
         <section className="cards">
           <Card
             value={summary.needFollowUp}
-            label="Need Follow-Up"
+            label="Families to Follow Up"
             text={`${summary.childrenAcrossNeedFollowUp} children across ${summary.needFollowUp} families`}
             tone="red"
           />
           <Card
             value={summary.contacted}
             label="Contacted"
-            text="Follow-up completed"
+            text="Families contacted"
             tone="green"
           />
           <Card
@@ -271,13 +302,15 @@ export function FollowupWorkspace() {
             tone="purple"
           />
         </section>
-        <nav className="tabs">
+        <nav className="tabs" aria-label="Follow-up progress">
           {tabs.map(([id, label]) => (
             <button
               className={tab === id ? "on" : ""}
               key={id}
+              aria-current={tab === id ? "page" : undefined}
               onClick={() => {
                 setTab(id);
+                setStatus("");
                 setPage(1);
               }}
             >
@@ -295,10 +328,12 @@ export function FollowupWorkspace() {
                 setPage(1);
               }}
               placeholder="Search family, child or guardian…"
+              aria-label="Search family, child, guardian or phone"
             />
           </label>
           <span className="app-dropdown-host">
-            <select
+            <AppSelect
+              aria-label="Filter by class"
               onChange={(e) => {
                 setClassId(e.target.value);
                 setPage(1);
@@ -307,35 +342,36 @@ export function FollowupWorkspace() {
             >
               <option value="">All Classes</option>
               {classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-            </select>
+            </AppSelect>
           </span>
           <span className="app-dropdown-host">
-            <select
+            <AppSelect
+              aria-label="Filter by missed Sundays"
               onChange={(e) => {
                 setMissed(e.target.value);
                 setPage(1);
               }}
               value={missed}
             >
-              <option value="">All Missed</option>
+              <option value="">All missed Sundays</option>
               <option value="1">1+ Sunday</option>
               <option value="2">2+ Sundays</option>
               <option value="3">3+ Sundays</option>
-            </select>
+            </AppSelect>
           </span>
-          <span className="app-dropdown-host"><select aria-label="Filter by month" onChange={(e) => { setMonth(e.target.value); setPage(1); }} value={month}><option value="">All months</option>{months.map((label, index) => <option key={label} value={String(index + 1)}>Filter by {label}</option>)}</select></span>
-          <span className="app-dropdown-host"><select aria-label="Filter by year" onChange={(e) => { setYear(e.target.value); setPage(1); }} value={year}><option value="">All years</option>{years.map((value) => <option key={value} value={value}>Filter by {value}</option>)}</select></span>
-          <DataViewToggle value={display} onChange={setFollowupDisplay} gridLabel="Follow-up cards" listLabel="Follow-up table" />
+          <span className="app-dropdown-host"><AppSelect aria-label="Filter by month" onChange={(e) => { setMonth(e.target.value); setPage(1); }} value={month}><option value="">All months</option>{months.map((label, index) => <option key={label} value={String(index + 1)}>Filter by {label}</option>)}</AppSelect></span>
+          <span className="app-dropdown-host"><AppSelect aria-label="Filter by year" onChange={(e) => { setYear(e.target.value); setPage(1); }} value={year}><option value="">All years</option>{years.map((value) => <option key={value} value={value}>Filter by {value}</option>)}</AppSelect></span>
+          {canManage && <span className="app-dropdown-host"><AppSelect aria-label="Filter by assigned teacher" value={ownerId} onChange={event => { setOwnerId(event.target.value); setPage(1); }}><option value="">All assignments</option><option value="unassigned">Not assigned</option>{assignees.map(person => <option key={person.id} value={person.id}>{person.name}</option>)}</AppSelect></span>}
+          {tab === "needs" && <span className="app-dropdown-host"><AppSelect aria-label="Filter by progress" value={status} onChange={event => { setStatus(event.target.value); setPage(1); }}><option value="">All pending progress</option><option value="NEEDS_FOLLOW_UP">Needs follow-up</option><option value="COULDNT_REACH">Couldn’t reach</option></AppSelect></span>}
         </section>
-        <p className="count">
-          {total}{" "}
-          {tab === "needs" ? "families need follow-up" : "follow-up cases"}
-        </p>
+        <div className="followup-results-heading"><div><h2>{loading ? "Loading families…" : `${total} ${total === 1 ? "family" : "families"}${hasFilters ? " matching your filters" : tab === "needs" ? " need follow-up" : " in this view"}`}</h2><p>{loading ? "Getting the latest follow-up records." : `${childrenTotal} ${childrenTotal === 1 ? "child" : "children"} across these families. Open a family to assign a call or record an update.`}</p></div><div>{hasFilters && <button type="button" className="followup-clear" onClick={clearFilters}>Clear filters</button>}<DataViewToggle value={display} onChange={setFollowupDisplay} gridLabel="Follow-up cards" listLabel="Follow-up table" /></div></div>
         {error ? (
-          <p className="error">{error}</p>
+          <div role="alert" className="followup-error"><p>{error}</p><button type="button" onClick={() => void load()}>Try again</button></div>
+        ) : loading ? (
+          <div className="followup-loading" role="status" aria-label="Loading follow-up records">{Array.from({length:5},(_,index)=><div key={index} className="skeleton" />)}</div>
         ) : (
           display === "LIST" ? <div className="table">
-            <table>
+            <table aria-label="Family follow-up cases">
               <thead>
                 <tr>
                   <th>Family / Children</th>
@@ -345,38 +381,33 @@ export function FollowupWorkspace() {
                   <th>Contact</th>
                   <th>Assigned To</th>
                   <th>Progress</th>
-                  <th />
+                  <th><span className="followup-sr-only">Open family</span></th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row) => (
                   <tr key={row.id} onClick={() => void open(row.id)}>
                     <td>
-                      <b>
-                        {row.childrenCount === 1
-                          ? childNames(row.children)
-                          : `${row.familyName} Family · ${row.childrenCount} children`}
-                      </b>
-                      <small>{childNames(row.children)}</small>
+                      <div className="followup-family"><i aria-hidden="true">{row.familyName.slice(0,2).toUpperCase()}</i><div><b>{row.familyName} Family</b><small>{row.childrenCount} {Number(row.childrenCount) === 1 ? "child" : "children"} · {childNames(row.children)}</small></div></div>
                     </td>
-                    <td>{row.classes}</td>
+                    <td><div className="followup-class-badges">{row.classes.split(", ").map(name => <ClassBadge key={name} name={name === "—" ? undefined : name} />)}</div></td>
                     <td>{date(row.lastAttended)}</td>
                     <td>
-                      <em>
+                      <RecordBadge tone="amber">
                         {row.missedSundays || 1} Sunday
                         {(row.missedSundays || 1) === 1 ? "" : "s"}
-                      </em>
+                      </RecordBadge>
                     </td>
                     <td>
                       <b>{row.guardianName || "Primary guardian"}</b>
                       <small>{row.guardianPhone || "Phone unavailable"}</small>
                     </td>
-                    <td>{row.ownerName === "Unassigned" ? "Not assigned" : row.ownerName}</td>
+                    <td><span className={row.ownerName === "Unassigned" ? "followup-unassigned" : "followup-assigned"}>{row.ownerName === "Unassigned" ? "Not assigned" : row.ownerName}</span></td>
                     <td>
                       <Badge status={row.status} />
                     </td>
                     <td>
-                      <FiChevronRight />
+                      <button className="followup-open" type="button" aria-label={`Open ${row.familyName} family follow-up`} onClick={event => { event.stopPropagation(); void open(row.id); }}>View <FiChevronRight /></button>
                     </td>
                   </tr>
                 ))}
@@ -397,11 +428,12 @@ export function FollowupWorkspace() {
             {rows.map((row) => <article key={row.id} onClick={() => void open(row.id)}>
               <header><span><b>{row.childrenCount === 1 ? childNames(row.children) : `${row.familyName} Family`}</b><small>{row.childrenCount} {row.childrenCount === 1 ? "child" : "children"} · {row.classes}</small></span><Badge status={row.status} /></header>
               <div><span><small>Last attended</small><b>{date(row.lastAttended)}</b></span><span><small>Missed</small><em>{row.missedSundays || 1} Sunday{(row.missedSundays || 1) === 1 ? "" : "s"}</em></span></div>
-              <footer><span><small>Contact</small><b>{row.guardianName || "Primary guardian"}</b></span><FiChevronRight /></footer>
+              <footer><span><small>Contact · {row.ownerName === "Unassigned" ? "Not assigned" : row.ownerName}</small><b>{row.guardianName || "Primary guardian"}</b></span><button className="followup-open" type="button" aria-label={`Open ${row.familyName} family follow-up`} onClick={event => { event.stopPropagation(); void open(row.id); }}>View <FiChevronRight /></button></footer>
             </article>)}
             {!rows.length && <p className="followup-grid-empty">No follow-up cases found.</p>}
           </div>
-        )}{" "}
+        )}
+        <footer className="followup-pagination"><span aria-live="polite">{loading ? "Loading…" : `Showing ${rangeStart}–${rangeEnd} of ${total} families`}</span><label>Rows per page <AppSelect aria-label="Families per page" value={pageSize} disabled={loading} onChange={event => { setPageSize(Number(event.target.value)); setPage(1); }}>{[10,25,50].map(size=><option key={size} value={size}>{size}</option>)}</AppSelect></label><div><button type="button" disabled={loading || page <= 1} onClick={() => setPage(value => value - 1)}>Previous</button><span>Page {page} of {pages}</span><button type="button" disabled={loading || page >= pages} onClick={() => setPage(value => value + 1)}>Next</button></div></footer>
         {detail && (
           <Drawer
             detail={detail}
@@ -447,11 +479,8 @@ function Card({
   return <StatCard icon={tone === "green" ? <FiCheckCircle /> : tone === "amber" ? <FiClock /> : <FiUsers />} value={value} title={label} description={text} tone={tone === "red" ? "orange" : tone === "amber" ? "yellow" : tone} />;
 }
 function Badge({ status }: { status: string }) {
-  const text =
-    status === "COULDNT_REACH"
-      ? "Couldn't Reach"
-      : status.replaceAll("_", " ").replace(/\b\w/g, (x) => x.toUpperCase());
-  return <span className={`badge ${status}`}>{text}</span>;
+  const text = status === "COULDNT_REACH" ? "Couldn’t reach" : status.toLowerCase().replaceAll("_", " ").replace(/^./, x => x.toUpperCase());
+  return <RecordBadge dot tone={status === "CONTACTED" || status === "RESOLVED" ? "green" : status === "COULDNT_REACH" ? "amber" : "rose"}>{text}</RecordBadge>;
 }
 function Drawer({
   detail,
@@ -490,6 +519,7 @@ function Drawer({
   assign: (staffUserId: number) => void;
   followupRecipients: FollowupRecipient[];
 }) {
+  useProfileDialog(close, ".followup .backdrop aside");
   const g = detail.primaryContact;
   const [assignee, setAssignee] = useState("");
   const [recipientId, setRecipientId] = useState("");
@@ -500,19 +530,19 @@ function Drawer({
   const recipientHref = recipient ? `https://wa.me/${recipient.phone.replace(/\D/g, "").replace(/^0/, "234")}?text=${encodeURIComponent(recipientMessage)}` : "#";
   return (
     <div className="backdrop" onMouseDown={close}>
-      <aside onMouseDown={(e) => e.stopPropagation()}>
-        <button className="close" onClick={close}>
+      <aside role="dialog" aria-modal="true" aria-label="Family follow-up" onMouseDown={(e) => e.stopPropagation()}>
+        <button className="close" aria-label="Close family follow-up" onClick={close}>
           <FiX />
         </button>
         <h2>
           {detail.childrenCount === 1
-            ? childNames(detail.children)
+            ? `${detail.children[0]?.firstName || ""} ${detail.children[0]?.lastName || ""}`.trim()
             : `${detail.familyName} Family`}
         </h2>
         <Badge status={detail.status} />
         <p>
-          {detail.childrenCount} children · {detail.missedSundays || 1} Sundays
-          missed
+          {detail.childrenCount} {Number(detail.childrenCount) === 1 ? "child" : "children"} · {detail.missedSundays || 1} {(detail.missedSundays || 1) === 1 ? "Sunday" : "Sundays"}
+          {" "}missed
         </p>
         <nav>
           {(["children", "contact", "history"] as const).map((x) => (
@@ -548,7 +578,7 @@ function Drawer({
               <span className="assignment-kicker">Follow-up lead</span>
               <h3>Assign this family call</h3>
               <p>Only the selected teacher will receive and see this task in My Follow-Ups.</p>
-              <div><select value={assignee} onChange={(event) => setAssignee(event.target.value)}><option value="">Choose a regular teacher</option>{assignees.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select><button type="button" disabled={!assignee} onClick={() => assign(Number(assignee))}>Assign call</button></div>
+              <div><AppSelect value={assignee} onChange={(event) => setAssignee(event.target.value)}><option value="">Choose a regular teacher</option>{assignees.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</AppSelect><button type="button" disabled={!assignee} onClick={() => assign(Number(assignee))}>Assign call</button></div>
             </div>}
             <div className="contact">
               <h3>Primary Contact</h3>
@@ -576,9 +606,9 @@ function Drawer({
             {followupRecipients.length > 0 && <div className="contact lead-contact">
               <h3>Message a follow-up lead</h3>
               <small>Choose a lead and WhatsApp will open with a short dashboard prompt.</small>
-              <select value={recipientId} onChange={(event) => setRecipientId(event.target.value)} aria-label="Follow-up lead">
+              <AppSelect value={recipientId} onChange={(event) => setRecipientId(event.target.value)} aria-label="Follow-up lead">
                 {followupRecipients.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
-              </select>
+              </AppSelect>
               <a className="lead-contact-link" href={recipientHref} target="_blank" rel="noreferrer" aria-disabled={!recipient}>
                 <FiMessageCircle /> Message selected lead
               </a>
@@ -602,7 +632,7 @@ function Drawer({
               ))}
               <label>
                 Reason for absence
-                <select
+                <AppSelect
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                 >
@@ -613,7 +643,7 @@ function Drawer({
                   <option>School / activity conflict</option>
                   <option>Transport</option>
                   <option>Other</option>
-                </select>
+                </AppSelect>
               </label>
               <label>
                 Notes

@@ -1,5 +1,6 @@
 "use client";
 
+import { AppSelect } from "@/components/app-dropdown";
 import Link from "next/link";
 import {useProfileDialog} from "@/components/use-profile-dialog";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -259,7 +260,7 @@ export function GuardianDirectory() {
             />
           </label>
           <span className="app-dropdown-host">
-            <select
+            <AppSelect
               value={relationship}
               onChange={(e) => reset(() => setRelationship(e.target.value))}
             >
@@ -267,13 +268,13 @@ export function GuardianDirectory() {
               {relationships.map((x) => (
                 <option key={x}>{x}</option>
               ))}
-            </select>
+            </AppSelect>
           </span>
 
-          <label className="directory-filter"><span>Status</span><select data-dropdown-native aria-label="Guardian status" value={active} onChange={e=>reset(()=>setActive(e.target.value))}><option value="">All statuses</option><option value="1">Active</option><option value="0">Inactive</option></select></label>
-          <label className="directory-filter"><span>Linked children</span><select data-dropdown-native aria-label="Linked children" value={childCount} onChange={e=>reset(()=>setChildCount(e.target.value))}><option value="">Any number</option><option value="2">2 or more</option><option value="3">3 or more</option></select></label>
-          <label className="directory-filter"><span>Pickup access</span><select data-dropdown-native aria-label="Additional pickup person" value={hasPickup} onChange={e=>reset(()=>setHasPickup(e.target.value))}><option value="">All guardians</option><option value="1">Additional pickup person</option></select></label>
-          <label className="directory-filter"><span>Sort by name</span><select data-dropdown-native aria-label="Sort guardians" value={order} onChange={e=>reset(()=>setOrder(e.target.value))}><option value="asc">Name A–Z</option><option value="desc">Name Z–A</option></select></label>
+          <label className="directory-filter"><span>Status</span><AppSelect aria-label="Guardian status" value={active} onChange={e=>reset(()=>setActive(e.target.value))}><option value="">All statuses</option><option value="1">Active</option><option value="0">Inactive</option></AppSelect></label>
+          <label className="directory-filter"><span>Linked children</span><AppSelect aria-label="Linked children" value={childCount} onChange={e=>reset(()=>setChildCount(e.target.value))}><option value="">Any number</option><option value="2">2 or more</option><option value="3">3 or more</option></AppSelect></label>
+          <label className="directory-filter"><span>Pickup access</span><AppSelect aria-label="Additional pickup person" value={hasPickup} onChange={e=>reset(()=>setHasPickup(e.target.value))}><option value="">All guardians</option><option value="1">Additional pickup person</option></AppSelect></label>
+          <label className="directory-filter"><span>Sort by name</span><AppSelect aria-label="Sort guardians" value={order} onChange={e=>reset(()=>setOrder(e.target.value))}><option value="asc">Name A–Z</option><option value="desc">Name Z–A</option></AppSelect></label>
           <div className="guardian-export">
             <button onClick={() => setExportOpen((x) => !x)}>
               <FiDownload />
