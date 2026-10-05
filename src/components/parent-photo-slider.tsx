@@ -14,7 +14,7 @@ export function ParentPhotoSlider({ compact = false, audience = "parent" }: { co
   useEffect(() => { setImageReady(false); const timer = window.setInterval(() => setSlideIndex((index) => (index + 1) % slides.length), 5_000); return () => window.clearInterval(timer); }, [slides.length]);
   return <aside className={`parent-photo-slider ${compact ? "parent-photo-slider-compact" : ""} ${imageReady ? "is-ready" : "is-loading"}`} aria-label="Moments from TribePetra Kids">
     <div className="parent-photo-slider-loader" aria-hidden="true"><span /><span /><span /></div>
-    <Image alt="" className="parent-photo-slider-image" fill key={slides[slideIndex]} onLoad={() => setImageReady(true)} priority={slideIndex === 0} sizes="(max-width: 920px) 100vw, 48vw" src={`${folder}/${slides[slideIndex]}`} />
+    <Image alt="" className="parent-photo-slider-image" fill key={slides[slideIndex]} onLoad={() => setImageReady(true)} priority={slideIndex === 0} sizes="(max-width: 920px) 100vw, 48vw" src={`${folder}/${slides[slideIndex]}`} style={{ objectFit: "cover", objectPosition: "center" }} />
     <div className="parent-photo-slider-shade" /><div className="parent-photo-slider-brand"><Image alt="TribePetra Kids" className="parent-photo-slider-logo" height={58} src="/brand/tpk-logo.png" width={300} style={{ filter: "none", mixBlendMode: "normal" }} /><span>Wuse Campus</span></div>
     <div className="parent-photo-slider-copy"><h2>Building Jesus<br />Kids Communities<br />Globally.</h2><i /><p>A warm, fun and safe place for every child to belong, learn and grow.</p></div><small className="parent-photo-slider-footer">Check in &nbsp;•&nbsp; Belong &nbsp;•&nbsp; Grow</small>
   </aside>;
