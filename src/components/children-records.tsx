@@ -1,0 +1,70 @@
+"use client";
+
+import Link from "next/link";
+import { FiChevronDown, FiChevronRight, FiPhone } from "react-icons/fi";
+import "./children-records.css";
+
+export type ChildRecord = {
+  id: number;
+  firstName: string;
+  lastName: string;
+  age?: number;
+  gender?: string;
+  className?: string;
+  guardianId?: number;
+  guardianName?: string;
+  guardianPhone?: string;
+  lastAttended?: string;
+};
+type Props = { rows: ChildRecord[]; onOpen: (id: number) => void };
+const nameOf = (child: ChildRecord) => `${child.firstName} ${child.lastName}`.trim();
+const ageOf = (child: ChildRecord) => child.age == null ? "Age not recorded" : child.age === 0 ? "Under 1 year" : `${child.age} ${child.age === 1 ? "year" : "years"} old`;
+const genderOf = (child: ChildRecord) => child.gender === "FEMALE" ? "Female" : child.gender === "MALE" ? "Male" : "Not recorded";
+const lastSeen = (child: ChildRecord) => {
+  if (!child.lastAttended) return "No attendance yet";
+  const value = new Date(`${child.lastAttended.slice(0, 10)}T12:00:00Z`);
+  return Number.isNaN(value.getTime()) ? "Date not recorded" : new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(value);
+};
+
+function ChildName({ child, onOpen }: { child: ChildRecord; onOpen: Props["onOpen"] }) {
+  return <button type="button" className="record-child-name" onClick={() => onOpen(child.id)} aria-label={`View ${nameOf(child)}’s profile`}>
+    <span className="record-child-avatar" aria-hidden="true">{`${child.firstName[0] || ""}${child.lastName[0] || ""}`.toUpperCase()}</span>
+    <span className="record-child-title"><strong>{nameOf(child)}</strong><small>{ageOf(child)}</small></span>
+  </button>;
+}
+
+function GuardianContact({ child }: { child: ChildRecord }) {
+  return <div className="record-guardian-contact">
+    {child.guardianId && child.guardianName ? <Link href={`/account/guardians?guardianId=${child.guardianId}`} onClick={(event) => event.stopPropagation()}>{child.guardianName}</Link> : <span className={child.guardianName ? "" : "record-muted"}>{child.guardianName || "Guardian not recorded"}</span>}
+    <small><FiPhone aria-hidden="true" />{child.guardianPhone || "Phone not provided"}</small>
+  </div>;
+}
+
+export function ChildrenGrid({ rows, onOpen }: Props) {
+  return <div className="children-records-grid">
+    {rows.map((child) => <article className="child-directory-card" key={child.id}>
+      <header><ChildName child={child} onOpen={onOpen} /></header>
+      <dl className="record-child-facts">
+        <div><dt>Class</dt><dd><span className={`record-class ${child.className ? "" : "unassigned"}`}>{child.className || "Not assigned"}</span></dd></div>
+        <div><dt>Gender</dt><dd>{genderOf(child)}</dd></div>
+      </dl>
+      <section className="record-guardian"><h3>Parent or guardian</h3><GuardianContact child={child} /></section>
+      <footer><div><span>Last attended</span><b>{lastSeen(child)}</b></div><button type="button" className="record-profile-action" onClick={() => onOpen(child.id)} aria-label={`Open ${nameOf(child)}’s profile`}>View profile <FiChevronRight aria-hidden="true" /></button></footer>
+    </article>)}
+  </div>;
+}
+
+export function ChildrenList({ rows, onOpen, sort, order, onSort }: Props & { sort: string; order: string; onSort: (field: string) => void }) {
+  const heading = (label: string, field: string) => <th scope="col" aria-sort={sort === field ? order === "asc" ? "ascending" : "descending" : "none"}><button type="button" className={`record-sort ${sort === field ? "active" : ""}`} onClick={() => onSort(field)}>{label}<FiChevronDown className={sort === field && order === "desc" ? "descending" : ""} aria-hidden="true" /></button></th>;
+  return <div className="children-records-list"><table><caption className="record-sr-only">Children, their class, guardian contact and last attendance</caption><thead><tr>{heading("Child", "name")}{heading("Class", "class")}{heading("Age", "age")}{heading("Gender", "gender")}{heading("Parent or guardian", "guardian")}{heading("Last attended", "lastAttended")}<th scope="col"><span className="record-sr-only">Profile</span></th></tr></thead><tbody>
+    {rows.map((child) => <tr key={child.id}>
+      <td className="record-list-child"><ChildName child={child} onOpen={onOpen} /></td>
+      <td className="record-list-class" data-label="Class"><span className={`record-class ${child.className ? "" : "unassigned"}`}>{child.className || "Not assigned"}</span></td>
+      <td className="record-list-age" data-label="Age">{child.age == null ? "Not recorded" : child.age === 0 ? "Under 1" : child.age}</td>
+      <td className="record-list-gender" data-label="Gender">{genderOf(child)}</td>
+      <td className="record-list-guardian" data-label="Parent or guardian"><GuardianContact child={child} /></td>
+      <td className="record-list-attendance" data-label="Last attended">{lastSeen(child)}</td>
+      <td className="record-list-action"><button type="button" className="record-profile-action" onClick={() => onOpen(child.id)} aria-label={`Open ${nameOf(child)}’s profile`}>View <FiChevronRight aria-hidden="true" /></button></td>
+    </tr>)}
+  </tbody></table></div>;
+}

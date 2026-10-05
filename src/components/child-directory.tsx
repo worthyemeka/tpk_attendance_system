@@ -19,6 +19,7 @@ import {
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
 import { StatCard, type StatCardTone } from "@/components/stat-card";
 import { DataViewToggle, type DataView } from "@/components/data-view-toggle";
+import { ChildrenGrid, ChildrenList } from "@/components/children-records";
 import "./child-directory-refinement.css";
 
 type Session = ReturnType<typeof readTeacherSession>;
@@ -416,7 +417,7 @@ export function ChildDirectory() {
           <div>
             <p className="eyebrow">People</p>
             <h1>Children</h1>
-            <p>View and manage children registered with TribePetra Kids.</p>
+            <p>Find a child, contact their guardian, or review their attendance.</p>
           </div>
           <Link className="add-child" href="/account/check-in/assisted">
             <b>+</b>Add Child
@@ -465,12 +466,13 @@ export function ChildDirectory() {
             <input
               value={query}
               onChange={(e) => reset(() => setQuery(e.target.value))}
-              placeholder="Search child, guardian or phone number…"
+              aria-label="Search children"
+              placeholder="Search by child, guardian or phone…"
             />
           </label>
           <span className="app-dropdown-host">
             <select
-              aria-label="All classes"
+              aria-label="Filter children by class"
               value={classId}
               onChange={(e) => reset(() => setClassId(e.target.value))}
             >
@@ -484,11 +486,11 @@ export function ChildDirectory() {
           </span>
           <span className="app-dropdown-host">
             <select
-              aria-label="All sexes"
+              aria-label="Filter children by gender"
               value={gender}
               onChange={(e) => reset(() => setGender(e.target.value))}
             >
-              <option value="">All Sexes</option>
+              <option value="">All genders</option>
               <option value="MALE">Male</option>
               <option value="FEMALE">Female</option>
             </select>
@@ -502,145 +504,41 @@ export function ChildDirectory() {
             {exports && (
               <div>
                 <button onClick={() => void exportAttendancePdf()} disabled={exporting}>
-                  {exporting ? "Preparing…" : "Attendance PDF"}
+                  {exporting ? "Preparing…" : "Attendance report (PDF)"}
                 </button>
-                <button onClick={exportCsv}>CSV</button>
+                <button onClick={exportCsv}>Children directory (CSV)</button>
               </div>
             )}
           </div>
-          <DataViewToggle value={display} onChange={setChildDisplay} gridLabel="Children grid" listLabel="Children list" />
         </section>
-        <p className="children-count">
-          {loading ? "Loading children…" : `${total} children`}
-        </p>
+        <div className="directory-results-heading">
+          <div><p className="children-count" role="status">{loading ? "Updating children…" : `${total} ${total === 1 ? "child" : "children"}`}</p><p className="directory-results-note">Open a profile to see family details and attendance.</p></div>
+          <div className="directory-view-controls">
+            {(query || classId || gender) && <button type="button" className="directory-clear" onClick={clear}>Clear filters</button>}
+            <label className="directory-sort"><span>Sort by</span><select aria-label="Sort children" value={`${sort}:${order}`} onChange={(event) => { const [field, direction] = event.target.value.split(":"); setSort(field); setOrder(direction); setPage(1); }}>
+              <option value="name:asc">Name: A–Z</option><option value="name:desc">Name: Z–A</option>
+              <option value="age:asc">Age: youngest first</option><option value="age:desc">Age: oldest first</option>
+              <option value="class:asc">Class: A–Z</option><option value="class:desc">Class: Z–A</option>
+              <option value="gender:asc">Gender: A–Z</option><option value="gender:desc">Gender: Z–A</option>
+              <option value="guardian:asc">Guardian: A–Z</option><option value="guardian:desc">Guardian: Z–A</option>
+              <option value="lastAttended:desc">Last attended: newest</option><option value="lastAttended:asc">Last attended: oldest</option>
+            </select></label>
+            <DataViewToggle value={display} onChange={setChildDisplay} gridLabel="View children as cards" listLabel="View children as a list" />
+          </div>
+        </div>
         {error ? (
           <p className="child-error">{error}</p>
         ) : (
           <>
-            {display === "LIST" ? <div className="children-table">
-              <table>
-                <thead>
-                  <tr>
-                    <SortHeader
-                      label="#"
-                      field="id"
-                      sort={sort}
-                      order={order}
-                      onSort={toggleSort}
-                    />
-                    <SortHeader
-                      label="Child"
-                      field="name"
-                      sort={sort}
-                      order={order}
-                      onSort={toggleSort}
-                    />
-                    <SortHeader
-                      label="Class"
-                      field="class"
-                      sort={sort}
-                      order={order}
-                      onSort={toggleSort}
-                    />
-                    <SortHeader
-                      label="Age"
-                      field="age"
-                      sort={sort}
-                      order={order}
-                      onSort={toggleSort}
-                    />
-                    <SortHeader
-                      label="Sex"
-                      field="gender"
-                      sort={sort}
-                      order={order}
-                      onSort={toggleSort}
-                    />
-                    <SortHeader
-                      label="Guardian"
-                      field="guardian"
-                      sort={sort}
-                      order={order}
-                      onSort={toggleSort}
-                    />
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row, index) => (
-                    <tr key={row.id} onClick={() => void open(row.id)}>
-                      <td>{(page - 1) * 25 + index + 1}</td>
-                      <td>
-                        <span className="child-person">
-                          <i>{initials(row.firstName, row.lastName)}</i>
-                          <b>
-                            {row.firstName} {row.lastName}
-                          </b>
-                        </span>
-                      </td>
-                      <td>{row.className || "—"}</td>
-                      <td>{row.age ?? "—"}</td>
-                      <td>
-                        <span
-                          className={`sex-badge ${row.gender === "FEMALE" ? "female" : "male"}`}
-                        >
-                          {pretty(row.gender)}
-                        </span>
-                      </td>
-                      <td>
-                        <Link
-                          className="guardian-cell"
-                          href={`/account/guardians?guardianId=${row.guardianId || ""}`}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <b>{row.guardianName || "Not recorded"}</b>
-                          <small>
-                            {row.guardianPhone || "Phone unavailable"}
-                          </small>
-                        </Link>
-                      </td>
-                      <td>
-                        <button
-                          aria-label={`Open ${row.firstName} ${row.lastName}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void open(row.id);
-                          }}
-                        >
-                          <FiChevronRight />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {!loading && !rows.length && (
-                    <tr>
-                      <td className="empty" colSpan={7}>
-                        {query || classId || gender ? (
-                          <>
-                            <b>No children found</b>
-                            <small>Try changing your search or filters.</small>
-                          </>
-                        ) : (
-                          <>
-                            <b>No children registered yet</b>
-                            <small>
-                              Children will appear here once registration
-                              begins.
-                            </small>
-                          </>
-                        )}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div> : <div className="child-record-grid">
-              {rows.map((row) => <article key={row.id} onClick={() => void open(row.id)}>
-                <header><i>{initials(row.firstName, row.lastName)}</i><span><b>{row.firstName} {row.lastName}</b><small>{row.className || "No class"} · Age {row.age ?? "—"}</small></span><button aria-label={`Open ${row.firstName} ${row.lastName}`} onClick={(event) => { event.stopPropagation(); void open(row.id); }}><FiChevronRight /></button></header>
-                <div><span><small>Guardian</small><Link href={`/account/guardians?guardianId=${row.guardianId || ""}`} onClick={(event) => event.stopPropagation()}>{row.guardianName || "Not recorded"}</Link></span><span><small>Profile</small><b className={`sex-badge ${row.gender === "FEMALE" ? "female" : "male"}`}>{pretty(row.gender)}</b></span></div>
-              </article>)}
-              {!loading && !rows.length && <p className="child-grid-empty">{query || classId || gender ? "No children found. Try changing your search or filters." : "No children registered yet."}</p>}
-            </div>}
+            {rows.length > 0 && (display === "LIST" ?
+              <ChildrenList rows={rows} onOpen={(id) => void open(id)} sort={sort} order={order} onSort={toggleSort} /> :
+              <ChildrenGrid rows={rows} onOpen={(id) => void open(id)} />)}
+            {!loading && !rows.length && <section className="directory-empty">
+              <i><FiSearch /></i>
+              <h2>{query || classId || gender ? "No matching children" : "No children registered yet"}</h2>
+              <p>{query || classId || gender ? "Try another name, class or gender, or clear your filters to see everyone." : "Register your first child to start building the directory."}</p>
+              {query || classId || gender ? <button type="button" onClick={clear}>Clear filters</button> : <Link href="/account/check-in/assisted">Register a child <FiChevronRight /></Link>}
+            </section>}
             <footer className="child-pagination">
               <p>
                 Showing {rows.length ? (page - 1) * 25 + 1 : 0}–
@@ -698,9 +596,7 @@ export function ChildDirectory() {
       <style jsx>{`
         ${styles}${childEditStyles}
       `}</style>
-      <style jsx>{`
-        .child-record-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.child-record-grid article{cursor:pointer;border:1px solid #e7e7e4;border-radius:10px;background:#fff;padding:14px;transition:border-color .16s,box-shadow .16s}.child-record-grid article:hover{border-color:#f6a48b;box-shadow:0 8px 22px #16213a0d}.child-record-grid header{display:flex;align-items:center;gap:9px}.child-record-grid header>i{width:36px;height:36px;flex:none;display:grid;place-items:center;border-radius:50%;background:#e7efff;color:#225fa6;font-size:10px;font-style:normal;font-weight:900}.child-record-grid header span{min-width:0;display:grid;gap:3px;flex:1}.child-record-grid header b{overflow:hidden;color:#14223b;text-overflow:ellipsis;white-space:nowrap;font-size:12px}.child-record-grid header small,.child-record-grid>article>div small{color:#71809a;font-size:10px}.child-record-grid header button{border:0;background:transparent;color:#526884;font-size:18px;cursor:pointer}.child-record-grid>article>div{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:14px;padding-top:11px;border-top:1px solid #eff0f2}.child-record-grid>article>div span{min-width:0;display:grid;gap:4px}.child-record-grid a{overflow:hidden;color:#2b5797;text-decoration:none;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:800}.child-record-grid .sex-badge{width:max-content}.child-grid-empty{grid-column:1/-1;margin:0;padding:34px;border:1px dashed #dce2ea;border-radius:9px;color:#71809a;text-align:center;font-size:12px}@media(max-width:1120px){.child-record-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:620px){.child-record-grid{grid-template-columns:1fr}}
-      `}</style>
+
     </>
   );
 }
@@ -721,33 +617,6 @@ function Card({
   click: () => void;
 }) {
   return <StatCard icon={icon} value={value} title={label} description={text} tone={tone === "amber" ? "yellow" : tone} onClick={click} />;
-}
-function SortHeader({
-  label,
-  field,
-  sort,
-  order,
-  onSort,
-}: {
-  label: string;
-  field: string;
-  sort: string;
-  order: string;
-  onSort: (field: string) => void;
-}) {
-  const active = sort === field;
-  return (
-    <th>
-      <button
-        type="button"
-        className={`table-sort ${active ? "active" : ""}`}
-        onClick={() => onSort(field)}
-      >
-        {label}
-        <FiChevronDown className={active && order === "desc" ? "desc" : ""} />
-      </button>
-    </th>
-  );
 }
 function Drawer({
   child,

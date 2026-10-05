@@ -1,0 +1,53 @@
+.children-records-grid,.children-records-list{color:#203451;box-sizing:border-box}
+.children-records-grid *,.children-records-list *{box-sizing:border-box}
+.children-records-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.child-directory-card{display:flex;flex-direction:column;min-width:0;padding:20px;border:1px solid #e0e5eb;border-radius:14px;background:#fff;transition:border-color .15s}
+.child-directory-card:hover{border-color:#bdcad9}
+.record-child-name{display:flex;align-items:center;gap:12px;width:100%;min-width:0;padding:0;border:0;background:none;color:inherit;text-align:left;font-family:var(--font-body),sans-serif;cursor:pointer}
+.record-child-avatar{display:grid;place-items:center;flex:0 0 44px;height:44px;border:1px solid #dfe7ee;border-radius:14px;background:#f1f5f9;color:#526c8a;font-size:12px;font-weight:800}
+.record-child-title{display:grid;gap:5px;min-width:0}
+.record-child-title strong{color:#182b46;font-size:15px;line-height:1.4;overflow-wrap:anywhere}
+.record-child-title small{color:#71809a;font-size:11px;line-height:1.4}
+.record-child-name:hover strong{color:#cf492c}
+.record-child-facts{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px;margin:20px 0 0}
+.record-child-facts>div{min-width:0}
+.record-child-facts dt,.record-guardian h3,.child-directory-card footer>div>span{margin:0 0 6px;color:#75839a;font:600 10px/1.4 var(--font-body),sans-serif}
+.record-child-facts dd{margin:0;color:#41516a;font-size:12px;line-height:1.5}
+.record-class{display:inline-block;max-width:100%;padding:4px 8px;border-radius:6px;background:#f1f5fa;color:#435e80;font-size:11px;font-weight:700;line-height:1.5;overflow-wrap:anywhere}
+.record-class.unassigned{background:#f5f4f1;color:#777568;font-weight:500}
+.record-guardian{padding:17px 0;margin-top:17px;border-top:1px solid #eef1f4}
+.record-guardian-contact{display:grid;gap:6px;min-width:0}
+.record-guardian-contact>a,.record-guardian-contact>span{color:#314c6b;font-size:12px;font-weight:600;line-height:1.5;text-decoration:none;overflow-wrap:anywhere}
+.record-guardian-contact>a:hover{text-decoration:underline;text-underline-offset:3px;color:#cf492c}
+.record-guardian-contact small{display:flex;align-items:center;gap:6px;color:#75839a;font-size:11px;line-height:1.5;overflow-wrap:anywhere}
+.record-guardian-contact small svg{flex:none;width:12px;height:12px}
+.record-guardian-contact>.record-muted{color:#75839a;font-weight:400}
+.child-directory-card footer{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:auto;padding-top:15px;border-top:1px solid #eef1f4}
+.child-directory-card footer>div{display:grid;min-width:0;gap:3px}
+.child-directory-card footer>div>span{margin:0}
+.child-directory-card footer b{color:#65758b;font-size:11px;font-weight:500;line-height:1.5}
+.record-profile-action{display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:none;padding:8px 10px;min-height:36px;border:1px solid #e0e5eb;border-radius:7px;background:#fff;color:#314c6b;font:700 11px var(--font-body),sans-serif;cursor:pointer;white-space:nowrap}
+.record-profile-action:hover{border-color:#efb7a6;background:#fff7f3;color:#cf492c}
+.children-records-list{overflow:auto;border:1px solid #e0e5eb;border-radius:12px;background:#fff}
+.children-records-list table{width:100%;border-collapse:collapse;text-align:left}
+.children-records-list th{padding:14px 16px;background:#f8fafb;border-bottom:1px solid #e0e5eb;font-weight:600}
+.record-sort{display:inline-flex;align-items:center;gap:6px;padding:0;border:0;background:none;color:#728097;font:700 10px var(--font-body),sans-serif;text-align:left;white-space:nowrap;cursor:pointer}
+.record-sort svg{width:12px;height:12px;opacity:.5}.record-sort.active{color:#cf492c}.record-sort.active svg{opacity:1}.record-sort .descending{transform:rotate(180deg)}
+.children-records-list td{padding:16px;border-bottom:1px solid #eef1f4;vertical-align:middle;font-size:12px;line-height:1.5}
+.children-records-list tr:last-child td{border-bottom:0}.children-records-list tbody tr:hover{background:#fcfdfe}
+.children-records-list .record-child-name{min-width:190px}.children-records-list .record-child-title strong{font-size:13px}.children-records-list .record-child-title small{display:none}
+.children-records-list .record-child-avatar{flex-basis:36px;height:36px;border-radius:11px;font-size:10px}
+.record-list-guardian{min-width:175px}.record-list-attendance{color:#71809a;white-space:nowrap}.record-list-age{color:#71809a}.record-list-action{text-align:right}
+.record-sr-only{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.children-records-grid :is(button,a):focus-visible,.children-records-list :is(button,a):focus-visible{outline:3px solid #7098c9;outline-offset:4px;border-radius:5px}
+@media(max-width:1180px){.children-records-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.children-records-list th,.children-records-list td{padding:14px 12px}}
+@media(max-width:900px){
+ .children-records-list{overflow:visible}.children-records-list table,.children-records-list tbody{display:block}.children-records-list thead{display:none}
+ .children-records-list tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:14px;padding:18px;border-bottom:1px solid #e0e5eb}
+ .children-records-list tr:last-child{border-bottom:0}.children-records-list td{display:block;min-width:0;padding:0;border:0}.children-records-list td[data-label]:before{display:block;content:attr(data-label);margin-bottom:5px;color:#75839a;font-size:10px;line-height:1.4;font-weight:600}
+ .children-records-list .record-list-child{grid-column:1/3;grid-row:1}.children-records-list .record-list-action{grid-column:3;grid-row:1;align-self:center}
+ .children-records-list .record-list-class{grid-column:1;grid-row:2}.children-records-list .record-list-gender{grid-column:2/4;grid-row:2}
+ .children-records-list .record-list-guardian{grid-column:1;grid-row:3;min-width:0}.children-records-list .record-list-attendance{grid-column:2/4;grid-row:3;white-space:normal}
+ .children-records-list .record-list-age{display:none}.children-records-list .record-child-title small{display:block}.children-records-list .record-child-name{min-width:0}
+}
+@media(max-width:600px){.children-records-grid{grid-template-columns:minmax(0,1fr);gap:12px}.child-directory-card{padding:18px}.children-records-list tr{padding:16px;gap:14px 12px}.record-child-title strong{font-size:14px}}
