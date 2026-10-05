@@ -5,3 +5,4 @@ node_modules
 *.tsbuildinfo
 prisma/*.db
 .vercel
+/backend/storage/assembly-media/

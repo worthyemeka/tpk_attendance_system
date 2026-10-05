@@ -57,14 +57,14 @@
 .cw-page .teacher-heading { margin: 22px 0 10px; font-size: 12px; }
 .cw-page .teacher-strip {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 185px), 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 9px;
   align-items: stretch;
 }
 .cw-page .teacher-strip > span {
   display: grid;
   grid-template-columns: 38px minmax(0, 1fr);
-  grid-template-rows: auto auto;
+  grid-template-rows: auto;
   align-content: center;
   gap: 3px 9px;
   min-width: 0;
@@ -87,7 +87,7 @@
   color: #2d67a7;
   font: 800 11px var(--font-body);
 }
-.cw-page .teacher-strip .teacher-photo { grid-row: 1 / 3; align-self: center; }
+.cw-page .teacher-strip .teacher-photo { grid-row: 1; align-self: center; }
 .cw-page .cw-status {
   display: inline-flex;
   align-items: center;
@@ -132,7 +132,7 @@
 .cw-page .assembly-panel > header { margin-bottom: 18px; flex-wrap: wrap; }
 .cw-page .assembly-panel h3 { font: 400 23px var(--font-display), Georgia, serif; }
 .cw-page .assembly-panel > header a { min-height: 42px; box-sizing: border-box; color: #425673; font-size: 11px; }
-.cw-page .assembly-team { grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
+.cw-page .assembly-team { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .cw-page .assembly-team article { padding: 15px; gap: 12px; border-radius: 11px; }
 .cw-page .assembly-team b { overflow-wrap: anywhere; font-size: 13px; line-height: 1.5; }
 .cw-page .assembly-team small { font-size: 11px; }
@@ -194,7 +194,7 @@
   .cw-page .cw-primary-tabs { width: 100%; }
   .cw-page .class-card, .cw-page .assembly-panel, .cw-page .assembly-intro { padding: 18px; }
   .cw-page .class-card h3 { font-size: 20px; }
-  .cw-page .teacher-strip { grid-template-columns: 1fr; }
+  .cw-page .teacher-strip, .cw-page .assembly-team { grid-template-columns: 1fr; }
   .cw-page .assembly-metrics { grid-template-columns: 1fr; }
   .cw-page:not(.class-detail) .cw-metrics { grid-template-columns: 1fr; }
   .cw-page .assembly-note-form { align-items: stretch; }

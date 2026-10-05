@@ -8,11 +8,7 @@ function api_classroom_context_sessions(PDO $db, array $actor): array {
         $s->execute([$requested, (int)$actor['campus_id']]);
         $row = $s->fetch();
         if (!$row) api_error('SERVICE_SESSION_NOT_FOUND', 'This service is not available for your campus.', 404);
-        if ($actor['access_level'] !== 'TPK_SUPER_ADMIN' && api_table_exists($db, 'roster_assignments')) {
-            $check = $db->prepare("SELECT 1 FROM roster_assignments WHERE user_id=? AND service_session_id=? AND status NOT IN ('CANCELLED','REPLACED') LIMIT 1");
-            $check->execute([(int)$actor['id'], $requested]);
-            if (!$check->fetchColumn()) api_error('FORBIDDEN', 'This service is outside your assigned roster.', 403);
-        }
+        if(!api_service_duty($db,$actor,$requested))api_error('FORBIDDEN','This service is outside your assigned roster.',403);
         return [$row];
     }
     $scope = strtoupper(trim((string)($_GET['serviceScope'] ?? 'SECOND_SERVICE')));
@@ -25,12 +21,16 @@ function api_classroom_context_sessions(PDO $db, array $actor): array {
     if ($scope !== 'ALL') { $where[] = 'service_type=?'; $params[] = $scope; }
     $s = $db->prepare('SELECT id,name,service_type AS serviceType,service_date AS serviceDate,starts_at AS startsAt FROM service_sessions WHERE '.implode(' AND ', $where).' ORDER BY starts_at');
     $s->execute($params);
-    return $s->fetchAll();
+    return array_values(array_filter($s->fetchAll(),fn($row)=>api_service_duty($db,$actor,(int)$row['id'])));
 }
 
 function api_classroom_context_snapshot(PDO $db, array $actor, ?array $service): array {
     $sessionId = (int)($service['id'] ?? 0);
-    $allowed = api_permitted_class_ids($db, $actor);
+    $allowed=null;
+    if($actor['access_level']!=='TPK_SUPER_ADMIN'&&!api_service_duty($db,$actor,$sessionId,null,['HEAD_OF_SERVICE','ATTENDANCE','ASSISTANT_HEAD_OF_SERVICE_1','ASSISTANT_HEAD_OF_SERVICE_2'])){
+        $q=$db->prepare('SELECT id FROM classes WHERE campus_id=? AND is_active=1');$q->execute([(int)$actor['campus_id']]);
+        $allowed=array_values(array_filter(array_map('intval',array_column($q->fetchAll(),'id')),fn($id)=>api_service_duty($db,$actor,$sessionId,$id)));
+    }
     $where = ['c.campus_id=?', 'c.is_active=1'];
     $params = [(int)$actor['campus_id']];
     if ($allowed !== null) {
