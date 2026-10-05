@@ -1,93 +1,47 @@
-/* Keep the shared service controls readable on phones and small tablets. */
-@media (max-width: 760px) {
-  .universal-service-bar {
-    height: auto;
-    display: grid !important;
-    gap: 10px;
-    margin-bottom: 18px;
-  }
-
-  .universal-meta,
-  .universal-actions {
-    position: static;
-  }
-
-  .universal-meta {
-    width: 100%;
-    justify-content: flex-start;
-  }
-
-  .universal-meta time {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .universal-actions {
-    width: 100%;
-    display: grid !important;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 7px;
-    align-items: stretch;
-    flex-wrap: initial !important;
-  }
-
-  .universal-actions .service-menu,
-  .universal-actions .context-select,
-  .universal-actions .context-service-select {
-    min-width: 0;
-    width: 100%;
-  }
-
-  .universal-actions .context-service-select {
-    grid-column: 1 / -1;
-  }
-
-  .universal-actions .service-menu-trigger,
-  .universal-actions .universal-open,
-  .universal-actions .universal-qr,
-  .universal-actions .universal-assist {
-    width: 100%;
-    min-width: 0;
-    justify-content: center;
-    box-sizing: border-box;
-  }
-
-  .universal-actions .service-menu-trigger {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    padding-inline: 9px;
-    font-size: 10px;
-  }
-
-  .universal-actions .universal-open {
-    padding-inline: 8px;
-  }
-
-  .universal-actions .universal-qr span,
-  .universal-actions .assist-full,
-  .universal-actions .status-full {
-    display: none;
-  }
-
-  .universal-actions .universal-qr,
-  .universal-actions .universal-assist {
-    padding-inline: 8px;
-  }
-
-  .universal-actions .status-compact,
-  .universal-actions .assist-compact {
-    display: inline;
-  }
+/* Controls occupy real space, so long themes cannot cover the page heading. */
+.universal-service-bar{display:grid;gap:12px;min-width:0;margin-bottom:22px}
+.universal-meta{display:flex;justify-content:flex-end;align-items:center;gap:10px;min-width:0}
+.universal-meta time{display:flex;align-items:center;gap:7px;color:#626a79;font-size:10px;font-weight:700;min-width:0}
+.universal-meta time svg{color:#e25130;font-size:14px;flex-shrink:0}
+.universal-meta .notification-button{height:36px;width:36px;color:#272727;border-color:#ded9d1;background:#fffdfa;box-shadow:0 3px 10px #00000008}
+.universal-meta .notification-popover{left:auto;right:0}
+.universal-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 18px;min-width:0}
+.universal-context-controls{display:grid;grid-template-columns:minmax(132px,.7fr) minmax(132px,.7fr) minmax(205px,1.6fr);gap:10px;flex:1 1 520px;min-width:0;max-width:780px}
+.universal-operation-controls{display:flex;flex-wrap:wrap;align-items:center;gap:10px;min-width:0}
+.universal-operation-controls:empty{display:none}
+.service-menu{position:relative;min-width:0}
+.universal-service-bar .service-menu-trigger,.universal-qr,.universal-assist{height:42px;border:1px solid #dedbd5;border-radius:9px;padding:0 13px;background:#fffdfa;color:#171717;font:800 11px var(--font-body);display:flex;align-items:center;gap:8px;text-decoration:none;cursor:pointer;white-space:nowrap}
+.universal-service-bar .service-menu-trigger{width:100%;min-width:0;justify-content:space-between}
+.service-menu-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.service-menu-trigger svg{font-size:15px;flex-shrink:0}
+.service-menu-trigger:disabled{cursor:not-allowed;opacity:.75}
+.service-menu-options{position:absolute;z-index:24;left:0;top:48px;width:100%;padding:5px;background:#fffdfa;border:1px solid #dedbd5;border-radius:9px;box-shadow:0 12px 24px #2a1b101c;max-height:320px;overflow-y:auto}
+.service-menu-options button{min-height:38px;width:100%;border:0;background:transparent;padding:9px 7px;text-align:left;font:700 11px var(--font-body);color:#171717;display:flex;gap:8px;align-items:center;border-radius:6px;cursor:pointer}
+.service-menu-options button:hover{background:#fff2eb}
+.service-menu-options svg{color:#e9512e;font-size:16px;flex-shrink:0}
+.service-menu-options span{margin-left:24px;overflow-wrap:anywhere}
+.service-menu-options svg+span{margin-left:0}
+.universal-open{min-height:42px;padding:0 13px;background:#f0f8f3;color:#087757;border-radius:9px;display:flex;align-items:center;gap:9px;font-size:11px;font-weight:800}
+.universal-open i{width:10px;height:10px;flex-shrink:0;border-radius:50%;background:#079161;box-shadow:0 0 0 3px #d7f0e2}
+.universal-open.closed{background:#f7f3eb;color:#74624a}
+.universal-open.closed i{background:#d79a26;box-shadow:0 0 0 3px #f6e7c6}
+.status-compact,.assist-compact{display:none}
+.universal-qr{border-color:#ff5d34;background:#ff5d34;color:#fff}
+@media(max-width:760px){
+  .universal-meta{justify-content:flex-start}
+  .universal-context-controls{max-width:none;flex-basis:100%;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .context-service-select{grid-column:1/-1}
+  .universal-service-bar .service-menu-trigger{height:44px}
+  .universal-operation-controls{width:100%;gap:8px}
+  .universal-open{flex:1 1 140px}
+  .universal-qr,.universal-assist{min-height:44px;flex:1 1 auto;justify-content:center}
 }
-
-@media (max-width: 420px) {
-  .universal-actions {
-    grid-template-columns: 1fr;
-  }
-
-  .universal-actions .context-service-select {
-    grid-column: auto;
-  }
+@media(max-width:590px){
+  /* The mobile navbar already has the bell beside the menu toggle. */
+  .universal-meta .notification-wrap{display:none}
+  .universal-service-bar{gap:10px;margin-bottom:18px}
+  .universal-meta time{flex-wrap:wrap;line-height:1.5}
+  .universal-operation-controls{gap:7px}
+  .universal-open{flex:1 1 100%}
+  .universal-qr,.universal-assist{font-size:10px;padding-inline:10px}
 }

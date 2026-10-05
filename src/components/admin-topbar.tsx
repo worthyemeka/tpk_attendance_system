@@ -81,9 +81,10 @@ export function AdminTopbar() {
       <NotificationBell serviceSessionId={context.selectedServiceSessionId || undefined} />
     </div>
     <div className="universal-actions">
+      <div className="universal-context-controls" aria-label="Sunday service context">
       <div className="service-menu context-select">
         <button className="service-menu-trigger" onClick={() => setMenu(menu === "month" ? null : "month")} aria-expanded={menu === "month"} disabled={context.loading || !context.months.length}>
-          {context.loading ? "Loading month…" : context.months.find((item) => item.key === selectedMonthKey)?.label || "Choose month"}<FiChevronDown />
+          <span className="service-menu-label">{context.loading ? "Loading month…" : context.months.find((item) => item.key === selectedMonthKey)?.label || "Choose month"}</span><FiChevronDown />
         </button>
         {menu === "month" && <div className="service-menu-options">
           {context.months.map((item) => <button key={item.key} onClick={() => { context.selectMonth(item.key); setMenu(null); }}>
@@ -93,7 +94,7 @@ export function AdminTopbar() {
       </div>
       <div className="service-menu context-select">
         <button className="service-menu-trigger" onClick={() => setMenu(menu === "sunday" ? null : "sunday")} aria-expanded={menu === "sunday"} disabled={context.loading || !context.sundays.length}>
-          {selectedSunday?.label || "Choose Sunday"}<FiChevronDown />
+          <span className="service-menu-label">{selectedSunday?.label || "Choose Sunday"}</span><FiChevronDown />
         </button>
         {menu === "sunday" && <div className="service-menu-options">
           {context.sundays.map((item) => <button key={item.date} onClick={() => { context.selectSunday(item.date); setMenu(null); }}>
@@ -102,8 +103,8 @@ export function AdminTopbar() {
         </div>}
       </div>
       <div className="service-menu context-select context-service-select">
-        <button className="service-menu-trigger" onClick={() => { if (context.error) { context.retry(); return; } setMenu(menu === "service" ? null : "service"); }} aria-expanded={menu === "service"} disabled={!context.services.length && !context.error} title={context.error || undefined}>
-          {context.loading ? "Loading service…" : context.error ? "Retry service context" : context.selectedService ? serviceDisplayLabel(context.selectedService) : "No service configured"}<FiChevronDown />
+        <button className="service-menu-trigger" onClick={() => { if (context.error) { context.retry(); return; } setMenu(menu === "service" ? null : "service"); }} aria-expanded={menu === "service"} disabled={!context.services.length && !context.error} title={context.error || (context.selectedService ? serviceDisplayLabel(context.selectedService) : undefined)}>
+          <span className="service-menu-label">{context.loading ? "Loading service…" : context.error ? "Retry service context" : context.selectedService ? serviceDisplayLabel(context.selectedService) : "No service configured"}</span><FiChevronDown />
         </button>
         {menu === "service" && <div className="service-menu-options">
           {context.services.map((item) => <button key={item.id} onClick={() => { context.selectService(item.id); setMenu(null); }}>
@@ -111,9 +112,12 @@ export function AdminTopbar() {
           </button>)}
         </div>}
       </div>
+      </div>
+      <div className="universal-operation-controls">
       {canViewCheckIn && <span className={`universal-open ${state === "LIVE" ? "" : "closed"}`} title={stateLabel}><i /><span className="status-full">{stateLabel}</span><span className="status-compact">{state === "LIVE" ? "Open" : state === "COMPLETED" ? "Done" : "Closed"}</span></span>}
       {canViewCheckIn && <button className="universal-qr" onClick={() => setQr(true)} title="View Check-In QR"><FiGrid /><span>View Check-In QR</span></button>}
       {canAssistedCheckIn && <Link className="universal-assist" href={isPickupPage ? "/account/pick-up#assisted" : "/account/check-in/assisted"}><span className="assist-full">{isPickupPage ? "Start Assisted Pick-Up" : "Assisted Check-In"}</span><span className="assist-compact">Assisted</span></Link>}
+      </div>
     </div>
     {canViewCheckIn && qr && <div className="modal-backdrop"><div className="qr-modal">
       <button className="close-modal" onClick={() => setQr(false)}><FiX /></button>
@@ -126,9 +130,8 @@ export function AdminTopbar() {
       </div>
     </div></div>}
     <style jsx global>{`
-      .content{position:relative}.universal-service-bar{height:0}.universal-meta{position:absolute;right:32px;top:16px;display:flex;align-items:center;gap:10px}.universal-meta time{height:32px;display:flex;align-items:center;gap:7px;color:#626a79;font-size:10px;font-weight:700}.universal-meta time svg{color:#e25130;font-size:14px}.universal-meta .notification-button{height:36px;width:36px;color:#272727;border-color:#ded9d1;background:#fffdfa;box-shadow:0 3px 10px #00000008}.universal-meta .notification-popover{left:auto;right:0}.universal-actions{position:absolute;right:32px;top:62px;display:flex;gap:10px;align-items:center}.service-menu{position:relative}.context-select{min-width:150px}.context-service-select{min-width:205px}.context-select .service-menu-trigger{min-width:100%}.universal-actions button,.universal-assist{height:41px;border:1px solid #dedbd5;border-radius:9px;padding:0 13px;background:#fffdfa;color:#171717;font:800 11px var(--font-body);display:flex;align-items:center;gap:8px;text-decoration:none;cursor:pointer;white-space:nowrap}.service-menu-trigger{min-width:205px;justify-content:space-between}.service-menu-trigger svg{font-size:15px}.service-menu-trigger:disabled{cursor:not-allowed;opacity:.75}.service-menu-options{position:absolute;z-index:24;left:0;top:47px;width:100%;padding:5px;background:#fffdfa;border:1px solid #dedbd5;border-radius:9px;box-shadow:0 12px 24px #2a1b101c}.service-menu-options button{height:36px;width:100%;border:0;background:transparent;padding:0 7px;text-align:left;font:700 11px var(--font-body);display:flex;gap:8px;align-items:center;border-radius:6px}.service-menu-options button:hover{background:#fff2eb}.service-menu-options svg{color:#e9512e;font-size:16px}.service-menu-options span{margin-left:24px}.service-menu-options svg+span{margin-left:0}.universal-open{height:41px;padding:0 13px;background:#f0f8f3;color:#087757;border-radius:9px;display:flex;align-items:center;gap:9px;font-size:11px;font-weight:800;white-space:nowrap}.universal-open i{width:10px;height:10px;border-radius:50%;background:#079161;box-shadow:0 0 0 3px #d7f0e2}.universal-open.closed{background:#f7f3eb;color:#74624a}.universal-open.closed i{background:#d79a26;box-shadow:0 0 0 3px #f6e7c6}.status-compact,.assist-compact{display:none}.universal-qr{border-color:#ff5d34!important;background:#ff5d34!important;color:#fff!important}.overview .service-controls,.checkin-page .checkin-actions{display:none}.overview-header{padding-top:0;margin-bottom:20px}.checkin-page{padding-top:0}.overview h1{font-size:32px;letter-spacing:-.8px}.overview h1 span{font-size:25px}.overview .intro{font-size:15px;margin-top:5px}.checkin-page h1{font-size:34px}.checkin-header>div>p:last-child{font-size:15px;margin-top:5px}.followup-detail td{white-space:normal!important;background:#fff8f3;padding:14px!important}.followup-detail b{display:block;color:#262626;margin-bottom:7px;font-size:11px}.followup-detail textarea{width:100%;min-height:64px;border:1px solid #e3d8ce;border-radius:7px;background:#fffdfa;padding:9px;font:12px var(--font-body);resize:vertical;margin-bottom:9px}.followup-detail .solid-button{height:35px;padding:0 11px}.followup-detail small{display:block;color:#687184;font-size:11px;margin-top:9px}@media(max-width:1220px){.universal-actions{right:24px;gap:7px}.universal-open{padding:0 10px}.context-select{min-width:132px}.context-service-select{min-width:180px}.service-menu-trigger{min-width:0}.universal-actions button,.universal-assist{padding:0 10px;font-size:10px}}@media(max-width:1040px){.universal-actions{flex-wrap:wrap;justify-content:flex-end}.overview-header,.checkin-page{padding-top:110px}}@media(max-width:590px){.universal-service-bar{height:auto;display:grid;gap:10px;margin-bottom:18px}.universal-meta,.universal-actions{position:static}.universal-meta{justify-content:flex-end}.universal-meta time{font-size:10px}.universal-actions{display:flex;flex-wrap:nowrap;width:100%;gap:5px}.service-menu,.context-select,.context-service-select{flex:1 1 0;min-width:0}.context-service-select{flex-grow:1.3}.service-menu-trigger{min-width:0;width:100%;padding:0 9px!important;font-size:9px!important;overflow:hidden;text-overflow:ellipsis}.universal-open{flex:0 0 59px;justify-content:center;gap:6px;padding:0 7px;font-size:9px}.universal-open i{width:8px;height:8px;box-shadow:none}.status-full,.assist-full{display:none}.status-compact,.assist-compact{display:inline}.universal-qr{flex:0 0 39px;justify-content:center;padding:0!important}.universal-qr span{display:none}.universal-qr svg{font-size:14px}.universal-assist{flex:0 0 68px;justify-content:center;padding:0 6px!important;font-size:9px!important}.overview-header,.checkin-page{padding-top:0}.overview h1{font-size:29px}.overview .intro{font-size:14px}}
+      .overview .service-controls,.checkin-page .checkin-actions{display:none}.overview-header{padding-top:0;margin-bottom:20px}.checkin-page{padding-top:0}.overview h1{font-size:32px;letter-spacing:-.8px}.overview h1 span{font-size:25px}.overview .intro{font-size:15px;margin-top:5px}.checkin-page h1{font-size:34px}.checkin-header>div>p:last-child{font-size:15px;margin-top:5px}.followup-detail td{white-space:normal!important;background:#fff8f3;padding:14px!important}.followup-detail b{display:block;color:#262626;margin-bottom:7px;font-size:11px}.followup-detail textarea{width:100%;min-height:64px;border:1px solid #e3d8ce;border-radius:7px;background:#fffdfa;padding:9px;font:12px var(--font-body);resize:vertical;margin-bottom:9px}.followup-detail .solid-button{height:35px;padding:0 11px}.followup-detail small{display:block;color:#687184;font-size:11px;margin-top:9px}@media(max-width:590px){.overview h1{font-size:29px}.overview .intro{font-size:14px}}
       .qr-image{display:block;width:176px;height:176px;object-fit:contain;margin:20px auto;border:12px solid #fff}
-      @media(max-width:590px){.universal-meta{width:100%;justify-content:flex-start}.universal-meta time{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.universal-meta .notification-wrap{display:none}}
     `}</style>
   </section>;
 }
