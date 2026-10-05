@@ -1,0 +1,71 @@
+/* One calm, flat profile treatment across Overview, Onboarding and Roster. */
+body .profile-panel.teacher-drawer{background:#fff}
+body .profile-panel.teacher-drawer :is(.overview-card,.teacher-roster-panel,.probation-journey>section){border:1px solid #e3e8ef;border-radius:14px;padding:20px;background:#fff;box-shadow:none;min-width:0}
+body .profile-panel.teacher-drawer :is(h3,h4){font-family:var(--font-body);font-weight:800;letter-spacing:-.015em}
+body .profile-panel.teacher-drawer :is(.overview-card,.teacher-roster-panel)>header{display:flex;align-items:flex-start;gap:12px;padding:0;margin:0 0 20px;border:0;background:none}
+body .profile-panel.teacher-drawer :is(.overview-card,.teacher-roster-panel)>header>i{display:grid;place-items:center;flex:none;width:40px;height:40px;border-radius:11px;background:#fff1e9;color:#ec5b35;font-size:21px}
+body .profile-panel.teacher-drawer :is(.overview-card,.teacher-roster-panel)>header>div{min-width:0}
+body .profile-panel.teacher-drawer :is(.overview-card,.teacher-roster-panel)>header h3{font-size:18px;line-height:1.4;margin:0 0 5px}
+body .profile-panel.teacher-drawer :is(.overview-card,.teacher-roster-panel)>header p{font:500 12px/1.6 var(--font-body);color:#738199;margin:0;overflow-wrap:anywhere}
+body .profile-panel.teacher-drawer :is(.status,.access-pill,.roster-status,.gender-badge,.sub-unit-pills span,.probation-journey em,.orientation header>b){box-shadow:none!important;filter:none!important;text-shadow:none;background-image:none}
+body .team-page .status{box-shadow:none!important;filter:none!important;text-shadow:none;background-image:none}
+body .team-page .team-member-grid>article:focus-visible{outline:2px solid #ff5634;outline-offset:3px}
+body .profile-panel.teacher-drawer .status.onboarded{background:#edf9f1;border-color:#ccebd7;color:#087c50}
+body .profile-panel.teacher-drawer .status{display:inline-flex;align-items:center;gap:5px;width:fit-content;padding:5px 10px;border:1px solid transparent;border-radius:99px;font:800 11px/1.5 var(--font-body)}
+body .profile-panel.teacher-drawer .status.probation{background:#fff3df;border-color:#f2dfbc;color:#a56b15}
+body .profile-panel.teacher-drawer .overview-card dl>div{background:none;padding:0;border:0;border-radius:0;box-shadow:none}
+body .profile-panel.teacher-drawer .onboarding-complete-card>.status{margin:0 0 22px}
+body .profile-panel.teacher-drawer .onboarding-complete-card dl{gap:22px;grid-template-columns:repeat(2,minmax(0,1fr))}
+body .profile-panel.teacher-drawer .teacher-roster-toolbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+body .profile-panel.teacher-drawer .teacher-roster-toolbar .tpk-month-picker{flex:1;min-width:180px}
+body .profile-panel.teacher-drawer .teacher-roster-toolbar .drawer-export{display:flex;gap:8px;margin:0}
+body .profile-panel.teacher-drawer .drawer-export button{display:flex;align-items:center;gap:6px;min-height:42px;padding:9px 12px;border:1px solid #dce3ed;border-radius:9px;background:#fff;color:#354d6a;font:800 11px var(--font-body);cursor:pointer}
+body .profile-panel.teacher-drawer .drawer-export button:disabled{opacity:.5;cursor:not-allowed}
+body .profile-panel.teacher-drawer .teacher-roster-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 20px}
+body .profile-panel.teacher-drawer .teacher-roster-summary>div{display:grid;gap:4px;border:1px solid #e5eaf0;border-radius:10px;padding:14px;min-width:0}
+body .profile-panel.teacher-drawer .teacher-roster-summary b{font:800 24px/1.2 var(--font-body);color:#243650}
+body .profile-panel.teacher-drawer .teacher-roster-summary small{font:500 11px var(--font-body);color:#738199}
+body .profile-panel.teacher-drawer .teacher-roster-table{overflow:auto;border:1px solid #e3e8ef;border-radius:10px;background:#fff}
+body .profile-panel.teacher-drawer .teacher-roster-table table{border-collapse:collapse;width:100%;min-width:420px}
+body .profile-panel.teacher-drawer .teacher-roster-table th{padding:12px;text-align:left;background:#fafbfc;font:700 10px var(--font-body);color:#738199}
+body .profile-panel.teacher-drawer .teacher-roster-table td{padding:14px 12px;border-top:1px solid #e8ecf2;font:500 12px/1.5 var(--font-body);color:#354d6a;white-space:normal;overflow-wrap:anywhere}
+body .profile-panel.teacher-drawer .teacher-roster-table td small{display:block;margin-top:3px;color:#738199}
+body .profile-panel.teacher-drawer .roster-status{display:inline-flex;padding:5px 9px;border:0;border-radius:99px;font:800 10px/1.5 var(--font-body);background:#f1f4f8;color:#66778d;white-space:nowrap}
+body .profile-panel.teacher-drawer .roster-status:is(.served,.completed){background:#edf9f1;color:#087c50}
+body .profile-panel.teacher-drawer .roster-status.upcoming{background:#fff3df;color:#a56b15}
+body .profile-panel.teacher-drawer .roster-status.absent{background:#fff0eb;color:#bc553d}
+body .profile-panel.teacher-drawer .teacher-roster-cards{display:none}
+body .profile-panel.teacher-drawer .teacher-roster-panel>.quiet{margin:14px 0 0;font:500 11px/1.5 var(--font-body);color:#738199}
+body .profile-panel.teacher-drawer .probation-journey{display:grid;gap:16px}
+body .profile-panel.teacher-drawer .probation-journey h3{font-size:17px;line-height:1.4;margin:0}
+body .profile-panel.teacher-drawer .probation-journey p{font:500 12px/1.65 var(--font-body);color:#738199;margin:6px 0 0}
+body .profile-panel.teacher-drawer .probation-journey .progress-card{grid-template-columns:1fr;gap:14px}
+body .profile-panel.teacher-drawer .probation-journey .progress-card>b{text-align:left;font-size:12px;color:#35526e}
+body .profile-panel.teacher-drawer .probation-journey .milestones{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0}
+body .profile-panel.teacher-drawer .probation-journey .milestones>span{padding:12px 6px;border:1px solid #e5eaf0;border-radius:10px;background:#fff;gap:6px}
+body .profile-panel.teacher-drawer .probation-journey .milestones>span:after{display:none}
+body .profile-panel.teacher-drawer .probation-journey .milestones strong{font-size:11px}
+body .profile-panel.teacher-drawer .probation-journey .milestones small{font-size:10px}
+body .profile-panel.teacher-drawer .probation-journey .orientation>header{flex-wrap:wrap;padding:0;margin:0;border:0;background:none;gap:12px}
+body .profile-panel.teacher-drawer .probation-journey .orientation>header>b{font-size:10px;white-space:normal;line-height:1.5}
+body .profile-panel.teacher-drawer .probation-journey .orientation-data{padding:0;border:0;margin-top:20px;background:none;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+body .profile-panel.teacher-drawer .probation-journey .orientation-data b{font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+body .profile-panel.teacher-drawer .probation-journey .orientation-data small{font-size:11px;margin-bottom:4px}
+body .profile-panel.teacher-drawer .probation-journey .orientation-wait{flex-wrap:wrap;align-items:flex-start;gap:14px}
+body .profile-panel.teacher-drawer .probation-journey button:not(.week-toggle){height:auto;min-height:42px;padding:10px 12px;font:800 11px/1.5 var(--font-body);white-space:normal}
+body .profile-panel.teacher-drawer .probation-journey .log-intro{gap:16px}
+body .profile-panel.teacher-drawer .probation-journey .weekly>p{margin-bottom:18px}
+body .profile-panel.teacher-drawer .probation-journey .week-toggle{min-height:70px;padding:14px;gap:10px;grid-template-columns:22px minmax(0,1fr) auto 16px;background:#fff}
+body .profile-panel.teacher-drawer .probation-journey .week-toggle b{font-size:12px;line-height:1.5}
+body .profile-panel.teacher-drawer .probation-journey .week-toggle small{font-size:11px;line-height:1.6}
+body .profile-panel.teacher-drawer .probation-journey .week-body{background:#fff;padding:16px;gap:18px}
+body .profile-panel.teacher-drawer .probation-journey .fields>dl{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin:0;min-width:0}
+body .profile-panel.teacher-drawer .probation-journey .fields>dl>div{min-width:0}
+body .profile-panel.teacher-drawer .probation-journey .fields dt{margin:0 0 6px;color:#738199;font:500 11px/1.5 var(--font-body)}
+body .profile-panel.teacher-drawer .probation-journey .fields dd{margin:0;color:#354d6a;font:700 13px/1.5 var(--font-body);overflow-wrap:anywhere}
+body .profile-panel.teacher-drawer .probation-journey :is(.duty-sign,.leadership,.assigned-teacher){border:1px solid #e3e8ef;background:#fff;padding:14px;border-radius:10px}
+body .profile-panel.teacher-drawer .probation-journey :is(input,textarea,select){width:100%;min-width:0;min-height:44px;padding:11px;border-radius:9px;font:500 13px/1.5 var(--font-body);background:#fff}
+body .profile-panel.teacher-drawer .probation-journey label{font-size:11px;gap:7px;min-width:0}
+body .profile-panel.teacher-drawer .probation-journey .final{align-items:flex-start;flex-wrap:wrap;gap:14px}
+body .profile-panel.teacher-drawer .probation-journey .final>div:last-child{width:100%;padding-top:10px}
+@media(max-width:600px){body .profile-panel.teacher-drawer :is(.overview-card,.teacher-roster-panel,.probation-journey>section){padding:18px}body .profile-panel.teacher-drawer .onboarding-complete-card dl{grid-template-columns:1fr}body .profile-panel.teacher-drawer .teacher-roster-table{display:none}body .profile-panel.teacher-drawer .teacher-roster-cards{display:grid;gap:12px}body .profile-panel.teacher-drawer .teacher-roster-cards>article{display:grid;gap:8px;padding:16px;border:1px solid #e3e8ef;border-radius:10px;background:#fff}body .profile-panel.teacher-drawer .teacher-roster-cards header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;padding:0;margin:0 0 3px;border:0;background:none}body .profile-panel.teacher-drawer .teacher-roster-cards time{font:800 12px var(--font-body);color:#354d6a}body .profile-panel.teacher-drawer .teacher-roster-cards b{font:800 14px/1.5 var(--font-body);overflow-wrap:anywhere}body .profile-panel.teacher-drawer .teacher-roster-cards small{font:500 12px/1.5 var(--font-body);color:#738199}body .profile-panel.teacher-drawer .roster-empty{font:500 13px/1.6 var(--font-body);color:#738199}body .profile-panel.teacher-drawer .probation-journey .milestones{grid-template-columns:repeat(2,minmax(0,1fr))}body .profile-panel.teacher-drawer .probation-journey .orientation-data{grid-template-columns:1fr}body .profile-panel.teacher-drawer .probation-journey .week-toggle{grid-template-columns:22px minmax(0,1fr) 16px}body .profile-panel.teacher-drawer .probation-journey .week-toggle em{grid-column:2;justify-self:start}body .profile-panel.teacher-drawer .probation-journey .week-toggle>svg{grid-column:3;grid-row:1;display:block}body .profile-panel.teacher-drawer .probation-journey .fields{grid-template-columns:1fr}body .profile-panel.teacher-drawer .probation-journey .fields>*{grid-column:1}body .profile-panel.teacher-drawer .teacher-roster-summary>div{padding:12px 10px}}

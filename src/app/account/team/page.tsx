@@ -31,6 +31,7 @@ import { ProbationJourney } from "@/components/probation-journey";
 import { MonthPicker } from "@/components/month-picker";
 import { DataViewToggle, type DataView } from "@/components/data-view-toggle";
 import "./team-refinements.css";
+import "./teacher-profile-polish.css";
 
 type Onboarding = "PROBATION" | "ONBOARDED";
 type SubUnit = { id: number; name: string; description?: string | null; isActive?: boolean; assignedCount?: number };
@@ -113,9 +114,10 @@ export default function TeamPage() {
   const [roles, setRoles] = useState<string[]>([]);
   const [sort, setSort] = useState("NAME_ASC");
   const [page, setPage] = useState(1);
-  const [perPage, setPerPage] = useState(10);
+  const [pageSizeOverride, setPageSizeOverride] = useState<number | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [display, setDisplay] = useState<DataView>("LIST");
+  const perPage = pageSizeOverride ?? (display === "GRID" ? 12 : 10);
   const [selected, setSelected] = useState<Member | null>(null);
   const [drawerTab, setDrawerTab] = useState<
     "OVERVIEW" | "ROSTER" | "ONBOARDING"
@@ -131,6 +133,8 @@ export default function TeamPage() {
   }, []);
   const setTeamDisplay = (value: DataView) => {
     setDisplay(value);
+    setPageSizeOverride(null);
+    setPage(1);
     window.localStorage.setItem("tpk:team-display", value);
   };
   const isSuper =
@@ -514,7 +518,7 @@ export default function TeamPage() {
             </tbody>
           </table>
         </div> : <div className="team-member-grid">
-          {pagedMembers.map((member) => <article key={member.id} onClick={() => openMember(member)}>
+          {pagedMembers.map((member) => <article key={member.id} role="button" tabIndex={0} aria-label={`View ${personName(member)}’s profile`} onClick={() => openMember(member)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openMember(member); } }}>
             <header><Avatar member={member} /><span><b>{personName(member)}</b><small>{isSuper ? member.email || member.whatsappNumber || "No contact added" : "TPK Teacher"}</small></span><FiChevronRight /></header>
             <div><span><small>Team status</small><OnboardingBadge member={member} /></span><span><small>This week</small><b>{member.currentAssignment || "No upcoming assignment"}</b></span></div>
           </article>)}
@@ -524,7 +528,7 @@ export default function TeamPage() {
           Showing {shown.length ? `${(page - 1) * perPage + 1}–${Math.min(page * perPage, shown.length)}` : "0"} of {shown.length} team members
         </p>
         <div className="team-pagination">
-          <label>Show <select value={perPage} onChange={(event) => setPerPage(Number(event.target.value))}>{[5, 10, 20, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}</select> teachers</label>
+          <label>Show <select value={perPage} onChange={(event) => setPageSizeOverride(Number(event.target.value))}>{[5, 10, 12, 20, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}</select> teachers</label>
           <div><button disabled={page === 1} onClick={() => setPage((current) => current - 1)}>Previous</button><span>{page} of {totalPages}</span><button disabled={page === totalPages} onClick={() => setPage((current) => current + 1)}>Next</button></div>
         </div>
       </section>
@@ -1010,8 +1014,12 @@ function TeacherOverview({ member, isSuper, ownProfile, refreshTeam }: { member:
 }
 
 function OnboardedSummary({ member }: { member: Member }) {
-  return <section className="onboarded-summary">
-    <i><FiCheck /></i><div><h3>{member.title || "This teacher"} {member.firstName || personName(member)} is fully onboarded</h3><p>Orientation and the supported-service review have been completed. Their ministry profile is active and ready for Team &amp; Roster assignments.</p><dl><div><dt>Joined TPK</dt><dd>{niceDate(member.joinedAt)}</dd></div><div><dt>Fully onboarded</dt><dd>{niceDate(member.onboardedAt)}</dd></div><div><dt>Current role</dt><dd>{member.currentAssignment || "TPK Teacher"}</dd></div><div><dt>Status</dt><dd>✓ Onboarded</dd></div></dl></div>
+  return <section className="teacher-onboarding">
+    <article className="overview-card onboarding-complete-card">
+      <header><i><FiCheck /></i><div><h3>Onboarding complete</h3><p>{personName(member)} has completed orientation and supported serving.</p></div></header>
+      <span className="status onboarded"><FiCheck /> Fully onboarded</span>
+      <dl><div><dt>Joined TPK</dt><dd>{niceDate(member.joinedAt)}</dd></div><div><dt>Onboarded on</dt><dd>{member.onboardedAt ? niceDate(member.onboardedAt) : "Date not recorded"}</dd></div><div><dt>Current responsibility</dt><dd>{member.currentAssignment || "No upcoming assignment"}</dd></div><div><dt>Ready to serve</dt><dd>Available for Team &amp; Roster assignments</dd></div></dl>
+    </article>
   </section>;
 }
 
@@ -1046,7 +1054,17 @@ function TeacherRosterPanel({ member }: { member: Member }) {
     if (kind === "CSV") { const csv = [Object.keys(rows[0] || {}).join(","), ...rows.map((row) => Object.values(row).map((value) => `\"${String(value).replaceAll('"', '""')}\"`).join(","))].join("\n"); const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); const link = document.createElement("a"); link.href = url; link.download = `${personName(member).replaceAll(" ", "-").toLowerCase()}-${month.toISOString().slice(0, 7)}-roster.csv`; link.click(); URL.revokeObjectURL(url); return; }
     printBrandedDocument({ eyebrow: "Teaching roster", title: `${personName(member)}’s Roster`, subtitle: `${monthLabel} · TribePetra Kids, Wuse Campus.`, stats: [{ label: "Activities", value: rows.length }, { label: "Served", value: rows.filter((row) => row.Status === "Served").length }, { label: "Upcoming", value: rows.filter((row) => row.Status === "Upcoming").length }], columns: ["Date", "Service", "Class / Duty", "Status"], rows: rows.map((row) => [row.Date, row.Service, row["Class / Duty"], row.Status]) });
   };
-  return <section className="teacher-roster-panel"><header><i><FiCalendar /></i><div><h3>Teaching Roster</h3><p>All scheduled services, assignments and attendance for the selected month.</p></div><div className="drawer-export"><button onClick={() => exportRoster("PDF")}><FiDownload /> PDF</button><button onClick={() => exportRoster("CSV")}>CSV</button></div></header><MonthPicker value={month} onChange={setMonth} ariaLabel="Choose roster month" />{error && <p className="journey-error">{error}</p>}<div className="teacher-roster-table"><table><thead><tr><th>Date</th><th>Service</th><th>Class / Duty</th><th>Status</th></tr></thead><tbody>{activities.map((item) => { const status = teacherRosterStatus(item, today); return <tr key={item.id}><td data-label="Date"><b>{niceDate(item.assignmentDate)}</b></td><td data-label="Service">{item.serviceName}</td><td data-label="Class / Duty">{item.className || item.dutyName}</td><td data-label="Status"><span className={`roster-status ${status.toLowerCase()}`}>{status === "Served" || status === "Completed" ? "✓ " : status === "Absent" ? "× " : "○ "}{status}</span></td></tr>; })}{!activities.length && <tr><td colSpan={4}>{loading ? "Loading roster…" : "No activities are scheduled for this month."}</td></tr>}</tbody></table></div><p className="quiet">Showing {activities.length} activit{activities.length === 1 ? "y" : "ies"} for {monthLabel}.</p></section>;
+  const served = activities.filter((item) => teacherRosterStatus(item, today) === "Served").length;
+  const upcoming = activities.filter((item) => teacherRosterStatus(item, today) === "Upcoming").length;
+  return <section className="teacher-roster-panel" aria-busy={loading}>
+    <header><i><FiCalendar /></i><div><h3>Teaching roster</h3><p>Service dates, responsibilities and attendance in one place.</p></div></header>
+    <div className="teacher-roster-toolbar"><MonthPicker value={month} onChange={setMonth} ariaLabel="Choose roster month" /><div className="drawer-export"><button disabled={loading || !activities.length} onClick={() => exportRoster("PDF")}><FiDownload /> PDF</button><button disabled={loading || !activities.length} onClick={() => exportRoster("CSV")}>CSV</button></div></div>
+    {error && <p className="journey-error" role="alert">{error}</p>}
+    <div className="teacher-roster-summary"><div><b>{activities.length}</b><small>Assignments</small></div><div><b>{served}</b><small>Served</small></div><div><b>{upcoming}</b><small>Upcoming</small></div></div>
+    <div className="teacher-roster-table"><table><thead><tr><th>Date</th><th>Service</th><th>Responsibility</th><th>Status</th></tr></thead><tbody>{activities.map((item) => { const status = teacherRosterStatus(item, today); return <tr key={item.id}><td data-label="Date"><b>{niceDate(item.assignmentDate)}</b></td><td data-label="Service">{item.serviceName}</td><td data-label="Responsibility"><b>{item.dutyName}</b>{item.className && <small>{item.className}</small>}</td><td data-label="Status"><span className={`roster-status ${status.toLowerCase()}`}>{status}</span></td></tr>; })}{!activities.length && <tr><td colSpan={4}>{loading ? "Loading roster…" : "No assignments for this month. Choose another month to see more."}</td></tr>}</tbody></table></div>
+    <div className="teacher-roster-cards">{activities.map((item) => { const status = teacherRosterStatus(item, today); return <article key={item.id}><header><time dateTime={item.assignmentDate}>{niceDate(item.assignmentDate)}</time><span className={`roster-status ${status.toLowerCase()}`}>{status}</span></header><b>{item.dutyName}{item.className ? ` · ${item.className}` : ""}</b><small>{item.serviceName}</small></article>; })}{!activities.length && <p className="roster-empty">{loading ? "Loading roster…" : "No assignments for this month. Choose another month to see more."}</p>}</div>
+    <p className="quiet">{monthLabel} · {activities.length} assignment{activities.length === 1 ? "" : "s"}</p>
+  </section>;
 }
 function ProbationLog({ member }: { member: Member }) {
   const session = useMemo(() => readTeacherSession(), []);

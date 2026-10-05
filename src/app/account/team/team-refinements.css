@@ -1,11 +1,11 @@
 .team-page .status {
   border: 1px solid transparent;
-  box-shadow: 0 2px 7px rgba(24, 43, 75, 0.06);
+  box-shadow: none;
 }
 
 .team-page .status.onboarded {
   border-color: #c9ecd6;
-  background: linear-gradient(135deg, #e8faee, #f4fff8);
+  background: #edf9f1;
 }
 
 .team-page .status.probation {

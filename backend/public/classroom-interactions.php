@@ -25,7 +25,7 @@ function api_discussion_payload(PDO $db,array $actor,int $id): array {
     $replies=[];$counts=['LIKE'=>0,'APPLAUSE'=>0,'HEART'=>0];$mine=null;
     $ready=api_table_exists($db,'classroom_review_replies')&&api_table_exists($db,'classroom_review_reactions');
     if($ready){
-        $q=$db->prepare("SELECT r.id,r.body,r.created_at AS createdAt,r.created_by_staff_user_id AS authorId,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',p.title,p.first_name,p.last_name)),''),u.name) AS author FROM classroom_review_replies r JOIN staff_users u ON u.id=r.created_by_staff_user_id LEFT JOIN teacher_profiles p ON p.staff_user_id=u.id WHERE r.review_id=? ORDER BY r.created_at,r.id");$q->execute([$id]);$replies=$q->fetchAll();
+        $q=$db->prepare("SELECT r.id,r.body,r.created_at AS createdAt,r.created_by_staff_user_id AS authorId,p.profile_image_url AS authorProfileImageUrl,COALESCE(NULLIF(TRIM(CONCAT_WS(' ',p.title,p.first_name,p.last_name)),''),u.name) AS author FROM classroom_review_replies r JOIN staff_users u ON u.id=r.created_by_staff_user_id LEFT JOIN teacher_profiles p ON p.staff_user_id=u.id WHERE r.review_id=? ORDER BY r.created_at,r.id");$q->execute([$id]);$replies=$q->fetchAll();
         $q=$db->prepare('SELECT reaction,COUNT(*) AS total FROM classroom_review_reactions WHERE review_id=? GROUP BY reaction');$q->execute([$id]);foreach($q->fetchAll() as $row)$counts[$row['reaction']]=(int)$row['total'];
         $q=$db->prepare('SELECT reaction FROM classroom_review_reactions WHERE review_id=? AND staff_user_id=?');$q->execute([$id,(int)$actor['id']]);$mine=$q->fetchColumn()?:null;
     }

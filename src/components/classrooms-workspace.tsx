@@ -26,6 +26,7 @@ import "./classroom-attendance.css";
 import "./classroom-refinements.css";
 import "./classrooms-overview.css";
 import { DiscussionThread, AssemblyAttachment, type AssemblyMedia } from "./classroom-discussion-thread";
+import { TeacherAttribution } from "./teacher-attribution";
 import { VideoTrimmer } from "./video-trimmer";
 import { TOTAL_UPLOAD_BYTES, VIDEO_UPLOAD_BYTES } from "@/lib/video-trim";
 import {
@@ -70,8 +71,8 @@ type Overview = {
   };
   items: Classroom[];
 };
-type AssemblyActivity = { id: number; activityName: string; ledByStaffUserId?: number | null; ledBy?: string | null; notes?: string | null; media?: AssemblyMedia[]; createdAt?: string };
-type AssemblyNote = { id: number; note: string; author: string; createdAt: string };
+type AssemblyActivity = { id: number; activityName: string; ledByStaffUserId?: number | null; ledBy?: string | null; ledByProfileImageUrl?: string | null; notes?: string | null; media?: AssemblyMedia[]; createdAt?: string };
+type AssemblyNote = { id: number; note: string; author: string; authorProfileImageUrl?: string | null; createdAt: string };
 type AssemblyGroup = { serviceSession: { id: number; name: string; serviceDate: string; serviceType?: string } | null; childrenInService: number; team: Teacher[]; leaders?: Pick<Teacher, "userId" | "name">[]; activities: AssemblyActivity[]; notes: AssemblyNote[]; canManage: boolean; isSuperAdmin: boolean; needAttention: number };
 type Child = {
   id: number;
@@ -113,6 +114,7 @@ type Detail = {
     workedWell?: string;
     needsImprovement?: string;
     author: string;
+    authorProfileImageUrl?: string | null;
     createdAt: string;
   }[];
 };
@@ -503,11 +505,11 @@ function AssemblyView({ groups, loading, isSuperAdmin, onRefresh }: { groups: As
     <section className="assembly-panel">
       <header><div><p className="eyebrow">Service programme</p><h3>Assembly Programme</h3></div>{canManage && <button className="primary" onClick={() => { setMessage(""); setShowActivity(true); }}><FiPlus /> Add Activity</button>}</header>
       <div className="assembly-activity-list">{group.activities.map((activity) => <article key={activity.id}>
-        <div className="assembly-activity-copy"><b>{activity.activityName}</b><small>{activity.ledBy ? `Led by ${activity.ledBy}` : "Leader not specified"}</small>{activity.notes && <p>{activity.notes}</p>}</div>
+        <div className="assembly-activity-copy"><b>{activity.activityName}</b><TeacherAttribution name={activity.ledBy || "Leader not specified"} namePrefix={activity.ledBy ? "Led by" : undefined} photo={activity.ledByProfileImageUrl} createdAt={activity.createdAt} label="Activity added" />{activity.notes && <p>{activity.notes}</p>}</div>
         {!!activity.media?.length && <div className="assembly-media-grid">{activity.media.map((item) => <AssemblyAttachment key={item.id} item={item} />)}</div>}
       </article>)}{!group.activities.length && <p className="cw-empty">No Assembly activities recorded for this service.</p>}</div>
     </section>
-    <section className="assembly-panel"><header><div><p className="eyebrow">Service history</p><h3>Assembly Notes</h3></div></header><div className="assembly-notes">{group.notes.map((item) => <article key={item.id}><p>{item.note}</p><small>{item.author} · {formatDate(item.createdAt)}</small></article>)}{!group.notes.length && <p className="cw-empty">No Assembly notes yet.</p>}</div>{canManage && <div className="assembly-note-form"><textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a short note about this service…" /><button className="primary" onClick={() => void addNote()} disabled={saving || !note.trim()}>{saving ? "Saving…" : "Save note"}</button></div>}</section>
+    <section className="assembly-panel"><header><div><p className="eyebrow">Service history</p><h3>Assembly Notes</h3></div></header><div className="assembly-notes">{group.notes.map((item) => <article key={item.id}><TeacherAttribution name={item.author} photo={item.authorProfileImageUrl} createdAt={item.createdAt} /><p>{item.note}</p></article>)}{!group.notes.length && <p className="cw-empty">No Assembly notes yet.</p>}</div>{canManage && <div className="assembly-note-form"><label htmlFor="assembly-note">Add a service note</label><textarea id="assembly-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a short note about this service…" /><button className="primary" onClick={() => void addNote()} disabled={saving || !note.trim()}>{saving ? "Saving…" : "Save note"}</button></div>}</section>
     {message && <p className="cw-save-message">{message}</p>}
     {showActivity && <div className="cw-modal"><section role="dialog" aria-modal="true" aria-labelledby="assembly-activity-title" aria-busy={saving}>
       <button className="modal-close" disabled={saving} onClick={() => setShowActivity(false)} aria-label="Close activity form"><FiX /></button>
@@ -931,13 +933,13 @@ function WeeklyReviews({
         {data.weeklyReviews.map((review) => (
           <article key={review.id}>
             <header>
-              <div>
+              <div className="review-service">
                 <b>{formatDate(review.serviceDate)}</b>
                 <small>
-                  {review.serviceName || "Sunday service"} · {review.author}
+                  {review.serviceName || "Sunday service"}
                 </small>
               </div>
-              <FiMessageCircle />
+              <TeacherAttribution name={review.author} photo={review.authorProfileImageUrl} createdAt={review.createdAt} />
             </header>
             {review.workedWell && (
               <p>

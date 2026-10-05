@@ -1,0 +1,19 @@
+body .profile-panel.guardian-drawer{background:#fff}
+body .profile-panel.guardian-drawer .guardian-overview{display:grid;gap:18px}
+body .profile-panel.guardian-drawer .guardian-profile-group{padding:20px;border:1px solid #e3e8ef;border-radius:14px;background:#fff;box-shadow:none;min-width:0}
+body .profile-panel.guardian-drawer .guardian-profile-group>header{display:block;padding:0;margin:0 0 18px;border:0;background:none}
+body .profile-panel.guardian-drawer .guardian-profile-group h3{margin:0;color:#243650;font:800 17px/1.4 var(--font-body)}
+body .profile-panel.guardian-drawer .guardian-profile-group header p{margin:5px 0 0;color:#728099;font:500 12px/1.6 var(--font-body)}
+body .profile-panel.guardian-drawer .guardian-facts-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px 16px}
+body .profile-panel.guardian-drawer .guardian-facts-grid .profile-fact{margin:0;padding:0;border:0;border-radius:0;background:none;box-shadow:none;min-width:0;align-items:start;grid-template-columns:20px minmax(0,1fr);gap:10px}
+body .profile-panel.guardian-drawer .guardian-facts-grid .fact-wide{grid-column:1/-1}
+body .profile-panel.guardian-drawer .guardian-facts-grid .profile-fact>i{display:grid;place-items:center;width:20px;height:20px;border-radius:0;background:none;padding:0;color:#8292a7}
+body .profile-panel.guardian-drawer .guardian-facts-grid .profile-fact>i svg{width:18px;height:18px;color:inherit}
+body .profile-panel.guardian-drawer .profile-fact-content{display:grid;gap:6px;min-width:0}
+body .profile-panel.guardian-drawer .profile-fact-content>b{font:700 13px/1.5 var(--font-body);overflow-wrap:anywhere}
+body .profile-panel.guardian-drawer .guardian-contact-actions{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 0;padding:0;border:0}
+body .profile-panel.guardian-drawer .guardian-contact-actions a{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px;padding:8px 10px;border:1px solid #dde4ed;border-radius:8px;color:#344c69;background:#fff;font:800 11px var(--font-body);text-decoration:none}
+body .profile-panel.guardian-drawer .guardian-contact-actions a.whatsapp-action{color:#087a4b;background:#edf9f2;border-color:#ccebdd}
+body .profile-panel.guardian-drawer .guardian-contact-actions svg{width:15px;height:15px;color:inherit}
+body .profile-panel.guardian-drawer .guardian-contact-actions a:focus-visible{outline:2px solid #ff5634;outline-offset:3px}
+@media(max-width:600px){body .profile-panel.guardian-drawer .guardian-profile-group{padding:18px}body .profile-panel.guardian-drawer .guardian-facts-grid{grid-template-columns:1fr;gap:22px}}

@@ -30,7 +30,7 @@ function api_assembly_store_media(PDO $db,array $actor,int $id,array $uploads,ar
 }
 function api_assembly_activity_media(PDO $db,int $id): array {
     if(!api_table_exists($db,'assembly_activity_media'))return[];
-    $q=$db->prepare('SELECT id,original_name AS name,mime_type AS mimeType,byte_size AS size FROM assembly_activity_media WHERE activity_id=? ORDER BY id');$q->execute([$id]);$rows=$q->fetchAll();foreach($rows as &$r)$r['url']='/api/v1/assembly/media/'.(int)$r['id'];return$rows;
+    $q=$db->prepare('SELECT id,original_name AS name,mime_type AS mimeType,byte_size AS size,created_at AS createdAt FROM assembly_activity_media WHERE activity_id=? ORDER BY id');$q->execute([$id]);$rows=$q->fetchAll();foreach($rows as &$r)$r['url']='/api/v1/assembly/media/'.(int)$r['id'];return$rows;
 }
 function api_assembly_media_download(PDO $db,int $id): never {
     $actor=api_actor($db);

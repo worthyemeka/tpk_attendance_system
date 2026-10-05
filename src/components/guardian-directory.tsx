@@ -12,7 +12,6 @@ import {
   FiMail,
   FiUser,
   FiMapPin,
-  FiMessageCircle,
   FiMoreHorizontal,
   FiPhone,
   FiSearch,
@@ -20,6 +19,8 @@ import {
   FiUsers,
   FiX,
 } from "react-icons/fi";
+import { FaWhatsapp } from "react-icons/fa";
+import "./guardian-profile-polish.css";
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
 import { GUARDIAN_RELATIONSHIPS } from "@/lib/guardian-relationships";
 import { StatCard, type StatCardTone } from "@/components/stat-card";
@@ -511,10 +512,12 @@ function Drawer({
           ))}
         </nav>
         {tab === "overview" && (
-          <section className="drawer-section">
-            <h3>Contact Information</h3>
+          <section className="drawer-section guardian-overview">
+            <article className="guardian-profile-group">
+            <header><h3>Contact information</h3><p>Reach this guardian using the details below.</p></header>
+            <div className="guardian-facts-grid">
             <Info
-              icon={<FiPhone />}
+              icon={<FaWhatsapp />}
               label="WhatsApp Number"
               value={guardian.primaryPhone || "Not recorded"}
             />
@@ -534,13 +537,18 @@ function Drawer({
               label="Address"
               value={guardian.homeAddress || "Not recorded"}
             />
-            <hr />
-            <h3>Guardian Details</h3>
+            </div>
+            </article>
+            <article className="guardian-profile-group">
+            <header><h3>Guardian details</h3></header>
+            <div className="guardian-facts-grid">
             <Info
               label="Relationship"
               value={guardian.relationship || "Not recorded"}
             />
             <Info label="Joined" value={date} />
+            </div>
+            </article>
           </section>
         )}
         {tab === "children" && (
@@ -628,47 +636,10 @@ function ContactActions({ phone }: { phone: string }) {
   const linked = phoneForLink(phone);
   if (!linked) return null;
   return (
-    <p style={{ display: "flex", gap: 8, margin: "-4px 0 15px 29px" }}>
-      <a
-        href={`tel:${phone}`}
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 5,
-          border: "1px solid #dbe0e9",
-          borderRadius: 7,
-          padding: "7px 9px",
-          color: "#243653",
-          fontSize: 10,
-          fontWeight: 800,
-          textDecoration: "none",
-        }}
-      >
-        <FiPhone />
-        Call
-      </a>
-      <a
-        href={`https://wa.me/${linked}`}
-        rel="noreferrer"
-        target="_blank"
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 5,
-          border: "1px solid #ccebdd",
-          borderRadius: 7,
-          padding: "7px 9px",
-          background: "#effaf4",
-          color: "#087a4b",
-          fontSize: 10,
-          fontWeight: 800,
-          textDecoration: "none",
-        }}
-      >
-        <FiMessageCircle />
-        WhatsApp
-      </a>
-    </p>
+    <div className="guardian-contact-actions">
+      <a href={`tel:${phone}`}><FiPhone aria-hidden="true" />Call</a>
+      <a className="whatsapp-action" href={`https://wa.me/${linked}`} rel="noopener noreferrer" target="_blank"><FaWhatsapp aria-hidden="true" />WhatsApp</a>
+    </div>
   );
 }
 function Info({
