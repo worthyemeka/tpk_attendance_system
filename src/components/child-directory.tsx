@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import {useProfileDialog} from "@/components/use-profile-dialog";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
@@ -112,7 +113,7 @@ const initials = (first: string, last: string) =>
   `${first[0] || ""}${last[0] || ""}`.toUpperCase();
 const pretty = (value?: string) =>
   value
-    ? value.replaceAll("_", " ").replace(/\b\w/g, (x) => x.toUpperCase())
+    ? value.toLowerCase().replaceAll("_", " ").replace(/\b\w/g, (x) => x.toUpperCase())
     : "—";
 const date = (value?: string) =>
   value
@@ -645,6 +646,7 @@ function Drawer({
   classes: ClassItem[];
   refresh: () => Promise<void>;
 }) {
+  useProfileDialog(close, ".child-drawer");
   const [editing, setEditing] = useState(false);
   const hasCare =
     care &&
@@ -654,9 +656,9 @@ function Drawer({
         Boolean(value),
     );
   return (
-    <div className="child-drawer-backdrop" onMouseDown={close}>
-      <aside className="child-drawer" onMouseDown={(e) => e.stopPropagation()}>
-        <button className="close" onClick={close}>
+    <div className="child-drawer-backdrop profile-backdrop" onMouseDown={close}>
+      <aside className="child-drawer profile-panel" role="dialog" aria-modal="true" aria-label="Child profile" onMouseDown={(e) => e.stopPropagation()}>
+        <button className="close" type="button" aria-label="Close child profile" onClick={close}>
           <FiX />
         </button>
         {editing ? (
@@ -674,7 +676,7 @@ function Drawer({
             <header>
               <i>{initials(child.firstName, child.lastName)}</i>
               <div>
-                <h2>
+                <small className="profile-kicker">Child profile</small><h2>
                   {child.firstName} {child.lastName}
                 </h2>
                 <p>
@@ -707,7 +709,7 @@ function Drawer({
                 <Info
                   icon={<FiCalendar />}
                   label="Date of Birth"
-                  value={safe(child.dateOfBirth)}
+                  value={child.dateOfBirth ? date(child.dateOfBirth) : "Not recorded"}
                 />
                 <Info
                   label="Age"

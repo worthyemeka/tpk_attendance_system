@@ -31,6 +31,7 @@ import {
 } from "@/lib/session";
 import { subscribeToActiveService, type ActiveService } from "@/lib/active-service";
 import { NotificationBell } from "@/components/notification-bell";
+import { useProfileDialog } from "@/components/use-profile-dialog";
 import "./sidebar-refinement.css";
 
 const campusFont = localFont({ src: "../../public/fonts/dm-serif-display.ttf", weight: "400", display: "swap", variable: "--font-campus" });
@@ -124,6 +125,7 @@ export function Sidebar() {
   const [checkinVisible, setCheckinVisible] = useState(false);
   const [peopleDirectoryVisible, setPeopleDirectoryVisible] = useState(false);
   const [profileImageFailed, setProfileImageFailed] = useState(false);
+  useProfileDialog(() => setMobileNavOpen(false), ".sidebar.mobile-open", mobileNavOpen);
   useEffect(() => {
     const refreshSession = () => { setSession(readTeacherSession()); setProfileImageFailed(false); };
     const onStorage = (event: StorageEvent) => { if (event.key === "tpk-teacher" || event.key === null) refreshSession(); };
@@ -176,6 +178,12 @@ export function Sidebar() {
     setMobileNavOpen(false);
     setOpen(false);
   }, [pathname]);
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const resize = () => { if (!window.matchMedia("(max-width: 590px)").matches) setMobileNavOpen(false); };
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  }, [mobileNavOpen]);
   if (!session) return null;
   const superAdmin = session.accessLevel === "TPK_SUPER_ADMIN";
   const followUpLead = session.accessLevel === "TPK_FOLLOW_UP_ADMIN";
@@ -193,7 +201,7 @@ export function Sidebar() {
   const closeMobileNav = () => setMobileNavOpen(false);
   return (
     <>
-      <div className={`mobile-nav-bar${mobileNavScrolled ? " is-scrolled" : ""}`}>
+      {!mobileNavOpen && <div className={`mobile-nav-bar${mobileNavScrolled ? " is-scrolled" : ""}`}>
         <Link className="mobile-tpk-mark" href="/account/overview">
           <Image
             src="/brand/tpk-logo.png"
@@ -217,7 +225,7 @@ export function Sidebar() {
             {mobileNavOpen ? <FiX /> : <FiMenu />}
           </button>
         </div>
-      </div>
+      </div>}
       {mobileNavOpen && (
         <button
           className="sidebar-backdrop"
@@ -229,7 +237,11 @@ export function Sidebar() {
       <aside
         className={`sidebar${mobileNavOpen ? " mobile-open" : ""}`}
         id="dashboard-navigation"
+        role={mobileNavOpen ? "dialog" : undefined}
+        aria-modal={mobileNavOpen || undefined}
+        aria-label={mobileNavOpen ? "Navigation" : undefined}
       >
+        {mobileNavOpen && <button className="sidebar-menu-close" type="button" aria-label="Close navigation" onClick={closeMobileNav}><FiX /></button>}
         <div className="sidebar-scroll">
           <Link className={`brand ${campusFont.variable}`} href="/account/overview">
             <span className="brand-logos">

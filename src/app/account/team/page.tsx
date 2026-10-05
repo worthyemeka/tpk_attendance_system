@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import {useProfileDialog} from "@/components/use-profile-dialog";
+import { UpcomingTeacherDuty } from "@/components/upcoming-teacher-duty";
 import { useSearchParams } from "next/navigation";
 import {
   FiActivity,
@@ -680,6 +682,7 @@ function TeacherDrawer({
   manageAccess: (level: "TPK_ADMIN" | "TPK_FOLLOW_UP_ADMIN" | "TPK_SUPER_ADMIN") => void;
   refreshTeam: () => Promise<void>;
 }) {
+  useProfileDialog(closing, ".teacher-drawer");
   const progress =
     member.onboardingStatus === "ONBOARDED"
       ? 100
@@ -695,27 +698,25 @@ function TeacherDrawer({
     ["ROSTER", "Roster"],
   ];
   return (
-    <div className="drawer-backdrop" onClick={closing}>
+    <div className="drawer-backdrop profile-backdrop" onClick={closing}>
       <aside
-        className="teacher-drawer"
+        className="teacher-drawer profile-panel" role="dialog" aria-modal="true" aria-label="Teacher profile"
         onClick={(event) => event.stopPropagation()}
       >
-        <button className="drawer-close" onClick={closing}>
+        <button className="drawer-close" type="button" aria-label="Close teacher profile" onClick={closing}>
           <FiX />
         </button>
         <header className="drawer-header">
           <Avatar member={member} />
           <div>
-            <h2>{personName(member)}</h2>
+            <small className="profile-kicker">Teacher profile</small><h2>{personName(member)}</h2>
             <p>TPK Teacher</p>
             <OnboardingBadge member={member} />
-            <q>A place to belong, grow and lead.</q>
           </div>
-          <img className="drawer-kids-logo" src="/brand/tpk-logo.png" alt="TribePetra Kids" />
         </header>
         <div className="drawer-teacher-meta">
           <span><FiCalendar /><small>Joined TPK</small><b>{niceDate(member.joinedAt)}</b></span>
-          <span><FiUsers /><small>Role this week</small><b>{member.currentAssignment || "No role assigned this week"}</b></span>
+          <span><FiUsers /><small>Roster responsibility</small><b>{member.currentAssignment || "No role assigned this week"}</b></span>
           {isSuper && <span><FiMail /><small>Email</small><b>{member.email ? <a href={`mailto:${member.email}`}>{member.email}</a> : "Not added"}</b></span>}
         </div>
         <nav>
@@ -1001,7 +1002,7 @@ function TeacherOverview({ member, isSuper, ownProfile, refreshTeam }: { member:
   const probation = member.onboardingStatus === "PROBATION";
   return <section className="teacher-overview">
 <article className="overview-card about-card"><header><i><FiUsers /></i><div><h3>About {member.firstName || personName(member)}</h3><p>Key information and ministry details.</p></div>{ownProfile && <Link href="/account/profile">Edit Details</Link>}</header><dl><div><dt>Full Name</dt><dd>{personName(member)}</dd></div><div><dt>Email Address</dt><dd>{member.email ? <a href={`mailto:${member.email}`}>{member.email}</a> : "Not added"}</dd></div><div><dt>System role</dt><dd>{accessLabel(member.accessLevel || "TPK_ADMIN")}</dd></div><div><dt>Phone Number</dt><dd>{whatsappHref(member.whatsappNumber) ? <a href={whatsappHref(member.whatsappNumber)} target="_blank" rel="noreferrer">{member.whatsappNumber}</a> : "Not added"}</dd></div><div><dt>Location</dt><dd>{isSuper ? member.residentialAddress || "Not added" : "Wuse Campus"}</dd></div><div><dt>Start Date</dt><dd>{niceDate(member.joinedAt)}</dd></div><div><dt>Date of Birth</dt><dd>{birthdayLabel(member.birthDayMonth || member.birthDate)}</dd></div><div><dt>Emergency Contact</dt><dd>{member.emergencyContact || "Not added"}</dd></div><div><dt>Status</dt><dd className={probation ? "probation-text" : "onboarded-text"}>{probation ? `● On Probation · Week ${member.probationWeek || 1}/${member.probationTargetWeeks}` : "✓ Onboarded"}</dd></div></dl></article>
-    <div className="overview-split"><article className="overview-card assignment-card"><header><i><FiUsers /></i><div><h3>Roles &amp; Responsibilities</h3><p>Leadership assigns system access and ministry responsibilities.</p></div></header><dl><div><dt>System role</dt><dd>{accessLabel(member.accessLevel || "TPK_ADMIN")}</dd></div><div><dt>Upcoming responsibility</dt><dd>{member.currentAssignment || "No upcoming responsibility"}</dd></div><div><dt>Class responsibility</dt><dd>{member.assignedClasses || "Assigned by weekly roster"}</dd></div></dl></article>{probation ? <article className="overview-card probation-card"><header><i><FiShield /></i><div><h3>Probation Summary</h3><p>A quick view of their onboarding progress.</p></div></header><b>{member.probationWeek || 1} of {member.probationTargetWeeks + 1} milestones in progress</b><div className="overview-progress"><i style={{ width: `${Math.min(100, ((member.probationWeek || 1) / member.probationTargetWeeks) * 100)}%` }} /></div><small>Orientation · supported service weeks · final review</small></article> : <article className="overview-card onboarded-card"><header><i><FiCheck /></i><div><h3>Onboarding Complete</h3><p>Ready for ongoing ministry assignments.</p></div></header><b>✓ Fully onboarded</b><small>Orientation and supported serving completed.</small></article>}</div>
+    <div className="overview-split"><article className="overview-card assignment-card"><header><i><FiUsers /></i><div><h3>Roles &amp; Responsibilities</h3><p>Leadership assigns system access and ministry responsibilities.</p></div></header><dl><div><dt>System role</dt><dd>{accessLabel(member.accessLevel || "TPK_ADMIN")}</dd></div><div><dt>Upcoming responsibility</dt><dd><UpcomingTeacherDuty teacherId={member.id} fallback={member.currentAssignment}/></dd></div><div><dt>Class responsibility</dt><dd>{member.assignedClasses || "Assigned by weekly roster"}</dd></div></dl></article>{probation ? <article className="overview-card probation-card"><header><i><FiShield /></i><div><h3>Probation Summary</h3><p>A quick view of their onboarding progress.</p></div></header><b>{member.probationWeek || 1} of {member.probationTargetWeeks + 1} milestones in progress</b><div className="overview-progress"><i style={{ width: `${Math.min(100, ((member.probationWeek || 1) / member.probationTargetWeeks) * 100)}%` }} /></div><small>Orientation · supported service weeks · final review</small></article> : <article className="overview-card onboarded-card"><header><i><FiCheck /></i><div><h3>Onboarding Complete</h3><p>Ready for ongoing ministry assignments.</p></div></header><b>✓ Fully onboarded</b><small>Orientation and supported serving completed.</small></article>}</div>
     <article className="overview-card ministry-card"><header><i><FiActivity /></i><div><h3>Ministry Information</h3><p>Serving profile and leadership details.</p></div></header><div><p><b>Profile</b><br/>Teacher details, assignment history and emergency contact information are held here for safe ministry coordination.</p><p><b>Emergency contact</b><br/>{member.emergencyRelationship || "Relationship not added"}{member.emergencyPhone ? ` · ${member.emergencyPhone}` : ""}</p></div></article>
     <SubUnitPanel member={member} isSuper={isSuper} refreshTeam={refreshTeam} />
     <article className="overview-card permissions-card"><header><i><FiShield /></i><div><h3>Account &amp; Permissions</h3><p>System access is separate from Sub Unit responsibilities.</p></div></header><div><span className="access-pill">TPK Teacher</span>{member.accessLevel && <span className="access-pill">{accessLabel(member.accessLevel)}</span>}{isSuper && <span className="access-pill">{member.accountActive === false ? "Inactive" : "Active account"}</span>}</div></article>

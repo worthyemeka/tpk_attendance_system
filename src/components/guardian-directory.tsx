@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import {useProfileDialog} from "@/components/use-profile-dialog";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   FiChevronDown,
   FiChevronRight,
   FiDownload,
-  FiFilter,
   FiMapPin,
   FiMessageCircle,
   FiMoreHorizontal,
@@ -86,7 +86,6 @@ export function GuardianDirectory() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [filterOpen, setFilterOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [selected, setSelected] = useState<Detail | null>(null);
   const [tab, setTab] = useState<"overview" | "children" | "pickup">(
@@ -266,56 +265,11 @@ export function GuardianDirectory() {
               ))}
             </select>
           </span>
-          <div className="more-filter">
-            <button onClick={() => setFilterOpen((x) => !x)}>
-              <FiFilter />
-              More Filters
-              <FiChevronDown />
-            </button>
-            {filterOpen && (
-              <div className="more-filter-menu">
-                <span className="app-dropdown-host">
-                  <select
-                    value={active}
-                    onChange={(e) => reset(() => setActive(e.target.value))}
-                  >
-                    <option value="">Active / Inactive</option>
-                    <option value="1">Active</option>
-                    <option value="0">Inactive</option>
-                  </select>
-                </span>
-                <span className="app-dropdown-host">
-                  <select
-                    value={childCount}
-                    onChange={(e) => reset(() => setChildCount(e.target.value))}
-                  >
-                    <option value="">Linked children</option>
-                    <option value="2">2+ linked children</option>
-                    <option value="3">3+ linked children</option>
-                  </select>
-                </span>
-                <label className="more-check">
-                  <input
-                    type="checkbox"
-                    checked={hasPickup === "1"}
-                    onChange={(e) =>
-                      reset(() => setHasPickup(e.target.checked ? "1" : ""))
-                    }
-                  />
-                  Has additional pickup person
-                </label>
-                <span className="app-dropdown-host">
-                  <select
-                    value={order}
-                    onChange={(e) => setOrder(e.target.value)}
-                  >
-                    <option value="asc">Name A–Z</option>
-                    <option value="desc">Name Z–A</option>
-                  </select>
-                </span>
-              </div>
-            )}
-          </div>
+
+          <label className="directory-filter"><span>Status</span><select data-dropdown-native aria-label="Guardian status" value={active} onChange={e=>reset(()=>setActive(e.target.value))}><option value="">All statuses</option><option value="1">Active</option><option value="0">Inactive</option></select></label>
+          <label className="directory-filter"><span>Linked children</span><select data-dropdown-native aria-label="Linked children" value={childCount} onChange={e=>reset(()=>setChildCount(e.target.value))}><option value="">Any number</option><option value="2">2 or more</option><option value="3">3 or more</option></select></label>
+          <label className="directory-filter"><span>Pickup access</span><select data-dropdown-native aria-label="Additional pickup person" value={hasPickup} onChange={e=>reset(()=>setHasPickup(e.target.value))}><option value="">All guardians</option><option value="1">Additional pickup person</option></select></label>
+          <label className="directory-filter"><span>Sort by name</span><select data-dropdown-native aria-label="Sort guardians" value={order} onChange={e=>reset(()=>setOrder(e.target.value))}><option value="asc">Name A–Z</option><option value="desc">Name Z–A</option></select></label>
           <div className="guardian-export">
             <button onClick={() => setExportOpen((x) => !x)}>
               <FiDownload />
@@ -511,6 +465,7 @@ function Drawer({
   setTab: (x: "overview" | "children" | "pickup") => void;
   close: () => void;
 }) {
+  useProfileDialog(close, ".guardian-drawer");
   const date = guardian.joinedAt
     ? new Intl.DateTimeFormat("en-NG", {
         day: "numeric",
@@ -519,18 +474,18 @@ function Drawer({
       }).format(new Date(guardian.joinedAt))
     : "—";
   return (
-    <div className="guardian-drawer-backdrop" onMouseDown={close}>
+    <div className="guardian-drawer-backdrop profile-backdrop" onMouseDown={close}>
       <aside
-        className="guardian-drawer"
+        className="guardian-drawer profile-panel" role="dialog" aria-modal="true" aria-label="Guardian profile"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <button className="drawer-close" onClick={close}>
+        <button className="drawer-close" type="button" aria-label="Close guardian profile" onClick={close}>
           <FiX />
         </button>
         <header>
           <i>{initials(guardian)}</i>
           <div>
-            <h2>{name(guardian)}</h2>
+            <small className="profile-kicker">Guardian profile</small><h2>{name(guardian)}</h2>
             <p>{guardian.relationship || "Guardian"}</p>
           </div>
           <b className={guardian.active ? "active" : "inactive"}>
@@ -598,7 +553,7 @@ function Drawer({
                   </small>
                 </span>
                 <em>{c.active ? "Active" : "Inactive"}</em>
-                <Link href="/account/children">
+                <Link href={`/account/children?childId=${c.id}`} aria-label={`View ${name(c)}’s profile`}>
                   <FiChevronRight />
                 </Link>
               </article>

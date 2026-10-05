@@ -1,5 +1,6 @@
 "use client";
 
+import "./parent-photo-slider.css";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 

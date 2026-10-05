@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AttentionPanel } from "@/components/attention-panel";
 import { useEffect, useState } from "react";
 import {
   FiCheckCircle,
@@ -341,42 +342,7 @@ export default function AccountOverview() {
         </div>
         <aside className="right-column">
           <QuickActions />
-          <section className="panel attention-panel">
-            <div className="panel-heading">
-              <div>
-                <h2>Needs Attention</h2>
-                <p>Items requiring a next step.</p>
-              </div>
-            </div>
-            {dashboard.needsAttention.length ? (
-              <div className="attention-list">
-                {dashboard.needsAttention.map((item) => (
-                  <Link
-                    key={`${item.type}-${item.message}`}
-                    className="attention-item"
-                    href={item.actionDestination}
-                  >
-                    <i className={item.severity === "URGENT" ? "red" : "amber"}>
-                      <FiClock />
-                    </i>
-                    <span>
-                      {item.message}
-                      <small>{item.actionLabel}</small>
-                    </span>
-                    <FiChevronRight />
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <div className="all-good">
-                <FiCheckCircle />
-                <span>
-                  <b>Nothing needs attention now</b>
-                  <small>New ministry items will appear here.</small>
-                </span>
-              </div>
-            )}
-          </section>
+          <AttentionPanel items={dashboard.needsAttention} />
           {superAdmin && (
             <section className="panel relations-summary">
               <div className="panel-heading">
