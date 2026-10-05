@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import localFont from "next/font/local";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -30,6 +31,8 @@ import {
 import { subscribeToActiveService, type ActiveService } from "@/lib/active-service";
 import { NotificationBell } from "@/components/notification-bell";
 import "./sidebar-refinement.css";
+
+const campusFont = localFont({ src: "../../public/fonts/dm-serif-display.ttf", weight: "400", display: "swap", variable: "--font-campus" });
 
 type Item = readonly [string, string, typeof FiHome];
 const superSunday: readonly Item[] = [
@@ -217,7 +220,8 @@ export function Sidebar() {
         id="dashboard-navigation"
       >
         <div className="sidebar-scroll">
-          <Link className="brand" href="/account/overview">
+          <Link className={`brand ${campusFont.variable}`} href="/account/overview">
+            <span className="brand-logos">
             <Image
               src="/brand/petra-logo.jpg"
               alt="Petra Church"
@@ -226,17 +230,16 @@ export function Sidebar() {
               className="petra-logo"
               priority
             />
-            <span className="brand-copy">
               <Image
                 src="/brand/tpk-logo.png"
                 alt="TribePetra Kids"
-                width={118}
-                height={27}
+                width={76}
+                height={76}
                 className="tpk-logo"
                 priority
               />
-              <small>Wuse Campus</small>
             </span>
+            <span className="brand-copy"><small>Wuse Campus</small></span>
           </Link>
           <nav aria-label="Dashboard navigation">
             <Group

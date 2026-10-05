@@ -44,8 +44,15 @@
   padding: 22px;
   border: 1px solid #ece2da;
   border-radius: 16px;
-  background: linear-gradient(135deg, #fff, #fff9f5);
+  background: #fff;
 }
+
+.class-detail .weekly-reviews,
+.class-detail .weekly-reviews * { box-sizing: border-box; }
+.class-detail .weekly-reviews h2,
+.class-detail .weekly-reviews h3 { color: #172641; font-family: var(--font-display, sans-serif); letter-spacing: -.025em; }
+.class-detail .weekly-reviews p { margin: 0; }
+.class-detail .weekly-reviews .eyebrow { margin-bottom: 6px; color: #e65031; font-size: 10px; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
 
 .class-detail .weekly-reviews > header { margin-bottom: 18px; }
 .class-detail .weekly-reviews h2 { font-size: 27px; }
@@ -83,8 +90,9 @@
   font-size: 20px;
 }
 
-.class-detail .discussion-title h2 { margin-top: 2px; }
-.class-detail .discussion-title p:last-child { max-width: 540px; line-height: 1.55; }
+.class-detail .discussion-title h2 { margin: 0 0 8px; line-height: 1.2; }
+.class-detail .discussion-title p:last-child { max-width: 540px; color: #697a95; font-size: 13px; line-height: 1.55; }
+.class-detail .discussion-title > div { min-width: 0; }
 
 .class-detail .discussion-month,
 .class-detail .review-session {
@@ -106,12 +114,13 @@
   color: #203451;
   font: 800 12px var(--font-body);
 }
+.class-detail .discussion-month { flex: 0 0 175px; }
 
 .class-detail .review-form {
   padding: 0;
   overflow: hidden;
   border-color: #f1d9cf;
-  box-shadow: 0 10px 28px rgb(73 41 25 / 4%);
+  box-shadow: none;
 }
 
 .class-detail .review-form-heading {
@@ -142,22 +151,34 @@
 
 .class-detail .review-form-intro > div { display: grid; gap: 3px; }
 .class-detail .review-form-intro b { color: #1e304d; font-size: 13px; }
-.class-detail .review-form-intro small { color: #70809a; font-size: 10px; }
-.class-detail .review-session select { min-width: 245px; height: 39px; }
+.class-detail .review-form-intro small { color: #70809a; font-size: 11px; line-height: 1.5; }
+.class-detail .review-session { flex: 0 1 310px; min-width: 0; }
+.class-detail .review-session select {
+  width: 100%; min-width: 0; height: 44px; padding: 0 12px;
+  border: 1px solid #dce2eb; border-radius: 9px; background: #fff;
+  color: #203451; font: 700 12px var(--font-body, sans-serif);
+  text-overflow: ellipsis;
+}
 
 .class-detail .review-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
   padding: 18px;
   background: #fff;
 }
 
 .class-detail .review-field {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
   gap: 5px;
   padding: 13px;
   border: 1px solid #e4e8ee;
   border-radius: 11px;
-  background: #fcfdff;
+  background: #fafcfb;
 }
+.class-detail .review-field.improve { background: #fffaf6; }
 
 .class-detail .review-field > span {
   display: flex;
@@ -171,8 +192,18 @@
 .class-detail .review-field > span svg { font-size: 15px; }
 .class-detail .review-field.worked > span svg { color: #079455; }
 .class-detail .review-field.improve > span svg { color: #e06a20; }
-.class-detail .review-field small { min-height: 28px; color: #7786a0; font-size: 10px; font-weight: 600; line-height: 1.4; }
-.class-detail .review-field textarea { min-height: 118px; border-radius: 8px; background: #fff; line-height: 1.5; }
+.class-detail .review-field small { min-height: 32px; color: #677790; font-size: 11px; font-weight: 400; line-height: 1.5; }
+.class-detail .review-field textarea {
+  display: block; width: 100%; min-width: 0; min-height: 160px; margin-top: 8px;
+  padding: 13px; border: 1px solid #dce2eb; border-radius: 9px;
+  background: #fff; color: #203451; font: 13px/1.65 var(--font-body, sans-serif);
+  resize: vertical; transition: border-color .15s, box-shadow .15s;
+}
+.class-detail .review-field textarea::placeholder { color: #8793a5; opacity: 1; }
+.class-detail .weekly-reviews :is(input, select, textarea, button):focus-visible {
+  outline: 2px solid #ff5938; outline-offset: 3px;
+}
+.class-detail .review-field textarea:focus { border-color: #ff9a83; }
 
 .class-detail .review-actions {
   display: flex;
@@ -184,8 +215,9 @@
   background: #fbfcfe;
 }
 
-.class-detail .review-actions p { color: #72809a; font-size: 10px; }
-.class-detail .review-save-message { margin-left: auto; color: #c85b2f; font-size: 10px; font-weight: 800; }
+.class-detail .review-actions p { display: flex; align-items: center; gap: 7px; color: #72809a; font-size: 11px; line-height: 1.5; }
+.class-detail .review-actions p svg { flex: none; }
+.class-detail .review-save-message { margin-left: auto; color: #c85b2f; font-size: 11px; font-weight: 700; }
 .class-detail .review-save-message.success { color: #078d61; }
 .class-detail .review-actions .primary {
   display: inline-flex;
@@ -193,9 +225,20 @@
   justify-content: center;
   gap: 6px;
   min-width: 152px;
+  flex: none;
+  min-height: 44px;
   margin: 0;
   padding: 0 15px;
+  border: 1px solid #ff5938;
+  border-radius: 9px;
+  background: #ff5938;
+  color: #fff;
+  font: 800 12px var(--font-body, sans-serif);
+  cursor: pointer;
+  transition: background .15s;
 }
+.class-detail .review-actions .primary:not(:disabled):hover { background: #e8492b; }
+.class-detail .review-actions .primary:disabled { background: #f1f3f6; border-color: #e4e8ee; color: #697a95; cursor: not-allowed; }
 
 .class-detail .review-history-heading {
   display: flex;
@@ -207,20 +250,26 @@
 
 .class-detail .review-history-heading h3 { margin: 3px 0 0; font-size: 18px; }
 .class-detail .review-history-heading span { border-radius: 999px; background: #f1f4f8; padding: 5px 9px; color: #667590; font-size: 10px; font-weight: 900; }
-.class-detail .review-list { margin-top: 12px; }
+.class-detail .review-list { display: grid; gap: 12px; margin-top: 12px; }
 
 .class-detail .review-list article {
   position: relative;
   overflow: hidden;
   padding: 16px;
   border-color: #e6e4df;
-  box-shadow: 0 5px 15px rgb(38 32 22 / 2%);
+  border: 1px solid #e6e4df;
+  background: #fff;
+  box-shadow: none;
 }
+.class-detail .review-list article header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.class-detail .review-list article header > div { display: grid; gap: 5px; min-width: 0; }
+.class-detail .review-list article header b { color: #203451; font-size: 13px; }
+.class-detail .review-list article header small { color: #71809b; font-size: 11px; line-height: 1.5; }
 
 .class-detail .review-list article::before { position: absolute; inset: 0 auto 0 0; width: 3px; background: #ff5a39; content: ""; }
 .class-detail .review-list article header svg { width: 30px; height: 30px; padding: 7px; box-sizing: border-box; border-radius: 9px; background: #fff0e9; }
-.class-detail .review-list article p { padding: 10px 11px; border-radius: 8px; background: #fafbfc; }
-.class-detail .review-list article p strong { color: #334764; }
+.class-detail .review-list article p { display: grid; gap: 5px; margin-top: 12px; padding: 12px; border-radius: 8px; background: #fafbfc; color: #586a85; font-size: 13px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+.class-detail .review-list article p strong { color: #334764; font-size: 11px; }
 
 .class-detail .discussion-empty {
   display: flex;
@@ -238,6 +287,14 @@
 .class-detail .discussion-empty b { color: #203451; font-size: 12px; }
 .class-detail .discussion-empty p { color: #75839a; font-size: 11px; line-height: 1.5; }
 
+@media (max-width: 900px) {
+  .class-detail .review-form-heading { align-items: stretch; flex-direction: column; }
+  .class-detail .review-session { flex-basis: auto; width: 100%; }
+  .class-detail .review-fields { grid-template-columns: 1fr; }
+  .class-detail .review-field small { min-height: 0; }
+  .class-detail .review-actions { flex-wrap: wrap; }
+}
+
 @media (max-width: 650px) {
   .class-detail .attendance-cards { display: grid !important; }
   .class-detail .matrix { display: none !important; }
@@ -253,6 +310,7 @@
   .class-detail .review-session,
   .class-detail .discussion-month input,
   .class-detail .review-session select { width: 100%; min-width: 0; }
+  .class-detail .discussion-month { flex-basis: auto; }
   .class-detail .review-form-heading { gap: 13px; padding: 15px; }
   .class-detail .review-fields { padding: 15px; }
   .class-detail .review-actions { padding: 13px 15px; }

@@ -548,6 +548,7 @@ export function ClassroomDetail({ classId }: { classId: number }) {
   const addWeeklyReview = async () => {
     if (
       !session ||
+      discussionMessage === "Saving discussion…" ||
       !reviewSessionId ||
       (!workedWell.trim() && !needsImprovement.trim())
     )
@@ -858,6 +859,7 @@ function WeeklyReviews({
     (item, index, list) =>
       list.findIndex((other) => other.id === item.id) === index,
   );
+  const saving = discussionMessage === "Saving discussion…";
   return (
     <section className="weekly-reviews">
       <header className="discussion-header">
@@ -882,7 +884,7 @@ function WeeklyReviews({
         </label>
       </header>
       {data.canManage && (
-        <section className="review-form">
+        <section className="review-form" aria-busy={saving}>
           <div className="review-form-heading">
             <div className="review-form-intro">
               <i><FiClipboard /></i>
@@ -895,6 +897,7 @@ function WeeklyReviews({
               <span>Sunday service</span>
               <select
                 value={reviewSessionId}
+                disabled={saving}
                 onChange={(event) => setReviewSessionId(event.target.value)}
               >
                 <option value="">Choose Sunday</option>
@@ -912,6 +915,8 @@ function WeeklyReviews({
               <span><FiCheckCircle /> What worked well?</span>
               <small>Celebrate what helped children engage, learn or settle in.</small>
               <textarea
+                disabled={saving}
+                rows={6}
                 value={workedWell}
                 onChange={(event) => setWorkedWell(event.target.value)}
                 placeholder="What helped the children learn, participate or settle well?"
@@ -921,6 +926,8 @@ function WeeklyReviews({
               <span><FiAlertTriangle /> What should we improve?</span>
               <small>Note one thing to prepare or handle differently next time.</small>
               <textarea
+                disabled={saving}
+                rows={6}
                 value={needsImprovement}
                 onChange={(event) => setNeedsImprovement(event.target.value)}
                 placeholder="What needs attention before the next Sunday?"
@@ -928,17 +935,18 @@ function WeeklyReviews({
             </label>
           </div>
           <footer className="review-actions">
-            <p>Visible to teachers assigned to this class.</p>
-            {discussionMessage && <span className={`review-save-message${discussionMessage === "Discussion saved." ? " success" : ""}`}>{discussionMessage}</span>}
+            <p><FiUsers aria-hidden="true" /> Shared with this class’s teaching team.</p>
+            {discussionMessage && <span role="status" className={`review-save-message${discussionMessage === "Discussion saved." ? " success" : ""}`}>{discussionMessage}</span>}
             <button
               className="primary"
               disabled={
+                saving ||
                 !reviewSessionId ||
                 (!workedWell.trim() && !needsImprovement.trim())
               }
               onClick={onSave}
             >
-              <FiCheckCircle /> Save discussion
+              <FiCheckCircle aria-hidden="true" /> {saving ? "Saving…" : "Save discussion"}
             </button>
           </footer>
         </section>
