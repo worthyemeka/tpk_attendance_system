@@ -1,6 +1,7 @@
 "use client";
 
 import { AppSelect } from "@/components/app-dropdown";
+import { DirectoryPagination } from "@/components/directory-pagination";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {useProfileDialog} from "@/components/use-profile-dialog";
@@ -411,7 +412,8 @@ export default function TeamPage() {
               placeholder="Search teacher by name, phone or email…"
             />
           </label>
-          <AppSelect
+          <label className="directory-select"><span>Filter by role</span><AppSelect
+            aria-label="Filter team by role"
             value={assignment}
             onChange={(event) => setAssignment(event.target.value)}
           >
@@ -419,7 +421,7 @@ export default function TeamPage() {
             {roles.map((item) => (
               <option key={item}>{item}</option>
             ))}
-          </AppSelect>
+          </AppSelect></label>
           <label className="directory-select">
             <span>Sort team</span>
             <AppSelect value={sort} onChange={(event) => setSort(event.target.value)}>
@@ -525,13 +527,7 @@ export default function TeamPage() {
           </article>)}
           {!shown.length && <p className="team-grid-empty">{loading ? "Loading registered teachers…" : "No team members match these filters."}</p>}
         </div>}
-        <p className="paging">
-          Showing {shown.length ? `${(page - 1) * perPage + 1}–${Math.min(page * perPage, shown.length)}` : "0"} of {shown.length} team members
-        </p>
-        <div className="team-pagination">
-          <label>Show <AppSelect value={perPage} onChange={(event) => setPageSizeOverride(Number(event.target.value))}>{[5, 10, 12, 20, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}</AppSelect> teachers</label>
-          <div><button disabled={page === 1} onClick={() => setPage((current) => current - 1)}>Previous</button><span>{page} of {totalPages}</span><button disabled={page === totalPages} onClick={() => setPage((current) => current + 1)}>Next</button></div>
-        </div>
+        <DirectoryPagination page={page} total={shown.length} pageSize={perPage} noun="team members" loading={loading} onPageChange={setPage} onPageSizeChange={setPageSizeOverride}/>
       </section>
       {selected && (
         <TeacherDrawer

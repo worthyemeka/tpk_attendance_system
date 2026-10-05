@@ -11,6 +11,9 @@ export function useProfileDialog(close:()=>void,selector:string,enabled=true){
     const focusable=()=>Array.from(panel.querySelectorAll<HTMLElement>('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex="0"]')).filter(el=>el.getClientRects().length&&!el.matches('[tabindex="-1"],[aria-hidden="true"]'));
     focusable()[0]?.focus({preventScroll:true});
     const keydown=(event:KeyboardEvent)=>{
+      // Only the topmost dialog owns Escape and Tab when a feature opens a child profile.
+      const dialogs=Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"]')).filter(element=>element.getClientRects().length);
+      if(dialogs.length&&dialogs.at(-1)!==panel)return;
       if(event.key==="Escape"){event.preventDefault();closeRef.current();return;}
       if(event.key!=="Tab")return;const elements=focusable();const first=elements[0],last=elements.at(-1);
       if(!first){event.preventDefault();return;}

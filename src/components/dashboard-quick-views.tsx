@@ -7,10 +7,10 @@ import { apiBase, authHeaders, mediaUrl, readTeacherSession } from "@/lib/sessio
 import { useProfileDialog } from "./use-profile-dialog";
 import "./dashboard-quick-views.css";
 
-function QuickDialog({ title, close, children }: { title: string; close: () => void; children: React.ReactNode }) {
+export function QuickDialog({ title, close, children, wide = false }: { title: string; close: () => void; children: React.ReactNode; wide?: boolean }) {
   useProfileDialog(close, ".dashboard-quick-dialog");
   return createPortal(<div className="dashboard-quick-backdrop" onMouseDown={close}>
-    <section role="dialog" aria-modal="true" aria-label={title} className="dashboard-quick-dialog" onMouseDown={event => event.stopPropagation()}>
+    <section role="dialog" aria-modal="true" aria-label={title} className={`dashboard-quick-dialog${wide ? " dashboard-quick-dialog--wide" : ""}`} onMouseDown={event => event.stopPropagation()}>
       <header><div><small>TRIBEPETRA KIDS</small><h2>{title}</h2></div><button type="button" aria-label={`Close ${title}`} onClick={close}><FiX /></button></header>
       {children}
     </section>

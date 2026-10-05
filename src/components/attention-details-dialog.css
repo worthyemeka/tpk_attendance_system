@@ -1,0 +1,20 @@
+body .dashboard-quick-dialog--wide{width:min(1080px,100%);box-sizing:border-box}
+body .attention-refined button.attention-task{width:100%;background:#fff;text-align:left;font-family:var(--font-body);cursor:pointer}
+body .attention-refined button.attention-task:hover{border-color:#e5ac93;background:#fffcf9}
+body .attention-refined button.attention-task:focus-visible{outline:3px solid #9bc3e7;outline-offset:3px}
+.attention-roster-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:22px;color:#76869a;font-size:12px}
+.attention-roster-toolbar>div{display:flex;gap:6px;flex-wrap:wrap}
+.attention-roster-toolbar button,.attention-roster-date header>button,.quick-error button{min-height:42px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid #dce3ec;border-radius:10px;padding:8px 14px;background:#fff;color:#52687f;font:600 12px var(--font-body);cursor:pointer;box-shadow:none}
+.attention-roster-toolbar button[aria-pressed=true]{background:#fff3ed;color:#c75232;border-color:#f0c9b7}
+.attention-roster-dates{display:grid;gap:22px}
+.attention-roster-date{padding:20px;border:1px solid #e3e7ed;border-radius:14px;background:#fff}
+.attention-roster-date header{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:18px}
+.dashboard-quick-dialog .attention-roster-date h3{display:flex;align-items:center;gap:10px;font-size:16px;line-height:1.5}
+.attention-roster-date h3 svg{flex:none;color:#e26742;font-size:18px}
+.attention-roster-date>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.attention-roster-date article{display:flex;align-items:flex-start;gap:12px;padding:16px;border:1px solid #e8ecf0;border-radius:12px;min-width:0}
+.attention-roster-date article>img,.attention-roster-date article>i{width:42px;height:42px;flex:none;border-radius:50%;object-fit:cover;display:grid;place-items:center;background:#edf3fb;color:#4675a4;font:700 12px var(--font-body);font-style:normal}
+.attention-roster-date article>div{min-width:0;overflow-wrap:anywhere}.attention-roster-date article b{font-size:14px}.attention-roster-date article small{display:block;margin:5px 0;color:#72839a;font-size:12px}.attention-roster-date article p{font-size:13px;line-height:1.6;margin:10px 0 0;color:#354e6b}
+.attention-workspace{min-width:0}.attention-workspace :is(.pickup-dashboard,.children-directory,.followup){padding:0!important;max-width:none!important}.attention-workspace :is(.child-header,.pickup-dashboard>header,.followup>header){display:none}.attention-workspace .child-summary{display:none}
+.quick-error button{margin-left:12px}.attention-roster-date button:disabled{opacity:.5;cursor:default}
+@media(max-width:650px){.attention-roster-date{padding:14px}.attention-roster-date>div{grid-template-columns:1fr}.attention-roster-date header{align-items:flex-start}.dashboard-quick-dialog .attention-roster-date h3{font-size:14px}.attention-roster-date header>button{padding:8px 10px}.attention-roster-date article{padding:14px}.attention-roster-toolbar>div{width:100%;display:grid;grid-template-columns:1fr 1fr}.attention-roster-toolbar button{font-size:11px;padding:8px}.attention-workspace .table-wrap{max-width:100%}}

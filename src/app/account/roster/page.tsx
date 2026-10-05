@@ -26,7 +26,7 @@ import {
 } from "react-icons/fi";
 import { apiBase, authHeaders, mediaUrl, readTeacherSession } from "@/lib/session";
 import { printBrandedDocument } from "@/lib/branded-print";
-import { downloadWeeklyRosterPdf, rosterWeek } from "@/lib/weekly-roster-pdf";
+import { downloadWeeklyRosterPdf } from "@/lib/weekly-roster-pdf";
 import { MonthPicker } from "@/components/month-picker";
 import { DataViewToggle, type DataView } from "@/components/data-view-toggle";
 import { useSundayContext } from "@/lib/sunday-context";
@@ -428,17 +428,9 @@ export default function RosterPage() {
     if(!data||!session||downloadingWeek)return;
     setDownloadingWeek(date);setError("");
     try {
-      const week=rosterWeek(date);let assignments=[...data.assignments];
-      const months=[...new Set([week.start.slice(0,7),week.end.slice(0,7)])];
-      for(const month of months){
-        if(month===monthKey)continue;
-        const response=await fetch(`${apiBase}/api/v1/roster/management?month=${Number(month.slice(5))}&year=${month.slice(0,4)}`,{headers:authHeaders(session),cache:"no-store"});
-        const result=await response.json();if(!response.ok||!result.success)throw new Error("We couldn’t load the full week’s roster. Please try again.");
-        assignments=assignments.concat(result.data.assignments||[]);
-      }
-      await downloadWeeklyRosterPdf(assignments,date);
-      setNotice("Weekly roster PDF downloaded.");
-    }catch{setError("We couldn’t download this week’s roster. Please try again.");}finally{setDownloadingWeek("");}
+      await downloadWeeklyRosterPdf(data.assignments,date);
+      setNotice(`Roster for ${formatDate(date)} downloaded.`);
+    }catch{setError("We couldn’t download this date’s roster. Please try again.");}finally{setDownloadingWeek("");}
   }
   function exportRoster(kind: "CSV" | "PDF") {
     if (!data) return;
@@ -1089,7 +1081,7 @@ function SundayCalendar({
             ? formatDate(`${dates[0].slice(0, 7)}-01`).replace(/^1\s/, "")
             : ""}
         </h2>
-        <p>{dates.length} Sundays · Download a complete weekly roster from each row.</p>
+        <p>{dates.length} Sundays · Each row downloads assignments for that Sunday only.</p>
       </div>
       <table className="monthly-grid">
         <thead>
@@ -1131,7 +1123,7 @@ function SundayCalendar({
                 );
               })}
               <td>
-                <button className="row-more" disabled={downloading} onClick={() => onDownload(date)} aria-label={`Download weekly roster PDF for ${formatDate(date)}`} title="Download weekly roster PDF"><FiDownload /></button>
+                <button className="row-more" disabled={downloading} onClick={() => onDownload(date)} aria-label={`Download roster PDF for ${formatDate(date)}`} title="Download roster PDF"><FiDownload /></button>
               </td>
             </tr>
           ))}
@@ -1281,7 +1273,7 @@ function NonTeachingCalendar({
                 );
               })}
               <td>
-                <button className="row-more" disabled={downloading} onClick={() => onDownload(date)} aria-label={`Download weekly roster PDF for ${formatDate(date)}`} title="Download weekly roster PDF"><FiDownload /></button>
+                <button className="row-more" disabled={downloading} onClick={() => onDownload(date)} aria-label={`Download roster PDF for ${formatDate(date)}`} title="Download roster PDF"><FiDownload /></button>
               </td>
             </tr>
           ))}

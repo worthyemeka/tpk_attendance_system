@@ -47,7 +47,7 @@ export const AppSelect = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTML
     return () => observer.disconnect();
   }, [props]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
     const place = () => {
       const box = trigger.current?.getBoundingClientRect();
@@ -64,7 +64,7 @@ export const AppSelect = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTML
     document.addEventListener("pointerdown", outside);
     return () => { window.removeEventListener("resize", place); window.removeEventListener("scroll", place, true); document.removeEventListener("pointerdown", outside); };
   }, [open]);
-  useEffect(() => { if (open) optionRefs.current[active]?.focus(); }, [open, active]);
+  useEffect(() => { if (open) optionRefs.current[active]?.focus({ preventScroll: true }); }, [open, active]);
   useEffect(() => { if (props.disabled) setOpen(false); }, [props.disabled]);
 
   const choose = (index: number) => {
@@ -75,7 +75,7 @@ export const AppSelect = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTML
     field.dispatchEvent(new Event("change", { bubbles: true }));
     setValue(field.value);
     setOpen(false);
-    trigger.current?.focus();
+    trigger.current?.focus({ preventScroll: true });
   };
   const move = (direction: number) => {
     let next = active;

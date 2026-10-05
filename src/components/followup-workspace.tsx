@@ -21,6 +21,7 @@ import { ClassBadge, RecordBadge } from "@/components/record-badge";
 import { useProfileDialog } from "@/components/use-profile-dialog";
 import "./followup-refinements.css";
 import { FollowupHistory } from "./followup-history";
+import { DirectoryPagination } from "./directory-pagination";
 type Case = {
   id: number;
   familyId: number;
@@ -116,7 +117,7 @@ export function FollowupWorkspace() {
     [assignees, setAssignees] = useState<Assignee[]>([]),
     [followupRecipients, setFollowupRecipients] = useState<FollowupRecipient[]>([]),
     [page, setPage] = useState(1),
-    [pageSize, setPageSize] = useState(10),
+    [pageSizeOverride, setPageSizeOverride] = useState<number|null>(null),
     [total, setTotal] = useState(0),
     [childrenTotal, setChildrenTotal] = useState(0),
     [loading, setLoading] = useState(true),
@@ -131,6 +132,7 @@ export function FollowupWorkspace() {
     [error, setError] = useState(""),
     [display, setDisplay] = useState<DataView>("LIST");
   const request = useRef(0);
+  const pageSize=pageSizeOverride??(display==="GRID"?12:10);
   useEffect(() => {
     const saved = window.localStorage.getItem("tpk:followups-display");
     if (saved === "GRID" || saved === "LIST") setDisplay(saved);
@@ -138,6 +140,8 @@ export function FollowupWorkspace() {
   }, []);
   const setFollowupDisplay = (value: DataView) => {
     setDisplay(value);
+    setPageSizeOverride(null);
+    setPage(1);
     window.localStorage.setItem("tpk:followups-display", value);
   };
   const load = useCallback(async (signal?: AbortSignal) => {
@@ -259,11 +263,8 @@ export function FollowupWorkspace() {
     ["contacted", `Contacted (${summary.contacted})`],
     ["leadership", `Follow-Up Report Sent (${summary.needsLeadership})`],
   ];
-  const pages = Math.max(1, Math.ceil(total / pageSize));
   const hasFilters = Boolean(query || classId || missed || month || year || ownerId || status);
   const clearFilters = () => { setQuery(""); setClassId(""); setMissed(""); setMonth(""); setYear(""); setOwnerId(""); setStatus(""); setPage(1); };
-  const rangeStart = total ? (page - 1) * pageSize + 1 : 0;
-  const rangeEnd = Math.min(page * pageSize, total);
   return (
     <>
       <section className="followup followup-refined">
@@ -432,7 +433,7 @@ export function FollowupWorkspace() {
             {!rows.length && <p className="followup-grid-empty">No follow-up cases found.</p>}
           </div>
         )}
-        <footer className="followup-pagination"><span aria-live="polite">{loading ? "Loading…" : `Showing ${rangeStart}–${rangeEnd} of ${total} families`}</span><label>Rows per page <AppSelect aria-label="Families per page" value={pageSize} disabled={loading} onChange={event => { setPageSize(Number(event.target.value)); setPage(1); }}>{[10,25,50].map(size=><option key={size} value={size}>{size}</option>)}</AppSelect></label><div><button type="button" disabled={loading || page <= 1} onClick={() => setPage(value => value - 1)}>Previous</button><span>Page {page} of {pages}</span><button type="button" disabled={loading || page >= pages} onClick={() => setPage(value => value + 1)}>Next</button></div></footer>
+        <DirectoryPagination page={page} total={total} pageSize={pageSize} noun="families" loading={loading} onPageChange={setPage} onPageSizeChange={size=>{setPageSizeOverride(size);setPage(1);}}/>
         {detail && (
           <Drawer
             detail={detail}

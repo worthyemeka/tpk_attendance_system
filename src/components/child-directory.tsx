@@ -1,6 +1,7 @@
 "use client";
 
 import { AppSelect } from "@/components/app-dropdown";
+import { DirectoryPagination } from "./directory-pagination";
 import Link from "next/link";
 import {useProfileDialog} from "@/components/use-profile-dialog";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -177,7 +178,7 @@ function openChildrenAttendanceReport(report: AttendanceReport, target?: Window 
   return true;
 }
 
-export function ChildDirectory() {
+export function ChildDirectory({needsClassAssignment=false}: {needsClassAssignment?:boolean}={}) {
   const session = useMemo<Session>(() => readTeacherSession(), []);
   const searchParams = useSearchParams();
   const openedChildId = useRef<number | null>(null);
@@ -222,38 +223,43 @@ export function ChildDirectory() {
   }, []);
   const setChildDisplay = (value: DataView) => {
     setDisplay(value);
+    setPage(1);
     window.localStorage.setItem("tpk:children-display", value);
   };
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     if (!session) return;
     setLoading(true);
     try {
       const p = new URLSearchParams({
         page: String(page),
-        limit: "25",
+        limit: String(display === "GRID" ? 12 : 25),
         sort,
         order,
       });
       if (query) p.set("search", query);
       if (classId) p.set("classId", classId);
       if (gender) p.set("gender", gender);
+      if (needsClassAssignment) p.set("classAssignmentRequired", "1");
       const r = await fetch(`${apiBase}/api/v1/children?${p}`, {
           headers: authHeaders(session),
+          signal,
         }),
         b = await r.json();
+      if (signal?.aborted) return;
       if (!r.ok || !b.success)
         throw new Error(b.error?.message || "We could not load child records.");
       setRows(b.data || []);
       setTotal(Number(b.meta?.total || 0));
       setError("");
     } catch (e) {
+      if (signal?.aborted) return;
       setError(
         e instanceof Error ? e.message : "We could not load child records.",
       );
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
-  }, [classId, gender, order, page, query, session, sort]);
+  }, [classId, gender, order, page, query, session, sort, display, needsClassAssignment]);
   const loadSummary = useCallback(async () => {
     if (!session) return;
     try {
@@ -265,8 +271,9 @@ export function ChildDirectory() {
     } catch {}
   }, [session]);
   useEffect(() => {
-    const timer = window.setTimeout(() => void load(), query ? 180 : 0);
-    return () => window.clearTimeout(timer);
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => void load(controller.signal), query ? 180 : 0);
+    return () => { window.clearTimeout(timer); controller.abort(); };
   }, [load, query]);
   useEffect(() => {
     void loadSummary();
@@ -403,7 +410,7 @@ export function ChildDirectory() {
       setExporting(false);
     }
   };
-  const pages = Math.max(1, Math.ceil(total / 25));
+  const perPage = display === "GRID" ? 12 : 25;
   const clear = () => {
     setQuery("");
     setClassId("");
@@ -548,38 +555,7 @@ export function ChildDirectory() {
               <p>{query || classId || gender ? "Try another name, class or gender, or clear your filters to see everyone." : "Register your first child to start building the directory."}</p>
               {query || classId || gender ? <button type="button" onClick={clear}>Clear filters</button> : <Link href="/account/check-in/assisted">Register a child <FiChevronRight /></Link>}
             </section>}
-            <footer className="child-pagination">
-              <p>
-                Showing {rows.length ? (page - 1) * 25 + 1 : 0}–
-                {(page - 1) * 25 + rows.length} of {total} children
-              </p>
-              <div>
-                <button
-                  disabled={page === 1}
-                  onClick={() => setPage((v) => v - 1)}
-                >
-                  ‹
-                </button>
-                {Array.from(
-                  { length: Math.min(5, pages) },
-                  (_, i) => i + 1,
-                ).map((n) => (
-                  <button
-                    key={n}
-                    className={n === page ? "current" : ""}
-                    onClick={() => setPage(n)}
-                  >
-                    {n}
-                  </button>
-                ))}
-                <button
-                  disabled={page === pages}
-                  onClick={() => setPage((v) => v + 1)}
-                >
-                  ›
-                </button>
-              </div>
-            </footer>
+            <DirectoryPagination page={page} total={total} pageSize={perPage} noun="children" loading={loading} onPageChange={setPage}/>
           </>
         )}
       </section>
