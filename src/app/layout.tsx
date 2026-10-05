@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import { rootMetadata } from "@/lib/seo";
 import "./globals.css";
 import "./typography.css";
 import "./dropdowns.css";
@@ -16,7 +16,7 @@ import "../components/dashboard-ux.css";
 import "../components/notifications.css";
 import "../components/dashboard-refinements.css";
 import "../components/people-polish.css";
-export const metadata: Metadata = { title: "TribePetra Kids | Wuse", description: "Child check-in and pickup", icons: { icon: "/brand/tpk-logo.jpg" } };
+export const metadata = rootMetadata;
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return <html lang="en"><body><AppShell>{children}</AppShell><GlobalDropdowns /><DisplayTypography /></body></html>;
 }

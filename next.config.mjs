@@ -7,6 +7,9 @@ if (process.env.VERCEL === "1" && (!liveHostname || ["localhost", "127.0.0.1", "
 /** @type {import('next').NextConfig} */
 export default {
   reactStrictMode: true,
+  async headers() {
+    return ["/account/:path*", "/teacher/:path*", "/check-in/:path*", "/families/:path*", "/pick-up", "/pickup-ticket", "/api/:path*", "/uploads/:path*"].map(source => ({ source, headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow, nosnippet, noimageindex" }] }));
+  },
   async rewrites() {
     return [
       { source: "/api/:path*", destination: `${phpApi}/api/:path*` },
