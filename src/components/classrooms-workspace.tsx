@@ -955,7 +955,7 @@ function WeeklyReviews({
         <header className="review-history-heading">
           <div>
             <p className="eyebrow">Discussion history</p>
-            <h3>This month’s reflections</h3>
+            <h3>This month’s class reviews</h3>
           </div>
           <span>{data.weeklyReviews.length} {data.weeklyReviews.length === 1 ? "review" : "reviews"}</span>
         </header>

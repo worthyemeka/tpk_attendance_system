@@ -49,7 +49,11 @@ export function readTeacherSession(): TeacherSession | null {
   } catch { return null; }
 }
 
-export function saveTeacherSession(session: TeacherSession) { window.localStorage.setItem("tpk-teacher", JSON.stringify(session)); }
+export const teacherSessionChangedEvent = "tpk-teacher-session-changed";
+export function saveTeacherSession(session: TeacherSession) {
+  window.localStorage.setItem("tpk-teacher", JSON.stringify(session));
+  window.dispatchEvent(new Event(teacherSessionChangedEvent));
+}
 export function clearTeacherSession() { window.localStorage.removeItem("tpk-teacher"); }
 export function authHeaders(session = readTeacherSession()): HeadersInit { return session ? { Authorization: `Bearer ${session.sessionToken}` } : {}; }
 export function isSuperAdmin(session = readTeacherSession()) { return session?.accessLevel === "TPK_SUPER_ADMIN"; }
