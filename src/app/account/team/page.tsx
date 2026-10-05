@@ -23,6 +23,7 @@ import {
 } from "react-icons/fi";
 import { apiBase, authHeaders, mediaUrl, readTeacherSession } from "@/lib/session";
 import { printBrandedDocument } from "@/lib/branded-print";
+import { campusRosterDate, teacherRosterStatus } from "@/lib/teacher-roster-status";
 import { StatCard, type StatCardTone } from "@/components/stat-card";
 import { ProbationJourney } from "@/components/probation-journey";
 import { MonthPicker } from "@/components/month-picker";
@@ -1016,6 +1017,13 @@ function OnboardedSummary({ member }: { member: Member }) {
 type TeacherRosterActivity = { id:number; assignmentDate:string; status:string; dutyName:string; dutyCode:string; serviceName:string; startsAt?:string|null; className?:string|null };
 function TeacherRosterPanel({ member }: { member: Member }) {
   const session = useMemo(() => readTeacherSession(), []);
+  const [today, setToday] = useState(() => campusRosterDate());
+  useEffect(() => {
+    const update = () => setToday(campusRosterDate());
+    const timer = window.setInterval(update, 60_000);
+    window.addEventListener("focus", update);
+    return () => { window.clearInterval(timer); window.removeEventListener("focus", update); };
+  }, []);
   const [month, setMonth] = useState(() => new Date(Date.UTC(new Date().getFullYear(), new Date().getMonth(), 1)));
   const [activities, setActivities] = useState<TeacherRosterActivity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1033,11 +1041,11 @@ function TeacherRosterPanel({ member }: { member: Member }) {
   }, [member.id, month, session]);
   useEffect(() => { void load(); }, [load]);
   const exportRoster = (kind: "CSV" | "PDF") => {
-    const rows = activities.map((item) => ({ Date: niceDate(item.assignmentDate), Service: item.serviceName, "Class / Duty": item.className || item.dutyName, Status: item.status === "PRESENT" ? "Served" : item.status === "ABSENT" ? "Absent" : "Upcoming" }));
+    const rows = activities.map((item) => ({ Date: niceDate(item.assignmentDate), Service: item.serviceName, "Class / Duty": item.className || item.dutyName, Status: teacherRosterStatus(item, today) }));
     if (kind === "CSV") { const csv = [Object.keys(rows[0] || {}).join(","), ...rows.map((row) => Object.values(row).map((value) => `\"${String(value).replaceAll('"', '""')}\"`).join(","))].join("\n"); const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); const link = document.createElement("a"); link.href = url; link.download = `${personName(member).replaceAll(" ", "-").toLowerCase()}-${month.toISOString().slice(0, 7)}-roster.csv`; link.click(); URL.revokeObjectURL(url); return; }
     printBrandedDocument({ eyebrow: "Teaching roster", title: `${personName(member)}’s Roster`, subtitle: `${monthLabel} · TribePetra Kids, Wuse Campus.`, stats: [{ label: "Activities", value: rows.length }, { label: "Served", value: rows.filter((row) => row.Status === "Served").length }, { label: "Upcoming", value: rows.filter((row) => row.Status === "Upcoming").length }], columns: ["Date", "Service", "Class / Duty", "Status"], rows: rows.map((row) => [row.Date, row.Service, row["Class / Duty"], row.Status]) });
   };
-  return <section className="teacher-roster-panel"><header><i><FiCalendar /></i><div><h3>Teaching Roster</h3><p>All scheduled services, assignments and attendance for the selected month.</p></div><div className="drawer-export"><button onClick={() => exportRoster("PDF")}><FiDownload /> PDF</button><button onClick={() => exportRoster("CSV")}>CSV</button></div></header><MonthPicker value={month} onChange={setMonth} ariaLabel="Choose roster month" />{error && <p className="journey-error">{error}</p>}<div className="teacher-roster-table"><table><thead><tr><th>Date</th><th>Service</th><th>Class / Duty</th><th>Status</th></tr></thead><tbody>{activities.map((item) => <tr key={item.id}><td data-label="Date"><b>{niceDate(item.assignmentDate)}</b></td><td data-label="Service">{item.serviceName}</td><td data-label="Class / Duty">{item.className || item.dutyName}</td><td data-label="Status"><span className={`roster-status ${item.status.toLowerCase()}`}>{item.status === "PRESENT" ? "✓ Served" : item.status === "ABSENT" ? "× Absent" : "○ Upcoming"}</span></td></tr>)}{!activities.length && <tr><td colSpan={4}>{loading ? "Loading roster…" : "No activities are scheduled for this month."}</td></tr>}</tbody></table></div><p className="quiet">Showing {activities.length} activit{activities.length === 1 ? "y" : "ies"} for {monthLabel}.</p></section>;
+  return <section className="teacher-roster-panel"><header><i><FiCalendar /></i><div><h3>Teaching Roster</h3><p>All scheduled services, assignments and attendance for the selected month.</p></div><div className="drawer-export"><button onClick={() => exportRoster("PDF")}><FiDownload /> PDF</button><button onClick={() => exportRoster("CSV")}>CSV</button></div></header><MonthPicker value={month} onChange={setMonth} ariaLabel="Choose roster month" />{error && <p className="journey-error">{error}</p>}<div className="teacher-roster-table"><table><thead><tr><th>Date</th><th>Service</th><th>Class / Duty</th><th>Status</th></tr></thead><tbody>{activities.map((item) => { const status = teacherRosterStatus(item, today); return <tr key={item.id}><td data-label="Date"><b>{niceDate(item.assignmentDate)}</b></td><td data-label="Service">{item.serviceName}</td><td data-label="Class / Duty">{item.className || item.dutyName}</td><td data-label="Status"><span className={`roster-status ${status.toLowerCase()}`}>{status === "Served" || status === "Completed" ? "✓ " : status === "Absent" ? "× " : "○ "}{status}</span></td></tr>; })}{!activities.length && <tr><td colSpan={4}>{loading ? "Loading roster…" : "No activities are scheduled for this month."}</td></tr>}</tbody></table></div><p className="quiet">Showing {activities.length} activit{activities.length === 1 ? "y" : "ies"} for {monthLabel}.</p></section>;
 }
 function ProbationLog({ member }: { member: Member }) {
   const session = useMemo(() => readTeacherSession(), []);
