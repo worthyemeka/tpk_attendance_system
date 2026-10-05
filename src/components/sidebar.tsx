@@ -26,6 +26,7 @@ import {
   mediaUrl,
   clearTeacherSession,
   readTeacherSession,
+  teacherSessionChangedEvent,
   type TeacherSession,
 } from "@/lib/session";
 import { subscribeToActiveService, type ActiveService } from "@/lib/active-service";
@@ -123,7 +124,17 @@ export function Sidebar() {
   const [checkinVisible, setCheckinVisible] = useState(false);
   const [peopleDirectoryVisible, setPeopleDirectoryVisible] = useState(false);
   const [profileImageFailed, setProfileImageFailed] = useState(false);
-  useEffect(() => setSession(readTeacherSession()), []);
+  useEffect(() => {
+    const refreshSession = () => { setSession(readTeacherSession()); setProfileImageFailed(false); };
+    const onStorage = (event: StorageEvent) => { if (event.key === "tpk-teacher" || event.key === null) refreshSession(); };
+    refreshSession();
+    window.addEventListener(teacherSessionChangedEvent, refreshSession);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener(teacherSessionChangedEvent, refreshSession);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
   useEffect(() => subscribeToActiveService(setActiveService), []);
   useEffect(() => {
     if (!session) return;
