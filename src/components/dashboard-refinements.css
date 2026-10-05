@@ -68,8 +68,8 @@ body .settings-page .settings-grid a,body .settings-page .settings-grid button{f
 body .settings-page .settings-grid .signout{grid-column:1/-1;min-height:110px}
 body .settings-page .sunday-settings{max-width:none;background:#fff;border:1px solid #e1e6ed;padding:28px;border-radius:16px;margin-top:28px}
 body .schedule-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:24px}
-body .schedule-heading h2{font:700 24px/1.3 var(--font-body);margin:0}
-body .schedule-heading .eyebrow{font-size:10px;margin:0 0 6px;color:#ce5533}
+body .settings-page .sunday-settings .schedule-heading h2{font:700 24px/1.3 var(--font-body);margin:0}
+body .settings-page .sunday-settings .schedule-heading .eyebrow{font-size:10px;margin:0 0 6px;color:#ce5533}
 body .schedule-heading p:not(.eyebrow){line-height:1.6;margin:8px 0 0}
 body .schedule-heading>span{flex:none;padding:6px 10px;border-radius:20px;background:#f4f6f9;font-size:11px;color:#6d7d92}
 body .sunday-settings .schedule-controls{align-items:end;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.5fr);padding:18px;border:1px solid #e5eaf0;border-radius:12px;background:#fff;margin:0 0 18px}

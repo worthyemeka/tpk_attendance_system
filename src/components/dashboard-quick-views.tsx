@@ -53,26 +53,39 @@ export function FindChildDialog({ close }: { close: () => void }) {
 
 export type TeacherQuickTarget = { userId: number; name: string; image?: string | null; date?: string; roles?: string[] };
 type Contact = { id: number; name: string; email?: string; whatsappNumber?: string; mobileNumber?: string };
+type SundayContact = Omit<Contact, "id" | "name"> & { userId: number; assignmentDate: string; dutyName: string; className?: string; serviceName?: string };
 export function TeacherQuickView({ teacher, close }: { teacher: TeacherQuickTarget; close: () => void }) {
   const session = useMemo(readTeacherSession, []);
   const [contact, setContact] = useState<Contact | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [sundayRoles, setSundayRoles] = useState<string[]>([]);
   useEffect(() => {
     const controller = new AbortController();
     if (!session) { setLoading(false); setError("Please sign in to view teacher contact details."); return; }
-    setContact(null); setLoading(true); setError("");
-    fetch(`${apiBase}/api/v1/team?month=${encodeURIComponent(teacher.date?.slice(0,7) || new Date().toISOString().slice(0,7))}`, { headers: authHeaders(session), signal: controller.signal, cache: "no-store" })
-      .then(async response => { const result = await response.json(); if (!response.ok || !result.success) throw new Error(result.error?.message || "Teacher contact details are unavailable."); return result.data.members as Contact[]; })
-      .then(members => { if (controller.signal.aborted) return; const match = members.find(member => Number(member.id) === Number(teacher.userId)); if (!match) throw new Error("This teacher is not available in your team directory."); setContact(match); })
+    setContact(null); setSundayRoles([]); setLoading(true); setError("");
+    const month = teacher.date?.slice(0, 7) || new Date().toISOString().slice(0, 7);
+    // Use the existing Sunday roster contact data. The general team directory
+    // deliberately omits email addresses for non-admin viewers.
+    fetch(`${apiBase}/api/v1/roster/management?month=${Number(month.slice(5, 7))}&year=${month.slice(0, 4)}`, { headers: authHeaders(session), signal: controller.signal, cache: "no-store" })
+      .then(async response => { const result = await response.json(); if (!response.ok || !result.success) throw new Error(result.error?.message || "Teacher contact details are unavailable."); return result.data as { teachers: Contact[]; assignments: SundayContact[] }; })
+      .then(roster => {
+        if (controller.signal.aborted) return;
+        const member = roster.teachers.find(item => Number(item.id) === Number(teacher.userId));
+        const duties = roster.assignments.filter(item => Number(item.userId) === Number(teacher.userId) && item.assignmentDate === teacher.date);
+        if (!member && !duties.length) throw new Error("This teacher is not available in the selected Sunday’s roster.");
+        setContact({ ...member, ...duties[0], id: teacher.userId, name: teacher.name });
+        setSundayRoles(duties.map(item => [item.dutyName, item.className, item.serviceName].filter(Boolean).join(" · ")));
+      })
       .catch(reason => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Contact details unavailable."); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [session, teacher.userId, teacher.date]);
+  }, [session, teacher.userId, teacher.date, teacher.name]);
   const phone = contact?.whatsappNumber || contact?.mobileNumber;
+  const roles = sundayRoles.length ? sundayRoles : teacher.roles || [];
   const date = teacher.date ? new Intl.DateTimeFormat("en-NG", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${teacher.date}T12:00:00Z`)) : "Selected Sunday";
   return <QuickDialog title="Teacher contact" close={close}><div className="quick-teacher-identity">{teacher.image ? <img src={mediaUrl(teacher.image)} alt="" /> : <i><FiUsers /></i>}<div><h3>{teacher.name}</h3><p>Serving with TribePetra Kids</p></div></div>
-    <div className="quick-duty"><small><FiCalendar />{date}</small><b>{teacher.roles?.length ? [...new Set(teacher.roles)].join(" · ") : "No role recorded for this Sunday"}</b></div>
+    <div className="quick-duty"><small><FiCalendar />{date}</small><b>{roles.length ? [...new Set(roles)].join(" · ") : "No role recorded for this Sunday"}</b></div>
     <dl className="quick-contact" aria-busy={loading}><div><dt><FiPhone />Phone number</dt><dd>{loading ? "Loading…" : phone ? <a href={`tel:${phone.replace(/[^+\d]/g, "")}`}>{phone}</a> : "Not recorded"}</dd></div><div><dt><FiMail />Email address</dt><dd>{loading ? "Loading…" : contact?.email ? <a href={`mailto:${contact.email}`}>{contact.email}</a> : "Not recorded"}</dd></div></dl>{error && <p className="quick-error" role="alert">{error}</p>}
   </QuickDialog>;
 }
