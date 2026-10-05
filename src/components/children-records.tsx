@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FiChevronDown, FiChevronRight, FiPhone } from "react-icons/fi";
 import "./children-records.css";
+import { ClassBadge, GenderBadge } from "./record-badge";
 
 export type ChildRecord = {
   id: number;
@@ -19,7 +20,6 @@ export type ChildRecord = {
 type Props = { rows: ChildRecord[]; onOpen: (id: number) => void };
 const nameOf = (child: ChildRecord) => `${child.firstName} ${child.lastName}`.trim();
 const ageOf = (child: ChildRecord) => child.age == null ? "Age not recorded" : child.age === 0 ? "Under 1 year" : `${child.age} ${child.age === 1 ? "year" : "years"} old`;
-const genderOf = (child: ChildRecord) => child.gender === "FEMALE" ? "Female" : child.gender === "MALE" ? "Male" : "Not recorded";
 const lastSeen = (child: ChildRecord) => {
   if (!child.lastAttended) return "No attendance yet";
   const value = new Date(`${child.lastAttended.slice(0, 10)}T12:00:00Z`);
@@ -45,8 +45,8 @@ export function ChildrenGrid({ rows, onOpen }: Props) {
     {rows.map((child) => <article className="child-directory-card" key={child.id}>
       <header><ChildName child={child} onOpen={onOpen} /></header>
       <dl className="record-child-facts">
-        <div><dt>Class</dt><dd><span className={`record-class ${child.className ? "" : "unassigned"}`}>{child.className || "Not assigned"}</span></dd></div>
-        <div><dt>Gender</dt><dd>{genderOf(child)}</dd></div>
+        <div><dt>Class</dt><dd><ClassBadge name={child.className} /></dd></div>
+        <div><dt>Gender</dt><dd><GenderBadge gender={child.gender} /></dd></div>
       </dl>
       <section className="record-guardian"><h3>Parent or guardian</h3><GuardianContact child={child} /></section>
       <footer><div><span>Last attended</span><b>{lastSeen(child)}</b></div><button type="button" className="record-profile-action" onClick={() => onOpen(child.id)} aria-label={`Open ${nameOf(child)}’s profile`}>View profile <FiChevronRight aria-hidden="true" /></button></footer>
@@ -59,9 +59,9 @@ export function ChildrenList({ rows, onOpen, sort, order, onSort }: Props & { so
   return <div className="children-records-list"><table><caption className="record-sr-only">Children, their class, guardian contact and last attendance</caption><thead><tr>{heading("Child", "name")}{heading("Class", "class")}{heading("Age", "age")}{heading("Gender", "gender")}{heading("Parent or guardian", "guardian")}{heading("Last attended", "lastAttended")}<th scope="col"><span className="record-sr-only">Profile</span></th></tr></thead><tbody>
     {rows.map((child) => <tr key={child.id}>
       <td className="record-list-child"><ChildName child={child} onOpen={onOpen} /></td>
-      <td className="record-list-class" data-label="Class"><span className={`record-class ${child.className ? "" : "unassigned"}`}>{child.className || "Not assigned"}</span></td>
+      <td className="record-list-class" data-label="Class"><ClassBadge name={child.className} /></td>
       <td className="record-list-age" data-label="Age">{child.age == null ? "Not recorded" : child.age === 0 ? "Under 1" : child.age}</td>
-      <td className="record-list-gender" data-label="Gender">{genderOf(child)}</td>
+      <td className="record-list-gender" data-label="Gender"><GenderBadge gender={child.gender} /></td>
       <td className="record-list-guardian" data-label="Parent or guardian"><GuardianContact child={child} /></td>
       <td className="record-list-attendance" data-label="Last attended">{lastSeen(child)}</td>
       <td className="record-list-action"><button type="button" className="record-profile-action" onClick={() => onOpen(child.id)} aria-label={`Open ${nameOf(child)}’s profile`}>View <FiChevronRight aria-hidden="true" /></button></td>

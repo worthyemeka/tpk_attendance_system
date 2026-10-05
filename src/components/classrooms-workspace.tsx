@@ -21,6 +21,8 @@ import {
 import { apiBase, authHeaders, mediaUrl, readTeacherSession } from "@/lib/session";
 import { StatCard, type StatCardTone } from "@/components/stat-card";
 import { MonthPicker } from "@/components/month-picker";
+import { classroomAttendanceStatus } from "@/lib/classroom-attendance";
+import "./classroom-attendance.css";
 import "./classroom-refinements.css";
 import "./classrooms-overview.css";
 import { DiscussionThread, AssemblyAttachment, type AssemblyMedia } from "./classroom-discussion-thread";
@@ -80,7 +82,6 @@ type Child = {
   guardianName?: string;
   guardianPhone?: string;
   todayStatus: string;
-  assignmentStatus: string;
   joinedAt?: string;
 };
 type Detail = {
@@ -97,20 +98,11 @@ type Detail = {
   teachers: Teacher[];
   children: Child[];
   summary: { present: number; absent: number; registered: number };
-  assignment?: {
-    id: number;
-    title: string;
-    instructions?: string;
-    dateGiven: string;
-    dueDate?: string;
-    createdBy: string;
-    submittedCount: number;
-    pendingCount: number;
-  } | null;
   monthly: {
     month: string;
     sessions: { id: number; serviceDate: string; name?: string }[];
     presentByDate: Record<string, number[]>;
+    presentBySession?: Record<string, number[]>;
   };
   notes: { id: number; note: string; author: string; createdAt: string }[];
   weeklyReviews: {
@@ -543,15 +535,16 @@ export function ClassroomDetail({ classId }: { classId: number }) {
   const [tab, setTab] = useState("children");
   const [query, setQuery] = useState("");
   const [attendanceFilter, setAttendanceFilter] = useState("");
-  const [assignmentFilter, setAssignmentFilter] = useState("");
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   const [error, setError] = useState("");
   const [discussionMessage, setDiscussionMessage] = useState("");
-  const [assignmentOpen, setAssignmentOpen] = useState(false);
   const [reviewSessionId, setReviewSessionId] = useState("");
   const [workedWell, setWorkedWell] = useState("");
   const [needsImprovement, setNeedsImprovement] = useState("");
   const detailRequestVersion = useRef(0);
+  useEffect(() => {
+    if (active?.serviceDate) setMonth(active.serviceDate.slice(0, 7));
+  }, [active?.id, active?.serviceDate]);
   const load = useCallback(async () => {
     if (!session) return;
     const requestVersion = ++detailRequestVersion.current;
@@ -583,23 +576,10 @@ export function ClassroomDetail({ classId }: { classId: number }) {
   }, [active?.id, classId, month, session]);
   useEffect(() => {
     setData(null); setReviewSessionId("");
+  }, [active?.id, classId]);
+  useEffect(() => {
     void load();
   }, [load]);
-  const updateSubmission = async (childId: number, status: string) => {
-    if (!data?.assignment || !session) return;
-    await fetch(
-      `${apiBase}/api/v1/classroom-assignments/${data.assignment.id}/children/${childId}`,
-      {
-        method: "PATCH",
-        headers: {
-          ...authHeaders(session),
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ status }),
-      },
-    );
-    void load();
-  };
   const addWeeklyReview = async () => {
     if (
       !session ||
@@ -652,8 +632,7 @@ export function ClassroomDetail({ classId }: { classId: number }) {
       `${child.firstName} ${child.lastName}`
         .toLowerCase()
         .includes(query.toLowerCase()) &&
-      (!attendanceFilter || child.todayStatus === attendanceFilter) &&
-      (!assignmentFilter || child.assignmentStatus === assignmentFilter),
+      (!attendanceFilter || child.todayStatus === attendanceFilter),
   );
   return (
     <section className="cw-page class-detail">
@@ -696,23 +675,6 @@ export function ClassroomDetail({ classId }: { classId: number }) {
           text="Children in class"
           tone="blue"
         />
-        {data.assignment && (
-          <>
-            <Metric
-              icon={<FiCheckCircle />}
-              value={data.assignment.submittedCount}
-              title="Submitted Assignment"
-              text="Present children"
-              tone="purple"
-            />
-            <Metric
-              icon={<FiClipboard />}
-              value={data.assignment.pendingCount}
-              title="Pending Assignment"
-              text="Needs recording"
-            />
-          </>
-        )}
       </section>
       <section className="assigned">
         <header>
@@ -760,7 +722,6 @@ export function ClassroomDetail({ classId }: { classId: number }) {
         {[
           ["children", `Children (${data.children.length})`],
           ["attendance", "Attendance"],
-          ["assignments", "Assignments"],
           ["notes", "Weekly Discussion"],
           ["details", "Class Details"],
         ].map(([id, title]) => (
@@ -792,41 +753,12 @@ export function ClassroomDetail({ classId }: { classId: number }) {
               <option value="PRESENT">Present</option>
               <option value="ABSENT">Absent</option>
             </select>
-            <select
-              value={assignmentFilter}
-              onChange={(event) => setAssignmentFilter(event.target.value)}
-            >
-              <option value="">All Assignment Status</option>
-              <option value="SUBMITTED">Submitted</option>
-              <option value="NOT_SUBMITTED">Not Submitted</option>
-              <option value="EXCUSED">Excused</option>
-              <option value="NOT_IN_CLASS">Not in class</option>
-            </select>
-            {data.canManage && (
-              <button
-                className="primary"
-                onClick={() => setAssignmentOpen(true)}
-              >
-                Add Assignment
-              </button>
-            )}
           </div>
-          <ChildrenTable
-            rows={visible}
-            assignment={Boolean(data.assignment)}
-            onSubmission={updateSubmission}
-          />
+          <ChildrenTable rows={visible} />
         </section>
       )}
       {tab === "attendance" && (
         <Attendance data={data} month={month} setMonth={setMonth} />
-      )}{" "}
-      {tab === "assignments" && (
-        <Assignments
-          data={data}
-          onNew={() => setAssignmentOpen(true)}
-          onSubmission={updateSubmission}
-        />
       )}{" "}
       {tab === "notes" && (
         <WeeklyReviews
@@ -844,40 +776,18 @@ export function ClassroomDetail({ classId }: { classId: number }) {
         />
       )}
       {tab === "details" && (
-        <section className="class-info">
-          <p>
-            <b>Class</b>
-            {data.class.name}
-          </p>
-          <p>
-            <b>Age range</b>
-            {data.class.ageLabel || "Not configured"}
-          </p>
-          <p>
-            <b>Status</b>
-            {data.class.active ? "Active" : "Inactive"}
-          </p>
-          <p>
-            <b>Registered children</b>
-            {data.summary.registered}
-          </p>
-          {data.isSuperAdmin && (
-            <Link href="/account/classes">
-              Manage Class Configuration <FiChevronRight />
-            </Link>
-          )}
+        <section className="class-details-panel">
+          <header>
+            <div><p className="eyebrow">At a glance</p><h2>About this class</h2><p>The essentials for caring for your children.</p></div>
+            {data.isSuperAdmin && <Link href="/account/classes" className="class-settings-link">Manage class <FiChevronRight /></Link>}
+          </header>
+          <div className="class-details-grid">
+            <article><span className="class-detail-icon"><FiUsers /></span><h3>Class</h3><p>{data.class.name}</p><small>A place to belong, learn and grow.</small></article>
+            <article><span className="class-detail-icon age"><FiUsers /></span><h3>Age range</h3><p>{data.class.ageLabel || "Not recorded"}</p><small>Children served by this class.</small></article>
+            <article><span className="class-detail-icon children"><FiCheckCircle /></span><h3>Registered children</h3><p>{data.summary.registered}</p><small>Children on this class’s register.</small></article>
+            <article><span className="class-detail-icon service"><FiCalendar /></span><h3>Selected Sunday</h3><p>{formatDate(data.serviceSession?.serviceDate)}</p><small>{data.serviceSession?.name || "No service selected"}</small></article>
+          </div>
         </section>
-      )}
-      {assignmentOpen && (
-        <AssignmentForm
-          classId={classId}
-          serviceId={active?.id}
-          close={() => setAssignmentOpen(false)}
-          done={() => {
-            setAssignmentOpen(false);
-            void load();
-          }}
-        />
       )}
       {quickTeacher && <TeacherQuickView teacher={quickTeacher} close={() => setQuickTeacher(null)} />}
       <style jsx>{styles}</style>
@@ -1058,328 +968,74 @@ function WeeklyReviews({
   );
 }
 
-function ChildrenTable({
-  rows,
-  assignment,
-  onSubmission,
-}: {
-  rows: Child[];
-  assignment: boolean;
-  onSubmission: (id: number, status: string) => void;
-}) {
+function ChildrenTable({ rows }: { rows: Child[] }) {
   return (
     <div className="cw-table children-table">
       <table>
-        <thead>
-          <tr>
-            <th>Child</th>
-            <th>Age</th>
-            <th>Guardian</th>
-            <th>Today</th>
-            <th>Assignment</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
+        <thead><tr><th>Child</th><th>Age</th><th>Guardian</th><th>Attendance</th><th>Actions</th></tr></thead>
         <tbody>
           {rows.map((child) => (
             <tr key={child.id}>
-              <td data-label="Child">
-                <Link href={`/account/children?childId=${child.id}`}>
-                  <b>
-                    {child.firstName} {child.lastName}
-                  </b>
-                </Link>
-              </td>
+              <td data-label="Child"><Link href={`/account/children?childId=${child.id}`}><b>{child.firstName} {child.lastName}</b></Link></td>
               <td data-label="Age">{child.age ?? "—"}</td>
-              <td data-label="Guardian">
-                {child.guardianId ? (
-                  <Link
-                    href={`/account/guardians?guardianId=${child.guardianId}`}
-                  >
-                    {child.guardianName}
-                    <small>{child.guardianPhone}</small>
-                  </Link>
-                ) : (
-                  "—"
-                )}
-              </td>
-              <td data-label="Today">
-                <Status value={child.todayStatus} />
-              </td>
-              <td data-label="Assignment">
-                {assignment ? <Status value={child.assignmentStatus} /> : "—"}
-              </td>
-              <td data-label="Actions">
-                {assignment && child.todayStatus === "PRESENT" ? (
-                  <select
-                    value={child.assignmentStatus}
-                    onChange={(event) =>
-                      onSubmission(child.id, event.target.value)
-                    }
-                  >
-                    <option value="NOT_SUBMITTED">Not Submitted</option>
-                    <option value="SUBMITTED">Submitted</option>
-                    <option value="EXCUSED">Excused</option>
-                  </select>
-                ) : (
-                  <Link href={`/account/children?childId=${child.id}`}>
-                    <FiChevronRight />
-                  </Link>
-                )}
-              </td>
+              <td data-label="Guardian">{child.guardianId ? <Link href={`/account/guardians?guardianId=${child.guardianId}`}>{child.guardianName}<small>{child.guardianPhone}</small></Link> : "—"}</td>
+              <td data-label="Attendance"><Status value={child.todayStatus} /></td>
+              <td data-label="Actions"><Link href={`/account/children?childId=${child.id}`} aria-label={`View ${child.firstName} ${child.lastName}’s profile`}><FiChevronRight /></Link></td>
             </tr>
           ))}
-          {!rows.length && (
-            <tr>
-              <td colSpan={6} className="cw-empty">
-                No children match this filter.
-              </td>
-            </tr>
-          )}
+          {!rows.length && <tr><td colSpan={5} className="cw-empty">No children match this filter.</td></tr>}
         </tbody>
       </table>
     </div>
   );
 }
-function Attendance({
-  data,
-  month,
-  setMonth,
-}: {
+function Attendance({ data, month, setMonth }: {
   data: Detail;
   month: string;
   setMonth: (value: string) => void;
 }) {
-  return (
-    <section className="attendance-view">
-      <header>
-        <div>
-          <h2>Attendance</h2>
-          <p>
-            {data.summary.present} present · {data.summary.absent} absent for
-            the selected service.
-          </p>
-        </div>
-        <input
-          type="month"
-          value={month}
-          onChange={(event) => setMonth(event.target.value)}
-        />
-      </header>
-      <div className="cw-table matrix">
-        <table>
-          <thead>
-            <tr>
-              <th>Child</th>
-              {data.monthly.sessions.map((item) => (
-                <th key={item.id}>
-                  Sun<small>{formatDate(item.serviceDate)}</small>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {data.children.map((child) => (
-              <tr key={child.id}>
-                <td>
-                  {child.firstName} {child.lastName}
-                </td>
-                {data.monthly.sessions.map((week) => {
-                  const notExpected = Boolean(
-                    child.joinedAt && child.joinedAt > week.serviceDate,
-                  );
-                  return (
-                    <td key={week.id}>
-                      {notExpected ? (
-                        <span>—</span>
-                      ) : (
-                        <Status
-                          value={
-                            data.monthly.presentByDate[
-                              week.serviceDate
-                            ]?.includes(child.id)
-                              ? "PRESENT"
-                              : "ABSENT"
-                          }
-                        />
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="attendance-cards">
-        {data.children.map((child) => (
-          <article key={child.id}>
-            <b>
-              {child.firstName} {child.lastName}
-            </b>
-            <div>
-              {data.monthly.sessions.map((week) => {
-                const notExpected = Boolean(
-                  child.joinedAt && child.joinedAt > week.serviceDate,
-                );
-                return (
-                  <span key={week.id}>
-                    <small>{formatDate(week.serviceDate)}</small>
-                    {notExpected ? (
-                      "—"
-                    ) : (
-                      <Status
-                        value={
-                          data.monthly.presentByDate[
-                            week.serviceDate
-                          ]?.includes(child.id)
-                            ? "PRESENT"
-                            : "ABSENT"
-                        }
-                      />
-                    )}
-                  </span>
-                );
-              })}
-            </div>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
-function Assignments({
-  data,
-  onNew,
-  onSubmission,
-}: {
-  data: Detail;
-  onNew: () => void;
-  onSubmission: (id: number, status: string) => void;
-}) {
-  return (
-    <section className="assignment-panel">
-      {data.assignment ? (
-        <>
-          <header>
-            <div>
-              <h2>{data.assignment.title}</h2>
-              <p>
-                Given {formatDate(data.assignment.dateGiven)} ·{" "}
-                {data.assignment.createdBy}
-              </p>
-            </div>
-            <Status value="SUBMITTED" />
-          </header>
-          <p>{data.assignment.instructions || "No additional instructions."}</p>
-          <p>
-            <b>{data.assignment.submittedCount} submitted</b> ·{" "}
-            {data.assignment.pendingCount} pending
-          </p>
-          <ChildrenTable
-            rows={data.children}
-            assignment
-            onSubmission={onSubmission}
-          />
-        </>
-      ) : (
-        <div className="cw-empty">
-          <FiClipboard />
-          <b>No assignment for this service</b>
-          <span>
-            Assignments only appear when a teacher records one for this
-            classroom.
-          </span>
-          <button className="primary" onClick={onNew}>
-            Add Assignment
-          </button>
-        </div>
-      )}
-    </section>
-  );
-}
-function AssignmentForm({
-  classId,
-  serviceId,
-  close,
-  done,
-}: {
-  classId: number;
-  serviceId?: number;
-  close: () => void;
-  done: () => void;
-}) {
-  const session = useMemo(() => readTeacherSession(), []);
-  const [title, setTitle] = useState("");
-  const [instructions, setInstructions] = useState("");
-  const [dueDate, setDueDate] = useState("");
-  const [error, setError] = useState("");
-  const submit = async () => {
-    if (!session) return;
-    const r = await fetch(
-      `${apiBase}/api/v1/classrooms/${classId}/assignments`,
-      {
-        method: "POST",
-        headers: {
-          ...authHeaders(session),
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          serviceSessionId: serviceId,
-          title,
-          instructions,
-          dueDate,
-        }),
-      },
-    );
-    const b = await r.json();
-    if (!r.ok || !b.success) {
-      setError(b.error?.message || "We could not create this assignment.");
-      return;
-    }
-    done();
+  const [sunday, setSunday] = useState(data.serviceSession?.serviceDate || "");
+  const historyLoading = data.monthly.month !== month;
+  const sessions = historyLoading ? [] : [...data.monthly.sessions];
+  const selected = data.serviceSession;
+  // Older servers may omit the selected session from history. Keep its canonical roster visible.
+  if (!historyLoading && selected?.serviceDate.startsWith(month) && !sessions.some((week) => Number(week.id) === Number(selected.id))) sessions.push(selected);
+  sessions.sort((a, b) => a.serviceDate.localeCompare(b.serviceDate) || Number(a.id) - Number(b.id));
+  const dates = [...new Set(sessions.map((week) => week.serviceDate))];
+  const effectiveSunday = sunday && dates.includes(sunday) ? sunday : "";
+  const visibleSessions = sessions.filter((week) => !effectiveSunday || week.serviceDate === effectiveSunday);
+  const counts = data.children.reduce((summary, child) => {
+    visibleSessions.forEach((week) => {
+      const status = classroomAttendanceStatus(data, child, week);
+      if (status === "PRESENT") summary.present++;
+      if (status === "ABSENT") summary.absent++;
+    });
+    return summary;
+  }, { present: 0, absent: 0 });
+  const statusBadge = (child: Child, week: Detail["monthly"]["sessions"][number]) => {
+    const status = classroomAttendanceStatus(data, child, week);
+    return status === "NOT_REGISTERED"
+      ? <span className="attendance-not-registered">Not yet registered</span>
+      : <Status value={status} />;
   };
   return (
-    <div className="cw-modal">
-      <section>
-        <button className="modal-close" onClick={close}>
-          ×
-        </button>
-        <p className="eyebrow">Class Assignment</p>
-        <h2>Add Assignment</h2>
-        <label>
-          Assignment Title
-          <input
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            placeholder="e.g. Memory Verse: Matthew 5:16"
-          />
-        </label>
-        <label>
-          Instructions
-          <textarea
-            value={instructions}
-            onChange={(event) => setInstructions(event.target.value)}
-            placeholder="Short instructions for the class..."
-          />
-        </label>
-        <label>
-          Due Date <small>(optional)</small>
-          <input
-            type="date"
-            value={dueDate}
-            onChange={(event) => setDueDate(event.target.value)}
-          />
-        </label>
-        {error && <p className="cw-error">{error}</p>}
-        <footer>
-          <button onClick={close}>Cancel</button>
-          <button className="primary" onClick={submit}>
-            Create Assignment
-          </button>
-        </footer>
-      </section>
-    </div>
+    <section className="class-attendance-panel">
+      <header className="class-attendance-header">
+        <div><p className="eyebrow">Class register</p><h2>Attendance</h2><p>{historyLoading ? "Loading this month’s register…" : visibleSessions.length ? `${counts.present} present · ${counts.absent} absent${visibleSessions.length > 1 ? " across the services shown" : " for this service"}.` : "No recorded services in this month."}</p></div>
+        <div className="class-attendance-filters">
+          <div><span>Review month</span><MonthPicker value={new Date(`${month}-01T12:00:00Z`)} onChange={(value) => setMonth(value.toISOString().slice(0, 7))} ariaLabel="Choose attendance month" /></div>
+          <label><span>Sunday</span><select value={effectiveSunday} onChange={(event) => setSunday(event.target.value)} aria-label="Choose attendance Sunday"><option value="">All Sundays</option>{dates.map((date) => <option key={date} value={date}>Sunday, {formatDate(date)}</option>)}</select></label>
+        </div>
+      </header>
+      {historyLoading ? <div className="class-attendance-empty" role="status">Loading attendance…</div> : visibleSessions.length ? <>
+        <div className="cw-table matrix class-attendance-matrix"><table>
+          <thead><tr><th>Child</th>{visibleSessions.map((week) => <th key={week.id}><span>{formatDate(week.serviceDate)}</span><small>{week.name || selected?.name || "Sunday service"}</small></th>)}</tr></thead>
+          <tbody>{data.children.map((child) => <tr key={child.id}><td><b>{child.firstName} {child.lastName}</b></td>{visibleSessions.map((week) => <td key={week.id}>{statusBadge(child, week)}</td>)}</tr>)}</tbody>
+        </table></div>
+        <div className="class-attendance-mobile">{data.children.map((child) => <article key={child.id}><h3>{child.firstName} {child.lastName}</h3><div>{visibleSessions.map((week) => <div key={week.id}><span>{formatDate(week.serviceDate)}<small>{week.name || selected?.name || "Sunday service"}</small></span>{statusBadge(child, week)}</div>)}</div></article>)}</div>
+        <p className="class-attendance-note">A child remains present after pickup. “Not yet registered” means they joined after that Sunday.</p>
+      </> : <div className="class-attendance-empty"><FiCalendar /><h3>No attendance to show</h3><p>Choose another month to see its Sunday registers.</p></div>}
+    </section>
   );
 }
 

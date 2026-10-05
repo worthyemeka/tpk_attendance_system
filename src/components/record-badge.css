@@ -1,0 +1,8 @@
+.record-badge{--badge-bg:#f2f3f4;--badge-ink:#586474;--badge-line:#e1e5e9;display:inline-flex;align-items:center;gap:7px;max-width:100%;padding:6px 10px;border:1px solid var(--badge-line);border-radius:999px;background:var(--badge-bg);color:var(--badge-ink);font:700 11px/1.45 var(--font-body),sans-serif;vertical-align:middle;overflow-wrap:anywhere}
+.record-badge>i{flex:none;width:6px;height:6px;border-radius:50%;background:currentColor}
+.record-badge.badge-orange{--badge-bg:#fff0e8;--badge-ink:#a93e21;--badge-line:#f5d5c6}
+.record-badge.badge-blue{--badge-bg:#eaf3ff;--badge-ink:#215e9b;--badge-line:#cfe0f6}
+.record-badge.badge-green{--badge-bg:#e8f7ef;--badge-ink:#1b704d;--badge-line:#c7e8d8}
+.record-badge.badge-purple{--badge-bg:#f2edff;--badge-ink:#6e439d;--badge-line:#e0d3f5}
+.record-badge.badge-rose{--badge-bg:#fff0f5;--badge-ink:#a13c69;--badge-line:#f1d2df}
+.record-badge.badge-amber{--badge-bg:#fff5df;--badge-ink:#925b0c;--badge-line:#f1dfb3}

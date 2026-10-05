@@ -6,6 +6,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   FiCalendar,
+  FiBookOpen,
+  FiUser,
   FiChevronDown,
   FiChevronRight,
   FiDownload,
@@ -22,6 +24,7 @@ import { StatCard, type StatCardTone } from "@/components/stat-card";
 import { DataViewToggle, type DataView } from "@/components/data-view-toggle";
 import { ChildrenGrid, ChildrenList } from "@/components/children-records";
 import "./child-directory-refinement.css";
+import { ClassBadge, GenderBadge, RecordBadge } from "./record-badge";
 
 type Session = ReturnType<typeof readTeacherSession>;
 type Child = {
@@ -679,9 +682,8 @@ function Drawer({
                 <small className="profile-kicker">Child profile</small><h2>
                   {child.firstName} {child.lastName}
                 </h2>
-                <p>
-                  {child.className || "Class pending"} · Age {child.age ?? "—"}
-                </p>
+                <p>{child.age == null ? "Age not recorded" : `${child.age} ${child.age === 1 ? "year" : "years"} old`}</p>
+                <div className="profile-identity-badges"><ClassBadge name={child.className} /><GenderBadge gender={child.gender} /></div>
               </div>
             </header>
             <nav>
@@ -706,6 +708,7 @@ function Drawer({
             {tab === "overview" && (
               <section>
                 <h3>Personal Information</h3>
+                <div className="profile-facts">
                 <Info
                   icon={<FiCalendar />}
                   label="Date of Birth"
@@ -713,11 +716,12 @@ function Drawer({
                 />
                 <Info
                   label="Age"
-                  value={child.age === undefined ? "—" : `${child.age} years`}
+                  value={child.age == null ? "Not recorded" : `${child.age} ${child.age === 1 ? "year" : "years"}`}
                 />
                 <Info label="Gender" value={pretty(child.gender)} />
                 <Info label="Class" value={safe(child.className)} />
                 <Info label="School Grade" value={safe(child.schoolGrade)} />
+                </div>
               </section>
             )}
             {tab === "guardians" && (
@@ -812,11 +816,7 @@ function Drawer({
                             {item.serviceName || pretty(item.serviceType)}
                           </small>
                         </span>
-                        <em
-                          className={item.status === "ABSENT" ? "absence" : ""}
-                        >
-                          {pretty(item.status)}
-                        </em>
+                        <RecordBadge tone={item.status === "ABSENT" ? "amber" : "green"} dot>{pretty(item.status)}</RecordBadge>
                       </p>
                     ))}
                   </div>
@@ -834,10 +834,7 @@ function Drawer({
                   followups.map((item) => (
                     <article className="followup" key={String(item.id)}>
                       <b>{pretty(String(item.taskType || "Follow-up"))}</b>
-                      <small>
-                        {pretty(String(item.status || "OPEN"))} ·{" "}
-                        {String(item.assignedTeacher || "Unassigned")}
-                      </small>
+                      <div className="profile-followup-meta"><RecordBadge tone={["CLOSED", "COMPLETED", "RESOLVED"].includes(String(item.status)) ? "green" : "amber"} dot>{pretty(String(item.status || "OPEN"))}</RecordBadge><small>{String(item.assignedTeacher || "Unassigned")}</small></div>
                       {item.notes ? <p>{String(item.notes)}</p> : null}
                     </article>
                   ))
@@ -1073,8 +1070,8 @@ function Info({
 }) {
   return (
     <div className="info profile-fact">
-      <i aria-hidden="true">{icon}</i>
-      <div className="profile-fact-content"><small>{label}</small><b>{value || "—"}</b></div>
+      <i aria-hidden="true">{icon || (label === "School Grade" ? <FiBookOpen /> : label === "Class" ? <FiUsers /> : <FiUser />)}</i>
+      <div className="profile-fact-content"><small>{label}</small><b>{label === "Class" ? <ClassBadge name={value === "—" || value === "Not recorded" ? null : value} /> : value || "—"}</b></div>
     </div>
   );
 }
