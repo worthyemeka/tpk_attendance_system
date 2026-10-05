@@ -20,6 +20,7 @@ import { DataViewToggle, type DataView } from "@/components/data-view-toggle";
 import { ClassBadge, RecordBadge } from "@/components/record-badge";
 import { useProfileDialog } from "@/components/use-profile-dialog";
 import "./followup-refinements.css";
+import { FollowupHistory } from "./followup-history";
 type Case = {
   id: number;
   familyId: number;
@@ -665,25 +666,7 @@ function Drawer({
             </div>
           </section>
         )}
-        {tab === "history" && (
-          <section>
-            <h3>Follow-Up History</h3>
-            {detail.history.length ? (
-              detail.history.map((h) => (
-                <article className="history" key={h.id}>
-                  <b>{h.eventType.replaceAll("_", " ")}</b>
-                  <small>
-                    {date(h.createdAt)} · {h.staffName}
-                  </small>
-                  {h.reason && <p>Reason: {h.reason}</p>}
-                  {h.notes && <p>{h.notes}</p>}
-                </article>
-              ))
-            ) : (
-              <p className="muted">No contact history recorded yet.</p>
-            )}
-          </section>
-        )}
+        {tab === "history" && <FollowupHistory key={detail.id} entries={detail.history} />}
       </aside>
     </div>
   );

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { FiCalendar, FiChevronDown, FiChevronLeft, FiChevronRight } from "react-icons/fi";
 import "./month-picker.css";
 
-type MonthPickerProps = { value: Date; onChange: (value: Date) => void; className?: string; ariaLabel?: string };
+type MonthPickerProps = { value: Date; onChange: (value: Date) => void; className?: string; ariaLabel?: string; displayLabel?: string };
 
 const months = Array.from({ length: 12 }, (_, month) => ({
   month,
@@ -13,7 +13,7 @@ const months = Array.from({ length: 12 }, (_, month) => ({
 const startOfMonth = (value: Date) => new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), 1));
 const labelFor = (value: Date) => new Intl.DateTimeFormat("en-NG", { month: "long", year: "numeric", timeZone: "UTC" }).format(value);
 
-export function MonthPicker({ value, onChange, className = "", ariaLabel = "Choose month" }: MonthPickerProps) {
+export function MonthPicker({ value, onChange, className = "", ariaLabel = "Choose month", displayLabel }: MonthPickerProps) {
   const selected = startOfMonth(value);
   const selectedYear = selected.getUTCFullYear();
   const [open, setOpen] = useState(false);
@@ -30,7 +30,7 @@ export function MonthPicker({ value, onChange, className = "", ariaLabel = "Choo
   const selectMonth = (month: number) => { onChange(new Date(Date.UTC(viewYear, month, 1))); setOpen(false); };
   return <div className={`tpk-month-picker ${className}`} ref={ref}>
     <button type="button" className="tpk-month-picker-arrow" aria-label="Previous month" onClick={() => move(-1)}><FiChevronLeft /></button>
-    <button type="button" className="tpk-month-picker-trigger" aria-label={ariaLabel} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((current) => !current)}><FiCalendar /><strong>{labelFor(selected)}</strong><FiChevronDown className={open ? "open" : ""} /></button>
+    <button type="button" className="tpk-month-picker-trigger" aria-label={ariaLabel} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((current) => !current)}><FiCalendar /><strong>{displayLabel || labelFor(selected)}</strong><FiChevronDown className={open ? "open" : ""} /></button>
     <button type="button" className="tpk-month-picker-arrow" aria-label="Next month" onClick={() => move(1)}><FiChevronRight /></button>
     {open && <section className="tpk-month-picker-popover" role="dialog" aria-label="Choose a month"><header><button type="button" aria-label="Previous year" onClick={() => setViewYear((year) => year - 1)}><FiChevronLeft /></button><strong>{viewYear}</strong><button type="button" aria-label="Next year" onClick={() => setViewYear((year) => year + 1)}><FiChevronRight /></button></header><div>{months.map(({ month, label }) => <button type="button" key={label} className={selected.getUTCFullYear() === viewYear && selected.getUTCMonth() === month ? "active" : ""} onClick={() => selectMonth(month)}>{label}</button>)}</div></section>}
   </div>;
