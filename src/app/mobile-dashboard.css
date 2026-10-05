@@ -31,6 +31,10 @@
   }
 
   .sidebar .sidebar-bottom { flex-shrink: 0; }
+  .sidebar .sidebar-footer { display: flex; }
+  .sidebar .sidebar-footer > div:not(.avatar),
+  .sidebar .sidebar-footer > svg { display: block; }
+  .sidebar .side-group a { min-height: 44px; }
   body .sidebar-backdrop { top: 64px; }
 
   .mobile-nav-bar .mobile-nav-actions .notification-popover {
@@ -45,11 +49,17 @@
   }
 
   .mobile-nav-actions .notification-heading {
-    flex-wrap: wrap;
-    gap: 12px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
     flex-shrink: 0;
   }
-  .mobile-nav-actions .notification-heading > div { flex: 1; }
+  .mobile-nav-actions .notification-heading > div { min-width: 0; }
+  .mobile-nav-actions .notification-heading > button:not(.notification-close) {
+    grid-column: 1;
+    grid-row: 2;
+    justify-self: start;
+  }
   .mobile-nav-actions .notification-items {
     min-height: 0;
     max-height: none;
@@ -57,6 +67,8 @@
     -webkit-overflow-scrolling: touch;
   }
   .mobile-nav-actions .notification-heading .notification-close {
+    grid-column: 2;
+    grid-row: 1;
     display: grid;
     place-items: center;
     width: 36px;
@@ -69,6 +81,12 @@
 }
 
 @media (max-width: 760px) {
+  .team-page .team-tabs button {
+    min-width: 0;
+    min-height: 44px;
+    height: auto;
+    padding: 10px 6px;
+  }
   .team-page .team-directory .toolbar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: end;
@@ -80,6 +98,10 @@
     grid-column: auto;
   }
   .team-page .team-directory .toolbar > .search { grid-column: 1 / -1; }
+  .team-page .team-directory .toolbar > .directory-select {
+    width: 100%;
+    min-width: 0;
+  }
   .team-page .team-directory .toolbar select,
   .team-page .team-directory .toolbar .filter-button { min-height: 44px; }
   .team-page .team-directory .toolbar .directory-select > .app-dropdown {
