@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { TeacherQuickView, type TeacherQuickTarget } from "@/components/dashboard-quick-views";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -534,6 +535,7 @@ export function ClassroomDetail({ classId }: { classId: number }) {
   const session = useMemo(() => readTeacherSession(), []);
   const searchParams = useSearchParams();
   const context = useSundayContext();
+  const [quickTeacher, setQuickTeacher] = useState<TeacherQuickTarget | null>(null);
   const requestedServiceId = Number(searchParams.get("serviceSessionId")) || 0;
   const active = context.services.find((service) => service.id === requestedServiceId)
     || context.selectedService;
@@ -724,16 +726,18 @@ export function ClassroomDetail({ classId }: { classId: number }) {
         <div className="teacher-cards">
           {data.teachers.map((teacher) => (
             <article key={teacher.userId} className="teacher-card">
-              <Link
-                href={`/account/team?member=${teacher.userId}`}
-                aria-label={`View ${teacher.name}'s profile`}
+              <button
+                type="button"
+                className="teacher-quick-trigger"
+                onClick={() => setQuickTeacher({ userId: teacher.userId, name: teacher.name, image: teacher.profileImageUrl, date: data.serviceSession?.serviceDate, roles: [`${teacher.dutyName || "Class teacher"} · ${data.class.name}`] })}
+                aria-label={`View ${teacher.name}'s contact details`}
               >
                 <Avatar teacher={teacher} />
-              </Link>
+              </button>
               <div>
-                <Link href={`/account/team?member=${teacher.userId}`}>
+                <button type="button" className="teacher-quick-trigger" onClick={() => setQuickTeacher({ userId: teacher.userId, name: teacher.name, image: teacher.profileImageUrl, date: data.serviceSession?.serviceDate, roles: [`${teacher.dutyName || "Class teacher"} · ${data.class.name}`] })}>
                   <b>{teacher.name}</b>
-                </Link>
+                </button>
                 <small>{teacher.dutyName || "Class teacher"}</small>
                 <small>
                   Assigned {formatDate(data.serviceSession?.serviceDate)}
@@ -875,6 +879,7 @@ export function ClassroomDetail({ classId }: { classId: number }) {
           }}
         />
       )}
+      {quickTeacher && <TeacherQuickView teacher={quickTeacher} close={() => setQuickTeacher(null)} />}
       <style jsx>{styles}</style>
     </section>
   );

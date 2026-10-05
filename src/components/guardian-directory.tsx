@@ -680,13 +680,13 @@ function Info({
   return (
     <>
       {
-        <p className="drawer-detail">
-          {icon || <span />}
-          <span>
+        <div className="drawer-detail profile-fact">
+          <i aria-hidden="true">{icon}</i>
+          <div className="profile-fact-content">
             <small>{label}</small>
-            {value}
-          </span>
-        </p>
+            <b>{value}</b>
+          </div>
+        </div>
       }
       {label === "WhatsApp Number" && <ContactActions phone={value} />}
     </>

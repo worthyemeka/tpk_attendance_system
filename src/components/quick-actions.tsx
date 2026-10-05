@@ -6,11 +6,13 @@ import { FiArrowUpRight, FiChevronRight, FiClock, FiSearch, FiUserPlus } from "r
 import type { IconType } from "react-icons";
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
 import { readActiveService } from "@/lib/active-service";
+import { FindChildDialog } from "./dashboard-quick-views";
 
 export function QuickActions() {
   const session = readTeacherSession();
   const superAdmin = session?.accessLevel === "TPK_SUPER_ADMIN";
   const [canAssistedCheckIn, setCanAssistedCheckIn] = useState(false);
+  const [findingChild, setFindingChild] = useState(false);
   useEffect(() => {
     if (!session) return;
     let cancelled = false;
@@ -36,5 +38,5 @@ export function QuickActions() {
     [superAdmin ? "View Follow-Ups" : "My Follow-Ups", "Review children needing care", "/account/relations", FiClock],
     ...(superAdmin ? [["Manage Roster", "Plan upcoming team duties", "/account/roster", FiClock] as [string, string, string, IconType]] : []),
   ];
-  return <section className="panel actions-panel"><div className="panel-heading"><div><h2>Quick Actions</h2><p>Common tasks</p></div></div><div className="action-list">{actions.map(([title, subtitle, href, Icon]) => <Link href={href} key={title}><Icon /><span><b>{title}</b><small>{subtitle}</small></span><FiChevronRight /></Link>)}</div></section>;
+  return <><section className="panel actions-panel"><div className="panel-heading"><div><h2>Quick Actions</h2><p>Common tasks</p></div></div><div className="action-list">{actions.map(([title, subtitle, href, Icon]) => title === "Find a Child" ? <button type="button" key={title} onClick={() => setFindingChild(true)}><Icon /><span><b>{title}</b><small>{subtitle}</small></span><FiChevronRight /></button> : <Link href={href} key={title}><Icon /><span><b>{title}</b><small>{subtitle}</small></span><FiChevronRight /></Link>)}</div></section>{findingChild && <FindChildDialog close={() => setFindingChild(false)} />}</>;
 }

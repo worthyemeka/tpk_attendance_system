@@ -1,6 +1,6 @@
 /* Shared profile and directory treatments; deliberately scoped away from forms. */
 body .profile-backdrop{position:fixed;inset:0;z-index:160;background:#13243b66;backdrop-filter:blur(3px)}
-body .profile-panel{position:absolute;inset:0 0 0 auto;width:min(640px,100%);height:100%;max-height:none;overflow:auto;overscroll-behavior:contain;background:#f8f7f4;color:#1c2d45;border-radius:0;box-shadow:-12px 0 40px #13243b18;-webkit-overflow-scrolling:touch}
+body .profile-panel{position:absolute;inset:0 0 0 auto;width:min(640px,100%);height:100%;max-height:none;overflow:auto;overscroll-behavior:contain;background:#fff;color:#1c2d45;border-radius:0;box-shadow:-12px 0 40px #13243b18;-webkit-overflow-scrolling:touch}
 body .profile-panel>header{display:grid;grid-template-columns:64px minmax(0,1fr);align-items:center;gap:16px;padding:38px 28px 24px;margin:0;background:#fffdfa;border-bottom:1px solid #e6e4df}
 body .profile-panel>header>div:not(.avatar){min-width:0;padding-right:35px}
 body .profile-panel>header>i,body .profile-panel>header>.avatar{display:grid;place-items:center;flex:none;width:64px;height:64px;border-radius:50%;background:#e8eef7;color:#416489;font:700 21px var(--font-body);font-style:normal;overflow:hidden}

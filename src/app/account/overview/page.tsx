@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { AttentionPanel } from "@/components/attention-panel";
+import { TeacherQuickView, type TeacherQuickTarget } from "@/components/dashboard-quick-views";
 import { useEffect, useState } from "react";
 import {
   FiCheckCircle,
@@ -102,6 +103,7 @@ export default function AccountOverview() {
   const sundayContext = useSundayContext();
   const [dashboard, setDashboard] = useState<Dashboard>(empty);
   const [live, setLive] = useState(false);
+  const [quickTeacher, setQuickTeacher] = useState<TeacherQuickTarget | null>(null);
   const [today, setToday] = useState("");
   const [serviceSessionId, setServiceSessionId] = useState<
     number | undefined
@@ -270,9 +272,10 @@ export default function AccountOverview() {
                 {dashboard.todayTeam.length ? (
                   <div className="team-people-list">
                     {dashboard.todayTeam.slice(0, 5).map((item) => (
-                      <Link
+                      <button
+                        type="button"
                         key={item.assignmentId}
-                        href={`/account/team?member=${item.userId}`}
+                        onClick={() => setQuickTeacher({ userId: item.userId, name: item.teacherName, image: item.profileImageUrl, date: sundayContext.selectedSundayDate || undefined, roles: dashboard.todayTeam.filter(assignment => Number(assignment.userId) === Number(item.userId)).map(assignment => `${assignment.dutyName} · ${assignment.serviceType.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, char => char.toUpperCase())}`) })}
                         className="team-person"
                       >
                         <TeacherPhoto
@@ -294,7 +297,7 @@ export default function AccountOverview() {
                           {item.status === "PRESENT" ? "Present" : "Assigned"}
                         </em>
                         <FiChevronRight />
-                      </Link>
+                      </button>
                     ))}
                   </div>
                 ) : (
@@ -347,8 +350,8 @@ export default function AccountOverview() {
             <section className="panel relations-summary">
               <div className="panel-heading">
                 <div>
-                  <h2>Children Relations</h2>
-                  <p>Follow-up care across the ministry.</p>
+                  <h2>Children’s follow-up</h2>
+                  <p>A caring check-in for children we’ve missed.</p>
                 </div>
                 <Link href="/account/relations" className="outline-button">
                   View Follow-Ups <FiChevronRight />
@@ -361,17 +364,18 @@ export default function AccountOverview() {
                 </b>
                 <b>
                   {dashboard.childrenRelations.contacted || 0}
-                  <small>contacted</small>
+                  <small>families contacted</small>
                 </b>
                 <b>
                   {dashboard.childrenRelations.pending || 0}
-                  <small>pending</small>
+                  <small>awaiting contact</small>
                 </b>
               </div>
             </section>
           )}
         </aside>
       </section>
+      {quickTeacher && <TeacherQuickView teacher={quickTeacher} close={() => setQuickTeacher(null)} />}
       <style jsx global>{`
         .assignment-card {
           display: flex;
@@ -381,8 +385,7 @@ export default function AccountOverview() {
         }
         .assignment-card h2 {
           font:
-            700 25px Georgia,
-            serif;
+            700 25px var(--font-body);
           margin: 0;
         }
         .assignment-card p:not(.eyebrow) {
@@ -445,8 +448,7 @@ export default function AccountOverview() {
           display: grid;
           gap: 3px;
           font:
-            700 25px Georgia,
-            serif;
+            700 30px var(--font-body);
         }
         .relation-numbers small {
           font: 600 10px var(--font-body);

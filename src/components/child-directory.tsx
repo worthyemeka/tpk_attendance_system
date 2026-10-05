@@ -1072,13 +1072,10 @@ function Info({
   value: string;
 }) {
   return (
-    <p className="info">
-      {icon || <span />}
-      <span>
-        <small>{label}</small>
-        <b>{value || "—"}</b>
-      </span>
-    </p>
+    <div className="info profile-fact">
+      <i aria-hidden="true">{icon}</i>
+      <div className="profile-fact-content"><small>{label}</small><b>{value || "—"}</b></div>
+    </div>
   );
 }
 

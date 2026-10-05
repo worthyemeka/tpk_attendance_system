@@ -1,0 +1,6 @@
+.relationship-field{display:grid;gap:8px;min-width:0;align-content:start;color:#263952;font:600 13px/1.5 var(--font-body)}
+.relationship-field>select,.relationship-field .relationship-custom>input{display:block;box-sizing:border-box;width:100%;max-width:100%;min-width:0;min-height:48px;height:48px;padding:10px 13px;border:1px solid #d7dfe8;border-radius:10px;background:#fff;color:#263952;font:500 14px var(--font-body)}
+.relationship-field .relationship-custom{display:grid;gap:8px;padding:14px;border:1px solid #ece1d8;border-radius:12px;background:#fffaf6}
+.relationship-field .relationship-custom>label{font:600 12px/1.5 var(--font-body)}
+.relationship-field .relationship-custom>small{color:#68788d;font:400 12px/1.5 var(--font-body)}
+.relationship-field select:focus-visible,.relationship-field input:focus-visible{outline:3px solid #ffd6c8;outline-offset:2px;border-color:#e87553}

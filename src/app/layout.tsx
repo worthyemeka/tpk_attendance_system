@@ -14,6 +14,7 @@ import { DisplayTypography } from "@/components/display-typography";
 
 import "../components/dashboard-ux.css";
 import "../components/notifications.css";
+import "../components/dashboard-refinements.css";
 export const metadata: Metadata = { title: "TribePetra Kids | Wuse", description: "Child check-in and pickup", icons: { icon: "/brand/tpk-logo.jpg" } };
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return <html lang="en"><body><AppShell>{children}</AppShell><GlobalDropdowns /><DisplayTypography /></body></html>;

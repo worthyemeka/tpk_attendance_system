@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { RelationshipField, validRelationship } from "@/components/relationship-field";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { FiArrowLeft, FiCheckCircle, FiMinus, FiPlus } from "react-icons/fi";
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
@@ -130,9 +131,9 @@ export default function AssistedCheckInPage() {
   const updateChild = (index: number, key: keyof Child, value: string) => setChildren((current) => current.map((child, childIndex) => childIndex === index ? { ...child, [key]: value } : child));
   const phoneIsValid = (phone: string) => phone.replace(/\D/g, "").length >= 10;
   const ready = Boolean(
-    serviceId && canOperate && guardian.firstName.trim() && guardian.lastName.trim() && phoneIsValid(guardian.phone) && guardian.relationship && guardian.address.trim() &&
+    serviceId && canOperate && guardian.firstName.trim() && guardian.lastName.trim() && phoneIsValid(guardian.phone) && validRelationship(guardian.relationship) && guardian.address.trim() &&
     children.every((child) => child.firstName.trim() && child.lastName.trim() && child.dateOfBirth && child.gender) &&
-    (pickup.mode === "SELF" || (pickup.fullName.trim() && pickup.relationship && phoneIsValid(pickup.phone)))
+    (pickup.mode === "SELF" || (pickup.fullName.trim() && validRelationship(pickup.relationship) && phoneIsValid(pickup.phone)))
   );
 
   async function submit(event: FormEvent) {
@@ -168,7 +169,7 @@ export default function AssistedCheckInPage() {
         <label>First name<input required autoComplete="given-name" value={guardian.firstName} onChange={(event) => setGuardian({ ...guardian, firstName: event.target.value })} /></label>
         <label>Last name<input required autoComplete="family-name" value={guardian.lastName} onChange={(event) => setGuardian({ ...guardian, lastName: event.target.value })} /></label>
         <label>Phone number<input required inputMode="tel" autoComplete="tel" placeholder="0803 123 4567" value={guardian.phone} onChange={(event) => setGuardian({ ...guardian, phone: event.target.value })} /></label>
-        <label>Relationship<select required value={guardian.relationship} onChange={(event) => setGuardian({ ...guardian, relationship: event.target.value })}><option value="">Choose relationship</option><option>Mother</option><option>Father</option><option>Guardian</option><option>Other</option></select></label>
+        <RelationshipField value={guardian.relationship} onChange={value=>setGuardian({...guardian,relationship:value})} />
         <label>Second phone <small>Optional</small><input inputMode="tel" value={guardian.secondaryPhone} onChange={(event) => setGuardian({ ...guardian, secondaryPhone: event.target.value })} /></label>
         <label>Email <small>Optional</small><input type="email" autoComplete="email" value={guardian.email} onChange={(event) => setGuardian({ ...guardian, email: event.target.value })} /></label>
         <label className="wide">Home address<textarea required value={guardian.address} onChange={(event) => setGuardian({ ...guardian, address: event.target.value })} /></label>
@@ -182,7 +183,7 @@ export default function AssistedCheckInPage() {
         <label>Class<select value={child.classId} onChange={(event) => updateChild(index, "classId", event.target.value)}><option value="">Auto-assign by age</option>{classes.map((classOption) => <option key={classOption.id} value={classOption.id}>{classOption.name}{classOption.ageLabel ? ` · ${classOption.ageLabel}` : ""}</option>)}</select><small>Choose a class when the age-based suggestion is not suitable.</small></label>
         <label className="wide">Care information <small>Optional — allergies, medical needs or anything the team should know</small><textarea value={child.careInformation} onChange={(event) => updateChild(index, "careInformation", event.target.value)} /></label>
       </div></div>)}
-      <section className="pickup-section"><h2>Pickup arrangement</h2><p>Who is expected to collect these children today?</p><div className="pickup-options"><button type="button" className={pickup.mode === "SELF" ? "selected" : ""} onClick={() => setPickup({ ...pickup, mode: "SELF" })}>Parent / guardian</button><button type="button" className={pickup.mode === "OTHER" ? "selected" : ""} onClick={() => setPickup({ ...pickup, mode: "OTHER" })}>Authorised pickup person</button></div>{pickup.mode === "OTHER" && <div className="grid"><label>Full name<input required value={pickup.fullName} onChange={(event) => setPickup({ ...pickup, fullName: event.target.value })} /></label><label>Relationship<select required value={pickup.relationship} onChange={(event) => setPickup({ ...pickup, relationship: event.target.value })}><option value="">Choose relationship</option><option>Family member</option><option>Friend</option><option>Other</option></select></label><label>Phone number<input required inputMode="tel" value={pickup.phone} onChange={(event) => setPickup({ ...pickup, phone: event.target.value })} /></label></div>}</section>
+      <section className="pickup-section"><h2>Pickup arrangement</h2><p>Who is expected to collect these children today?</p><div className="pickup-options"><button type="button" className={pickup.mode === "SELF" ? "selected" : ""} onClick={() => setPickup({ ...pickup, mode: "SELF" })}>Parent / guardian</button><button type="button" className={pickup.mode === "OTHER" ? "selected" : ""} onClick={() => setPickup({ ...pickup, mode: "OTHER" })}>Authorised pickup person</button></div>{pickup.mode === "OTHER" && <div className="grid"><label>Full name<input required value={pickup.fullName} onChange={(event) => setPickup({ ...pickup, fullName: event.target.value })} /></label><RelationshipField value={pickup.relationship} onChange={value=>setPickup({...pickup,relationship:value})} /><label>Phone number<input required inputMode="tel" value={pickup.phone} onChange={(event) => setPickup({ ...pickup, phone: event.target.value })} /></label></div>}</section>
       <button className="solid-button submit" disabled={!ready || busy}>{busy ? "Saving check-in…" : "Save check-in and create pickup ticket"}</button>
     </form><style jsx>{styles}</style>
   </section>;
