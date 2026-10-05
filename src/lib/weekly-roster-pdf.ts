@@ -32,7 +32,7 @@ export async function downloadWeeklyRosterPdf(items:WeeklyAssignment[],date:stri
   const week=rosterWeek(date),groups=weeklyRosterRows(items,date),images=new Map<number,Promise<Awaited<ReturnType<typeof avatar>>>>();
   groups.forEach(({item})=>{if(!images.has(item.userId))images.set(item.userId,avatar(item.profileImageUrl));});
   const photos=await Promise.all(groups.map(({item})=>images.get(item.userId)!));
-  downloadTablePdf(`TPK-week-${week.start}-roster.pdf`,{
+  await downloadTablePdf(`TPK-week-${week.start}-roster.pdf`,{
     title:"Weekly Team Roster",subtitle:`${label(week.start)} - ${label(week.end)} | Sunday service and weekday duties`,
     columns:["Photo","Teacher","Date","Service","Assigned roles"],widths:[.45,1.6,.8,1.6,2.1],photos,
     rows:groups.map(({item,roles})=>[item.teacherName.split(/\s+/).slice(-2).map(word=>word[0]).join(""),item.teacherName,label(item.assignmentDate),item.serviceName||"Ministry activity",[...roles].join("; ")]),

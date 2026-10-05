@@ -23,6 +23,10 @@ import { apiBase, authHeaders, mediaUrl, readTeacherSession } from "@/lib/sessio
 import { StatCard, type StatCardTone } from "@/components/stat-card";
 import { MonthPicker } from "@/components/month-picker";
 import { classroomAttendanceStatus } from "@/lib/classroom-attendance";
+import { ChildProfileDialog } from "./child-directory";
+import { downloadTablePdf } from "@/lib/table-pdf";
+import { classroomChildrenReport } from "@/lib/classroom-children-report";
+import "./classroom-children-table.css";
 import "./classroom-attendance.css";
 import "./classroom-refinements.css";
 import "./classrooms-overview.css";
@@ -531,6 +535,9 @@ export function ClassroomDetail({ classId }: { classId: number }) {
   const searchParams = useSearchParams();
   const context = useSundayContext();
   const [quickTeacher, setQuickTeacher] = useState<TeacherQuickTarget | null>(null);
+  const [selectedChildId,setSelectedChildId]=useState<number|null>(null);
+  const [exportingChildren,setExportingChildren]=useState(false);
+  const [exportError,setExportError]=useState("");
   const requestedServiceId = Number(searchParams.get("serviceSessionId")) || 0;
   const active = context.services.find((service) => service.id === requestedServiceId)
     || context.selectedService;
@@ -738,7 +745,7 @@ export function ClassroomDetail({ classId }: { classId: number }) {
         ))}
       </nav>
       {tab === "children" && (
-        <section>
+        <section className="classroom-children-section">
           <div className="detail-tools">
             <label>
               <FiSearch />
@@ -749,6 +756,7 @@ export function ClassroomDetail({ classId }: { classId: number }) {
               />
             </label>
             <AppSelect
+              aria-label="Filter classroom attendance"
               value={attendanceFilter}
               onChange={(event) => setAttendanceFilter(event.target.value)}
             >
@@ -756,8 +764,11 @@ export function ClassroomDetail({ classId }: { classId: number }) {
               <option value="PRESENT">Present</option>
               <option value="ABSENT">Absent</option>
             </AppSelect>
+            <button className="classroom-export" type="button" disabled={exportingChildren} onClick={async()=>{setExportError("");setExportingChildren(true);try{await downloadTablePdf(`TPK-${data.class.name.replace(/[^a-z0-9]+/gi,"-")}-${data.serviceSession?.serviceDate||"children"}.pdf`,classroomChildrenReport(data.class.name,data.serviceSession,visible,attendanceFilter,query));}catch(reason){setExportError(reason instanceof Error?reason.message:"We could not export this table. Please try again.");}finally{setExportingChildren(false);}}}><FiFileText/>{exportingChildren?"Preparing PDF…":"Export PDF"}</button>
           </div>
-          <ChildrenTable rows={visible} />
+          <div className="classroom-table-heading"><div><h2>Children in {data.class.name}</h2><p>{formatDate(data.serviceSession?.serviceDate)}{data.serviceSession?.name?` · ${data.serviceSession.name}`:""}</p></div><span aria-live="polite">{visible.length} of {data.children.length} children</span></div>
+          {exportError&&<p className="cw-error" role="alert">{exportError}</p>}
+          <ChildrenTable rows={visible} openChild={setSelectedChildId}/>
         </section>
       )}
       {tab === "attendance" && (
@@ -778,6 +789,7 @@ export function ClassroomDetail({ classId }: { classId: number }) {
           onSave={addWeeklyReview}
         />
       )}
+      {selectedChildId!==null&&<ChildProfileDialog key={selectedChildId} childId={selectedChildId} close={()=>setSelectedChildId(null)} onUpdated={()=>void load()} initialMonth={data.serviceSession?.serviceDate.slice(0,7)}/>}
       {tab === "details" && (
         <section className="class-details-panel">
           <header>
@@ -971,19 +983,20 @@ function WeeklyReviews({
   );
 }
 
-function ChildrenTable({ rows }: { rows: Child[] }) {
+export function ChildrenTable({ rows,openChild }: { rows: Child[];openChild:(id:number)=>void }) {
   return (
     <div className="cw-table children-table">
       <table>
-        <thead><tr><th>Child</th><th>Age</th><th>Guardian</th><th>Attendance</th><th>Actions</th></tr></thead>
+        <caption className="classroom-table-caption">Classroom children and attendance for the selected service</caption>
+        <thead><tr><th scope="col">Child</th><th scope="col">Age</th><th scope="col">Parent / guardian</th><th scope="col">Attendance</th><th scope="col">View more</th></tr></thead>
         <tbody>
           {rows.map((child) => (
             <tr key={child.id}>
-              <td data-label="Child"><Link href={`/account/children?childId=${child.id}`}><b>{child.firstName} {child.lastName}</b></Link></td>
-              <td data-label="Age">{child.age ?? "—"}</td>
-              <td data-label="Guardian">{child.guardianId ? <Link href={`/account/guardians?guardianId=${child.guardianId}`}>{child.guardianName}<small>{child.guardianPhone}</small></Link> : "—"}</td>
+              <td data-label="Child"><button className="classroom-child-name" type="button" onClick={()=>openChild(child.id)}><span className="classroom-child-initials" aria-hidden="true">{`${child.firstName[0]||""}${child.lastName[0]||""}`.toUpperCase()}</span><b>{child.firstName} {child.lastName}</b></button></td>
+              <td data-label="Age"><span>{child.age==null?"Not recorded":`${child.age} ${child.age===1?"year":"years"}`}</span></td>
+              <td data-label="Parent / guardian"><div className="classroom-guardian"><b>{child.guardianName||"Not recorded"}</b>{child.guardianPhone&&<a href={`tel:${child.guardianPhone.replace(/[^+\d]/g,"")}`}>{child.guardianPhone}</a>}</div></td>
               <td data-label="Attendance"><Status value={child.todayStatus} /></td>
-              <td data-label="Actions"><Link href={`/account/children?childId=${child.id}`} aria-label={`View ${child.firstName} ${child.lastName}’s profile`}><FiChevronRight /></Link></td>
+              <td data-label="View more"><button className="classroom-view-more" type="button" onClick={()=>openChild(child.id)} aria-label={`View more about ${child.firstName} ${child.lastName}`}>View more <FiChevronRight aria-hidden="true"/></button></td>
             </tr>
           ))}
           {!rows.length && <tr><td colSpan={5} className="cw-empty">No children match this filter.</td></tr>}

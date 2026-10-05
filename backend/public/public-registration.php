@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 /* Public parent registration/check-in endpoints. No staff account is needed. */
 require_once dirname(__DIR__) . '/config.php';
+require_once dirname(__DIR__) . '/registration-eligibility.php';
 
 function public_reply(mixed $data, int $status = 200): never {
     http_response_code($status);
@@ -115,6 +116,7 @@ function public_registration(PDO $db): never {
     $guardian = $payload['guardian'] ?? [];
     $children = $payload['children'] ?? [];
     if (!is_array($guardian) || !is_array($children) || !$children) public_error('VALIDATION_ERROR', 'Provide one or more children and the parent or guardian details.', 422);
+    if ($ageError = tpk_registration_age_error($children)) public_error($ageError['code'], $ageError['message'], 422);
     foreach (['firstName', 'lastName', 'relationship'] as $field) if (!public_name((string)($guardian[$field] ?? ''))) public_error('VALIDATION_ERROR', "Guardian $field is required.", 422);
     $phone = public_phone($guardian['primaryPhone'] ?? null);
     if (!$phone) public_error('INVALID_PHONE', 'Enter a valid Nigerian primary phone number.', 422);

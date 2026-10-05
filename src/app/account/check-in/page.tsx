@@ -24,7 +24,7 @@ function formatCheckInTime(value?: string | null) {
 
 function openPrintReport(title:string,columns:string[],rows:string[][]) {
   const service=readActiveService();
-  downloadTablePdf("tpk-check-in-report.pdf",{title,columns,rows,widths:[150,95,150,65,70,110,110],subtitle:`${service?.serviceDate||""} - ${service?.label||"Service"}`});
+  return downloadTablePdf("tpk-check-in-report.pdf",{title,columns,rows,widths:[150,95,150,65,70,110,110],subtitle:`${service?.serviceDate||""} - ${service?.label||"Service"}`});
 }
 
 export default function AccountCheckInPage() {
@@ -143,7 +143,7 @@ export default function AccountCheckInPage() {
     formatCheckInTime(item.checkedInAt),
     item.source === "ASSISTED" ? "Assisted check-in" : "Parent check-in",
     item.status.replaceAll("_", " "),
-  ]));
+  ])).catch(reason=>setError(reason instanceof Error?reason.message:"We could not export this report. Please try again."));
   return <section className="staff-checkin">
     <header><div><p className="eyebrow">Petra Wuse</p><h1>Check-In</h1><p className="intro">Monitor live arrivals and confirm the parent requests assigned to you.</p></div></header>
     {!canOperate && serviceSessionId && <p className="readonly-notice">Desk check-in and parent approval are available to authorised service leads for the selected service.</p>}

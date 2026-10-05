@@ -18,7 +18,7 @@ const stamp = (value?: string) => {const date=value?parseCampusTime(value):null;
 const initials = (first: string, last: string) => `${first[0] || ""}${last[0] || ""}`.toUpperCase();
 const dayLabel = (date?: string) => date ? new Intl.DateTimeFormat("en-NG", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date(`${date}T12:00:00`)) : "Sunday service";
 function openPickupPrintReport(title:string,rows:string[][],subtitle:string) {
-  downloadTablePdf("tpk-pickup-report.pdf",{title,subtitle,columns:["#","Child","Class","Guardian","Pickup code","Time","Status"],widths:[25,145,85,145,87,76,81],rows});
+  return downloadTablePdf("tpk-pickup-report.pdf",{title,subtitle,columns:["#","Child","Class","Guardian","Pickup code","Time","Status"],widths:[25,145,85,145,87,76,81],rows});
 }
 
 export function PickupDashboard() {
@@ -71,7 +71,7 @@ export function PickupDashboard() {
     child.pickupCode || "—",
     stamp(queue === "PRESENT" ? child.checkedInAt : child.pickedUpAt),
     queue === "PRESENT" ? "Still Present" : "Picked Up",
-  ]), `${dayLabel(dashboard.service?.serviceDate)} - ${dashboard.service?.name || "Service"}`);
+  ]), `${dayLabel(dashboard.service?.serviceDate)} - ${dashboard.service?.name || "Service"}`).catch(reason=>setMessage(reason instanceof Error?reason.message:"We could not export this report. Please try again."));
 
   return <section className="pickup-dashboard"><header><div><p className="eyebrow">Sunday</p><h1>Pick-Up</h1><p className="intro">Enter a parent&apos;s pickup code to find and safely release their child or children.</p></div></header>
     <section className="pickup-metrics"><Metric icon={<FiUsers />} value={dashboard.checkedIn} title="Checked In" text="This service" tone="green" /><Metric icon={<FiCheckCircle />} value={dashboard.pickedUp} title="Picked Up" text="Safely collected" tone="blue" /><Metric icon={<FiClock />} value={dashboard.stillPresent} title="Still Present" text="Awaiting pickup" tone="amber" /></section>

@@ -168,8 +168,12 @@ function openChildrenAttendanceReport(report: AttendanceReport, target?: Window 
     `<!doctype html><html><head><title>TPK Children Attendance Report</title><style>body{font:13px Arial,sans-serif;color:#172b4d;padding:30px}h1{font-size:24px;margin:0 0 5px}h2{font-size:16px;margin:28px 0 10px;color:#e65331}p{color:#667793;margin:0 0 18px}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0}.summary div{border:1px solid #dfe5ec;border-radius:8px;padding:12px;background:#f8fafc}.summary b{display:block;font-size:20px;color:#152644}.summary span{font-size:11px;color:#687995}table{width:100%;border-collapse:collapse;margin-bottom:20px}th,td{text-align:left;border:1px solid #dfe4eb;padding:8px;vertical-align:top}th{background:#f6f1ea;font-size:10px;text-transform:uppercase;letter-spacing:.04em}td{font-size:11px}.empty{text-align:center;color:#78869b;padding:18px}@media print{body{padding:0}.summary{break-inside:avoid}h2{break-after:avoid}table{break-inside:auto}tr{break-inside:avoid;break-after:auto}}</style></head><body><h1>TPK Children Attendance Report</h1><p>${reportValue(service)} · ${reportValue(dateLabel)}</p><div class="summary"><div><b>${report.summary.registered}</b><span>Registered children</span></div><div><b>${report.summary.present}</b><span>Present</span></div><div><b>${report.summary.absent}</b><span>Absent</span></div></div><h2>Present children</h2><table><thead><tr><th>Child</th><th>Class</th><th>Guardian</th></tr></thead><tbody>${childTable(report.present)}</tbody></table><h2>Absent children</h2><table><thead><tr><th>Child</th><th>Class</th><th>Guardian</th></tr></thead><tbody>${childTable(report.absent)}</tbody></table><h2>Attendance by class</h2><table><thead><tr><th>Class</th><th>Registered</th><th>Present</th><th>Absent</th><th>Present children</th><th>Absent children</th></tr></thead><tbody>${classTable || `<tr><td colspan="6" class="empty">No classes found.</td></tr>`}</tbody></table></body></html>`,
   );
   reportWindow.document.close();
+  const brandHeader=reportWindow.document.createElement("header");
+  brandHeader.style.cssText="display:flex;align-items:center;gap:14px;margin-bottom:18px;padding-bottom:12px;border-bottom:1px solid #dfe4eb";
+  brandHeader.innerHTML=`<img alt="Petra Christian Centre" src="${reportValue(window.location.origin)}/brand/petra-logo.jpg" width="48" height="48" style="object-fit:contain"/><img alt="TribePetra Kids" src="${reportValue(window.location.origin)}/brand/tpk-logo.png" width="54" height="54" style="object-fit:contain"/><strong style="font-size:11px;letter-spacing:.04em">TRIBEPETRA KIDS - WUSE CAMPUS</strong>`;
+  reportWindow.document.body.prepend(brandHeader);
   reportWindow.focus();
-  reportWindow.setTimeout(() => reportWindow.print(), 80);
+  void Promise.all(Array.from(brandHeader.querySelectorAll("img"),image=>image.decode().catch(()=>undefined))).then(()=>{if(!reportWindow.closed)reportWindow.print();});
   return true;
 }
 
@@ -606,6 +610,56 @@ export function ChildDirectory() {
   );
 }
 
+/** Mount the same child card without navigating away from its source page. */
+export function ChildProfileDialog({childId,close,onUpdated,initialMonth}: {childId:number;close:()=>void;onUpdated?:()=>void;initialMonth?:string}) {
+  const session=useMemo(()=>readTeacherSession(),[]);
+  const [child,setChild]=useState<Detail|null>(null);
+  const [tab,setTab]=useState<"overview"|"guardians"|"care"|"attendance"|"followup">("overview");
+  const [care,setCare]=useState<Record<string,unknown>|null>(null);
+  const [attendance,setAttendance]=useState<AttendanceSummary>({sundaysPresent:0,sundaysMissed:0,items:[]});
+  const [followups,setFollowups]=useState<Record<string,unknown>[]>([]);
+  const [classes,setClasses]=useState<ClassItem[]>([]);
+  const [month,setMonth]=useState(initialMonth||new Date().toISOString().slice(0,7));
+  const [error,setError]=useState("");
+  const [tabLoading,setTabLoading]=useState(false);
+  const [tabError,setTabError]=useState("");
+  const [retry,setRetry]=useState(0);
+  const [detailRetry,setDetailRetry]=useState(0);
+  useProfileDialog(close,".child-profile-loading",!child);
+  const loadChild=useCallback(async(signal?:AbortSignal)=>{
+    if(!session)throw new Error("Please sign in again to view this child.");
+    const response=await fetch(`${apiBase}/api/v1/children/${childId}`,{headers:authHeaders(session),signal});
+    const body=await response.json();if(!response.ok||!body.success)throw new Error(body.error?.message||"We could not load this child.");
+    if(!signal?.aborted)setChild(body.data);
+  },[childId,session]);
+  useEffect(()=>{const controller=new AbortController();setChild(null);setError("");setTab("overview");void loadChild(controller.signal).catch(reason=>{if(!controller.signal.aborted)setError(reason instanceof Error?reason.message:"We could not load this child.");});return()=>controller.abort();},[loadChild,retry]);
+  useEffect(()=>{if(!session)return;const controller=new AbortController();void fetch(`${apiBase}/api/v1/classes`,{headers:authHeaders(session),signal:controller.signal}).then(response=>response.json()).then(body=>{if(body.success&&!controller.signal.aborted)setClasses(body.data||[]);}).catch(()=>undefined);return()=>controller.abort();},[session]);
+  useEffect(()=>{
+    setTabError("");setTabLoading(false);
+    if(!session||!child||!["care","attendance","followup"].includes(tab))return;
+    const controller=new AbortController();setTabLoading(true);setTabError("");
+    const read=async(path:string)=>{const response=await fetch(`${apiBase}/api/v1/children/${childId}/${path}`,{headers:authHeaders(session),signal:controller.signal});const body=await response.json();if(!response.ok||!body.success)throw new Error(body.error?.message||"These details could not load. Please try again.");return body.data;};
+    const loadTab=async()=>{
+      if(tab==="care"){const [profile,emergency]=await Promise.all([read("care-profile"),read("emergency-profile")]);if(!controller.signal.aborted)setCare({...profile,...emergency});}
+      if(tab==="attendance"){const result=await read(`attendance?month=${month}`);if(!controller.signal.aborted)setAttendance(result);}
+      if(tab==="followup"){const result=await read("follow-ups");if(!controller.signal.aborted)setFollowups(result||[]);}
+    };
+    void loadTab().catch(reason=>{if(!controller.signal.aborted)setTabError(reason instanceof Error?reason.message:"These details could not load.");}).finally(()=>{if(!controller.signal.aborted)setTabLoading(false);});
+    return()=>controller.abort();
+  },[childId,child,month,session,tab,detailRetry]);
+  return <div className="classroom-child-profile-host">
+    {child?<Drawer child={child} tab={tab} setTab={setTab} close={close} care={care} attendance={attendance} followups={followups} month={month} setMonth={setMonth} classes={classes} detailLoading={tabLoading} detailError={tabError} retryDetails={()=>setDetailRetry(value=>value+1)} refresh={async()=>{await loadChild();onUpdated?.();}}/>:<div className="child-drawer-backdrop profile-backdrop" onMouseDown={close}><aside className="child-drawer profile-panel child-profile-loading" role="dialog" aria-modal="true" aria-label="Child profile" onMouseDown={event=>event.stopPropagation()}><button className="close" type="button" aria-label="Close child profile" onClick={close}><FiX/></button><section><h2>Child profile</h2>{error?<><p role="alert">{error}</p><button type="button" onClick={()=>setRetry(value=>value+1)}>Try again</button></>:<p role="status">Loading child’s details…</p>}</section></aside></div>}
+    <style jsx global>{`${styles.slice(styles.indexOf(".child-drawer-backdrop"),styles.indexOf("@media(max-width:1100px)"))}${childEditStyles}
+      .classroom-child-profile-host .child-drawer{background:#fff;box-shadow:none;color:#203451}
+      .classroom-child-profile-host .child-profile-loading section{padding-top:64px}
+      .classroom-child-profile-host .child-drawer :is(h2,h3){font-family:var(--font-body),Arial,sans-serif}
+      .classroom-child-profile-host .child-drawer .detail-state{margin:16px 24px;padding:16px;border:1px solid #e3e7ed;border-radius:12px;background:#fff;font-size:13px}
+      .classroom-child-profile-host .child-drawer .detail-state button{margin-top:10px;min-height:40px}
+      @media(max-width:650px){.classroom-child-profile-host .child-drawer{width:100%;top:0;bottom:0;height:100dvh;border-radius:0}.classroom-child-profile-host .child-drawer header{padding-left:20px;padding-right:48px}.classroom-child-profile-host .child-drawer .profile-facts{grid-template-columns:1fr}}
+    `}</style>
+  </div>;
+}
+
 function Card({
   icon,
   value,
@@ -635,6 +689,9 @@ function Drawer({
   setMonth,
   classes,
   refresh,
+  detailLoading=false,
+  detailError="",
+  retryDetails,
 }: {
   child: Detail;
   tab: "overview" | "guardians" | "care" | "attendance" | "followup";
@@ -649,6 +706,9 @@ function Drawer({
   setMonth: (v: string) => void;
   classes: ClassItem[];
   refresh: () => Promise<void>;
+  detailLoading?:boolean;
+  detailError?:string;
+  retryDetails?:()=>void;
 }) {
   useProfileDialog(close, ".child-drawer");
   const [editing, setEditing] = useState(false);
@@ -706,6 +766,8 @@ function Drawer({
                 </button>
               ))}
             </nav>
+            {detailLoading&&<p className="detail-state" role="status">Loading details…</p>}
+            {detailError&&!detailLoading&&<div className="detail-state" role="alert">{detailError}<br/><button type="button" onClick={retryDetails}>Try again</button></div>}
             {tab === "overview" && (
               <section>
                 <h3>Personal Information</h3>
@@ -760,7 +822,7 @@ function Drawer({
                 )}
               </section>
             )}
-            {tab === "care" && (
+            {tab === "care" && !detailLoading && !detailError && (
               <section>
                 <h3>Care Information</h3>
                 {hasCare ? (
@@ -786,7 +848,7 @@ function Drawer({
                 )}
               </section>
             )}
-            {tab === "attendance" && (
+            {tab === "attendance" && !detailLoading && !detailError && (
               <section>
                 <div className="tab-heading">
                   <h3>Attendance</h3>
@@ -828,7 +890,7 @@ function Drawer({
                 )}
               </section>
             )}
-            {tab === "followup" && (
+            {tab === "followup" && !detailLoading && !detailError && (
               <section>
                 <h3>Follow-Up</h3>
                 {followups.length ? (

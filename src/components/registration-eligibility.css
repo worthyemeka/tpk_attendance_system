@@ -1,0 +1,9 @@
+.new-reg-card .registration-age-notice{display:flex;align-items:flex-start;gap:14px;margin:0 0 22px;padding:20px;border:1px solid #f1d1ae;border-radius:14px;background:#fff8ee;color:#523c25;overflow-wrap:anywhere}
+.registration-age-notice>svg{flex:none;width:24px;height:24px;color:#b96f16;margin-top:2px}
+.new-reg-card .registration-age-notice h2{margin:0 0 8px;font:800 19px/1.35 var(--font-body,Arial,sans-serif);letter-spacing:-.025em}
+.registration-age-notice p{margin:0;font-size:14px;line-height:1.6}
+.registration-age-notice ul{margin:12px 0;padding-left:20px;font-size:14px;font-weight:800;line-height:1.6}
+.registration-age-notice .registration-age-help{margin-top:12px;color:#735d46;font-size:13px}
+.registration-age-notice button{display:inline-flex;align-items:center;gap:8px;min-height:44px;margin-top:14px;padding:10px 14px;border:1px solid #d6b386;border-radius:9px;background:#fff;color:#67451e;font:800 13px/1.4 var(--font-body,Arial,sans-serif);cursor:pointer;text-align:left}
+.registration-age-notice button:focus-visible{outline:3px solid #d6b386;outline-offset:3px}
+@media(max-width:560px){.new-reg-card .registration-age-notice{padding:16px;gap:10px}.registration-age-notice button{width:100%;justify-content:space-between}}
