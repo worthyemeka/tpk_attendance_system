@@ -21,6 +21,7 @@ import { apiBase, authHeaders, mediaUrl, readTeacherSession } from "@/lib/sessio
 import { StatCard, type StatCardTone } from "@/components/stat-card";
 import { MonthPicker } from "@/components/month-picker";
 import "./classroom-refinements.css";
+import "./classrooms-overview.css";
 import {
   useSundayContext,
   serviceDisplayLabel,
@@ -268,10 +269,32 @@ export function ClassroomsOverview() {
           {serviceDate && selectedService && <small className="cw-context-line">Viewing Sunday, {formatDate(serviceDate)} · {selectedService.name}</small>}
         </div>
       </header>
-      <nav className="cw-primary-tabs" aria-label="Classroom ministry views">
-        <button className={activeTab === "classrooms" ? "selected" : ""} onClick={() => setActiveTab("classrooms")}>Classrooms</button>
-        <button className={activeTab === "assembly" ? "selected" : ""} onClick={() => setActiveTab("assembly")}>Assembly</button>
+      <nav className="cw-primary-tabs" role="tablist" aria-label="Classroom ministry views">
+        {(["classrooms", "assembly"] as const).map((view, index) => (
+          <button
+            key={view}
+            id={`cw-tab-${view}`}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === view}
+            aria-controls={`cw-panel-${view}`}
+            tabIndex={activeTab === view ? 0 : -1}
+            className={activeTab === view ? "selected" : ""}
+            onClick={() => setActiveTab(view)}
+            onKeyDown={(event) => {
+              if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+              event.preventDefault();
+              const next = event.key === "Home" ? "classrooms" : event.key === "End" ? "assembly" : index === 0 ? "assembly" : "classrooms";
+              setActiveTab(next);
+              document.getElementById(`cw-tab-${next}`)?.focus();
+            }}
+          >
+            {view === "classrooms" ? <FiUsers /> : <FiClipboard />}
+            {view === "classrooms" ? "Classrooms" : "Assembly"}
+          </button>
+        ))}
       </nav>
+      <div id={`cw-panel-${activeTab}`} role="tabpanel" aria-labelledby={`cw-tab-${activeTab}`}>
       {activeTab === "classrooms" ? <>
       <section className="cw-metrics">
         <Metric
@@ -356,10 +379,12 @@ export function ClassroomsOverview() {
                     <span key={teacher.userId}>
                       <Avatar teacher={teacher} />
                       <b>{teacher.name}</b>
-                      <small>
+                      <small title="Teacher presence is confirmed from their roster; this is separate from children's attendance.">
                         {teacher.status === "PRESENT"
-                          ? "Confirmed present"
-                          : "Not confirmed"}
+                          ? "Presence confirmed"
+                          : teacher.status === "ABSENT"
+                            ? "Marked absent"
+                            : "Presence not confirmed"}
                       </small>
                     </span>
                   ))
@@ -405,8 +430,10 @@ export function ClassroomsOverview() {
         </section>)}</>
       )}
       </> : <AssemblyView groups={assembly.groups} loading={loading} isSuperAdmin={Boolean(isSuperAdmin)} />}
+      </div>
       <style jsx>{styles}</style>
-      <style jsx>{assemblyStyles}</style>
+      {/* Assembly is a child component, so its styles must not be parent-scoped. */}
+      <style>{assemblyStyles}</style>
       <style jsx>{mobileDetailStyles}</style>
     </section>
   );

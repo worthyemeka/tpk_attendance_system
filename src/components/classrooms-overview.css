@@ -1,0 +1,203 @@
+/* Shared overview styles also cover the nested Assembly, Avatar and Status components. */
+.cw-page .cw-primary-tabs {
+  display: flex;
+  gap: 0;
+  width: min(100%, 520px);
+  margin: 22px 0;
+  overflow: hidden;
+  border: 1px solid #e2e5eb;
+  border-radius: 10px;
+  background: #fff;
+}
+.cw-page .cw-primary-tabs button {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 12px 18px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: #66738c;
+  font: 800 13px var(--font-body);
+  cursor: pointer;
+}
+.cw-page .cw-primary-tabs button + button { border-left: 1px solid #e2e5eb; }
+.cw-page .cw-primary-tabs button.selected {
+  border-bottom-color: #ff5938;
+  background: #fff5ef;
+  color: #e85130;
+}
+.cw-page .cw-primary-tabs button:focus-visible,
+.cw-page .assembly-view button:focus-visible,
+.cw-page .assembly-view select:focus-visible,
+.cw-page .assembly-view textarea:focus-visible {
+  outline: 2px solid #ff5938;
+  outline-offset: -3px;
+}
+.cw-page .cw-heading > div > p:not(.eyebrow) { color: #617493; line-height: 1.6; }
+.cw-page .cw-context-line { line-height: 1.6; }
+.cw-page .cw-tools > * { min-width: 0; width: 100%; box-sizing: border-box; }
+.cw-page .cw-tools select { text-overflow: ellipsis; }
+.cw-page .class-grid { gap: 18px; }
+.cw-page .class-card {
+  min-width: 0;
+  gap: 0;
+  padding: 22px;
+  border-radius: 14px;
+  box-shadow: 0 3px 12px rgb(28 25 20 / 3%);
+}
+.cw-page .class-card > header { align-items: flex-start; flex-wrap: wrap; gap: 12px; }
+.cw-page .class-card > header > div { min-width: 0; flex: 1; }
+.cw-page .class-card h3 { overflow-wrap: anywhere; font-size: 21px; }
+.cw-page .class-card header p { font-size: 12px; line-height: 1.5; }
+.cw-page .teacher-heading { margin: 22px 0 10px; font-size: 12px; }
+.cw-page .teacher-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 185px), 1fr));
+  gap: 9px;
+  align-items: stretch;
+}
+.cw-page .teacher-strip > span {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-content: center;
+  gap: 3px 9px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #edf0f3;
+  border-radius: 10px;
+  background: #fffdfa;
+}
+.cw-page .teacher-strip b { white-space: normal; overflow-wrap: anywhere; font-size: 11px; line-height: 1.5; }
+.cw-page .teacher-strip small { font-size: 10px; line-height: 1.5; }
+.cw-page .teacher-photo {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #e9effa;
+  color: #2d67a7;
+  font: 800 11px var(--font-body);
+}
+.cw-page .teacher-strip .teacher-photo { grid-row: 1 / 3; align-self: center; }
+.cw-page .cw-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  max-width: 100%;
+  border-radius: 8px;
+  padding: 6px 9px;
+  font: 800 10px/1.5 var(--font-body);
+  white-space: normal;
+}
+.cw-page .cw-status svg { flex: none; }
+.cw-page .cw-status.good { background: #e6f8ec; color: #07844f; }
+.cw-page .cw-status.warn { background: #fff0e8; color: #d85332; }
+.cw-page .cw-status.quiet { background: #eff2f7; color: #5e6d85; }
+.cw-page .class-numbers { margin: 19px 0 16px; padding: 14px 0; border-top: 1px solid #edf0f3; }
+.cw-page .class-numbers b { font-size: 27px; color: #172a48; }
+.cw-page .class-numbers small { margin-top: 4px; font-size: 11px; }
+.cw-page .attendance-progress { margin-bottom: 17px; }
+.cw-page .class-card footer { flex-wrap: wrap; gap: 10px; }
+.cw-page .class-card footer small { font-size: 10px; line-height: 1.5; }
+.cw-page .class-card footer a { min-height: 40px; box-sizing: border-box; font-size: 11px; }
+.cw-page .assembly-view { min-width: 0; gap: 20px; }
+.cw-page .assembly-intro {
+  padding: 22px;
+  border-radius: 14px;
+  background: #fff5eb;
+}
+.cw-page .assembly-intro h2 { font: 400 28px var(--font-display), Georgia, serif; }
+.cw-page .assembly-intro p { font-size: 13px; line-height: 1.6; }
+.cw-page .assembly-intro .eyebrow,
+.cw-page .assembly-panel .eyebrow { margin: 0 0 6px; color: #ff5938; font-size: 10px; font-weight: 800; letter-spacing: .12em; }
+.cw-page .assembly-intro select { max-width: 100%; min-width: 0; min-height: 44px; }
+.cw-page .assembly-metrics { gap: 12px; }
+.cw-page .assembly-metrics .tpk-stat-card,
+.cw-page .cw-metrics .tpk-stat-card { gap: 13px; padding: 25px 18px; }
+.cw-page .assembly-metrics .tpk-stat-card b,
+.cw-page .cw-metrics .tpk-stat-card b { font-size: 15px; }
+.cw-page .assembly-metrics .tpk-stat-card small,
+.cw-page .cw-metrics .tpk-stat-card small { font-size: 11px; white-space: normal; }
+.cw-page .assembly-panel { min-width: 0; padding: 22px; border-radius: 14px; box-shadow: 0 3px 12px rgb(28 25 20 / 3%); }
+.cw-page .assembly-panel > header { margin-bottom: 18px; flex-wrap: wrap; }
+.cw-page .assembly-panel h3 { font: 400 23px var(--font-display), Georgia, serif; }
+.cw-page .assembly-panel > header a { min-height: 42px; box-sizing: border-box; color: #425673; font-size: 11px; }
+.cw-page .assembly-team { grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
+.cw-page .assembly-team article { padding: 15px; gap: 12px; border-radius: 11px; }
+.cw-page .assembly-team b { overflow-wrap: anywhere; font-size: 13px; line-height: 1.5; }
+.cw-page .assembly-team small { font-size: 11px; }
+.cw-page .assembly-view .primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid #ff5938;
+  border-radius: 9px;
+  background: #ff5938;
+  color: #fff;
+  font: 800 12px var(--font-body);
+  cursor: pointer;
+}
+.cw-page .assembly-view button:disabled { opacity: .5; cursor: not-allowed; }
+.cw-page .assembly-activity-list article { padding: 16px; border-radius: 10px; }
+.cw-page .assembly-activity-list b { font-size: 13px; }
+.cw-page .assembly-activity-list small { font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
+.cw-page .assembly-activity-list select { min-height: 44px; font-size: 12px; }
+.cw-page .assembly-notes article { padding: 16px; }
+.cw-page .assembly-notes p { font-size: 13px; overflow-wrap: anywhere; }
+.cw-page .assembly-notes small { font-size: 11px; line-height: 1.6; }
+.cw-page .assembly-note-form { align-items: flex-end; gap: 12px; }
+.cw-page .assembly-note-form textarea { min-width: 0; width: 100%; min-height: 90px; box-sizing: border-box; font-size: 13px; line-height: 1.6; }
+.cw-page .assembly-note-form button { flex: none; }
+.cw-page .assembly-view .cw-empty {
+  display: grid;
+  place-items: center;
+  grid-column: 1 / -1;
+  min-height: 100px;
+  margin: 0;
+  padding: 20px;
+  border: 1px dashed #e2e5eb;
+  border-radius: 10px;
+  background: #fffdfa;
+  color: #74829a;
+  font-size: 12px;
+  text-align: center;
+}
+.cw-page .assembly-view .cw-modal { position: fixed; z-index: 99; inset: 0; display: grid; place-items: center; padding: 20px; background: #0a173a77; }
+.cw-page .assembly-view .cw-modal > section { position: relative; display: grid; gap: 16px; width: min(100%, 510px); max-height: calc(100dvh - 40px); overflow-y: auto; padding: 26px; border-radius: 14px; background: #fffdfa; box-sizing: border-box; box-shadow: 0 20px 60px #101c373d; }
+.cw-page .assembly-view .cw-modal h2 { margin: 0; font: 400 28px var(--font-display), Georgia, serif; color: #172a48; }
+.cw-page .assembly-view .cw-modal label { display: grid; gap: 7px; color: #425673; font-size: 12px; font-weight: 800; }
+.cw-page .assembly-view .cw-modal input,
+.cw-page .assembly-view .cw-modal select,
+.cw-page .assembly-view .cw-modal textarea { width: 100%; min-height: 44px; box-sizing: border-box; padding: 11px; border: 1px solid #dce2eb; border-radius: 9px; background: #fff; color: #172a48; font: 12px var(--font-body); }
+.cw-page .assembly-view .cw-modal textarea { min-height: 90px; resize: vertical; }
+.cw-page .assembly-view .modal-close { position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 8px; background: transparent; color: #425673; font-size: 21px; cursor: pointer; }
+.cw-page .assembly-view .cw-modal footer { display: flex; justify-content: flex-end; gap: 10px; }
+.cw-page .assembly-view .cw-modal footer button:not(.primary) { min-height: 44px; padding: 10px 16px; border: 1px solid #dce2eb; border-radius: 9px; background: #fff; color: #425673; font: 800 12px var(--font-body); cursor: pointer; }
+@media (max-width: 1100px) {
+  .cw-page:not(.class-detail) .cw-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cw-page .assembly-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 650px) {
+  .cw-page .cw-primary-tabs { width: 100%; }
+  .cw-page .class-card, .cw-page .assembly-panel, .cw-page .assembly-intro { padding: 18px; }
+  .cw-page .class-card h3 { font-size: 20px; }
+  .cw-page .teacher-strip { grid-template-columns: 1fr; }
+  .cw-page .assembly-metrics { grid-template-columns: 1fr; }
+  .cw-page:not(.class-detail) .cw-metrics { grid-template-columns: 1fr; }
+  .cw-page .assembly-note-form { align-items: stretch; }
+  .cw-page .assembly-view .cw-modal { padding: 12px; }
+  .cw-page .assembly-view .cw-modal > section { max-height: calc(100dvh - 24px); padding: 22px 18px; }
+}
