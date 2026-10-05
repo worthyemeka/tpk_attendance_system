@@ -16,7 +16,6 @@ import {
   FiDownload,
   FiMail,
   FiMessageCircle,
-  FiMoreVertical,
   FiPhone,
   FiPlus,
   FiSearch,
@@ -26,6 +25,7 @@ import {
 } from "react-icons/fi";
 import { apiBase, authHeaders, mediaUrl, readTeacherSession } from "@/lib/session";
 import { printBrandedDocument } from "@/lib/branded-print";
+import { downloadWeeklyRosterPdf, rosterWeek } from "@/lib/weekly-roster-pdf";
 import { MonthPicker } from "@/components/month-picker";
 import { DataViewToggle, type DataView } from "@/components/data-view-toggle";
 import { useSundayContext } from "@/lib/sunday-context";
@@ -177,6 +177,7 @@ export default function RosterPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [display, setDisplay] = useState<DataView>("GRID");
   const [exportOpen, setExportOpen] = useState(false);
+  const [downloadingWeek, setDownloadingWeek] = useState("");
   const [modal, setModal] = useState<ModalState | null>(null);
   const [teacherSearch, setTeacherSearch] = useState("");
   const [saving, setSaving] = useState(false);
@@ -421,6 +422,22 @@ export default function RosterPage() {
     } finally {
       setSaving(false);
     }
+  }
+  async function exportWeek(date:string) {
+    if(!data||!session||downloadingWeek)return;
+    setDownloadingWeek(date);setError("");
+    try {
+      const week=rosterWeek(date);let assignments=[...data.assignments];
+      const months=[...new Set([week.start.slice(0,7),week.end.slice(0,7)])];
+      for(const month of months){
+        if(month===monthKey)continue;
+        const response=await fetch(`${apiBase}/api/v1/roster/management?month=${Number(month.slice(5))}&year=${month.slice(0,4)}`,{headers:authHeaders(session),cache:"no-store"});
+        const result=await response.json();if(!response.ok||!result.success)throw new Error("We couldn’t load the full week’s roster. Please try again.");
+        assignments=assignments.concat(result.data.assignments||[]);
+      }
+      await downloadWeeklyRosterPdf(assignments,date);
+      setNotice("Weekly roster PDF downloaded.");
+    }catch{setError("We couldn’t download this week’s roster. Please try again.");}finally{setDownloadingWeek("");}
   }
   function exportRoster(kind: "CSV" | "PDF") {
     if (!data) return;
@@ -774,6 +791,8 @@ export default function RosterPage() {
           />
         ) : tab === "SUNDAY" ? (
           <SundayCalendar
+            onDownload={(date) => void exportWeek(date)}
+            downloading={Boolean(downloadingWeek)}
             dates={(data?.sundays || []).filter(
               (date) => !sundayFilter || date === sundayFilter,
             )}
@@ -821,6 +840,8 @@ export default function RosterPage() {
           />
         ) : (
           <NonTeachingCalendar
+            onDownload={(date) => void exportWeek(date)}
+            downloading={Boolean(downloadingWeek)}
             dates={datesForNonTeaching}
             assignments={nonTeachingAssignments}
             onAssign={(date, code) => {
@@ -1042,6 +1063,8 @@ function SundayCalendar({
   loading,
   readOnly,
   locked,
+  onDownload,
+  downloading,
 }: {
   dates: string[];
   assignments: (
@@ -1053,6 +1076,8 @@ function SundayCalendar({
   loading: boolean;
   readOnly: boolean;
   locked: boolean;
+  onDownload: (date:string) => void;
+  downloading: boolean;
 }) {
   return (
     <div className="grid-wrap">
@@ -1063,7 +1088,7 @@ function SundayCalendar({
             ? formatDate(`${dates[0].slice(0, 7)}-01`).replace(/^1\s/, "")
             : ""}
         </h2>
-        <p>{dates.length} Sundays · 8 roles per Sunday</p>
+        <p>{dates.length} Sundays · Download a complete weekly roster from each row.</p>
       </div>
       <table className="monthly-grid">
         <thead>
@@ -1075,7 +1100,7 @@ function SundayCalendar({
                 {"sub" in column && <small>{column.sub}</small>}
               </th>
             ))}
-            <th>Actions</th>
+            <th>Weekly PDF</th>
           </tr>
         </thead>
         <tbody>
@@ -1105,14 +1130,7 @@ function SundayCalendar({
                 );
               })}
               <td>
-                {!locked && (
-                  <button
-                    className="row-more"
-                    aria-label={`Manage ${formatDate(date)} duties`}
-                  >
-                    <FiMoreVertical />
-                  </button>
-                )}
+                <button className="row-more" disabled={downloading} onClick={() => onDownload(date)} aria-label={`Download weekly roster PDF for ${formatDate(date)}`} title="Download weekly roster PDF"><FiDownload /></button>
               </td>
             </tr>
           ))}
@@ -1207,6 +1225,8 @@ function NonTeachingCalendar({
   loading,
   readOnly,
   locked,
+  onDownload,
+  downloading,
 }: {
   dates: string[];
   assignments: (date: string, code: string) => Assignment[];
@@ -1215,6 +1235,8 @@ function NonTeachingCalendar({
   loading: boolean;
   readOnly: boolean;
   locked: boolean;
+  onDownload: (date:string) => void;
+  downloading: boolean;
 }) {
   return (
     <div className="grid-wrap">
@@ -1228,7 +1250,7 @@ function NonTeachingCalendar({
             <th>Date</th>
             <th>Prayers</th>
             <th>Lesson Plan Review</th>
-            <th>Actions</th>
+            <th>Weekly PDF</th>
           </tr>
         </thead>
         <tbody>
@@ -1258,11 +1280,7 @@ function NonTeachingCalendar({
                 );
               })}
               <td>
-                {!locked && (
-                  <button className="row-more">
-                    <FiMoreVertical />
-                  </button>
-                )}
+                <button className="row-more" disabled={downloading} onClick={() => onDownload(date)} aria-label={`Download weekly roster PDF for ${formatDate(date)}`} title="Download weekly roster PDF"><FiDownload /></button>
               </td>
             </tr>
           ))}

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { FiArrowLeft, FiCalendar, FiMail, FiPhone, FiSearch, FiUsers, FiX } from "react-icons/fi";
+import { FiArrowLeft, FiCalendar, FiMail, FiMessageCircle, FiPhone, FiSearch, FiUsers, FiX } from "react-icons/fi";
 import { apiBase, authHeaders, mediaUrl, readTeacherSession } from "@/lib/session";
 import { useProfileDialog } from "./use-profile-dialog";
 import "./dashboard-quick-views.css";
@@ -52,7 +52,7 @@ export function FindChildDialog({ close }: { close: () => void }) {
 }
 
 export type TeacherQuickTarget = { userId: number; name: string; image?: string | null; date?: string; roles?: string[] };
-type Contact = { id: number; name: string; email?: string; whatsappNumber?: string; mobileNumber?: string };
+type Contact = { id: number; name: string; email?: string; whatsappNumber?: string; mobileNumber?: string; emergencyContact?: string; emergencyPhone?: string };
 type SundayContact = Omit<Contact, "id" | "name"> & { userId: number; assignmentDate: string; dutyName: string; className?: string; serviceName?: string };
 export function TeacherQuickView({ teacher, close }: { teacher: TeacherQuickTarget; close: () => void }) {
   const session = useMemo(readTeacherSession, []);
@@ -75,17 +75,25 @@ export function TeacherQuickView({ teacher, close }: { teacher: TeacherQuickTarg
         const duties = roster.assignments.filter(item => Number(item.userId) === Number(teacher.userId) && item.assignmentDate === teacher.date);
         if (!member && !duties.length) throw new Error("This teacher is not available in the selected Sunday’s roster.");
         setContact({ ...member, ...duties[0], id: teacher.userId, name: teacher.name });
-        setSundayRoles(duties.map(item => [item.dutyName, item.className, item.serviceName].filter(Boolean).join(" · ")));
+        setSundayRoles(duties.map(item => [item.dutyName, item.className].filter(Boolean).join(" · ")));
       })
       .catch(reason => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Contact details unavailable."); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [session, teacher.userId, teacher.date, teacher.name]);
-  const phone = contact?.whatsappNumber || contact?.mobileNumber;
+  const phone = contact?.mobileNumber || contact?.whatsappNumber;
+  const whatsapp = contact?.whatsappNumber || contact?.mobileNumber;
+  const whatsappDigits = whatsapp?.replace(/\D/g, "").replace(/^0(?=\d{10}$)/, "234");
   const roles = sundayRoles.length ? sundayRoles : teacher.roles || [];
   const date = teacher.date ? new Intl.DateTimeFormat("en-NG", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${teacher.date}T12:00:00Z`)) : "Selected Sunday";
   return <QuickDialog title="Teacher contact" close={close}><div className="quick-teacher-identity">{teacher.image ? <img src={mediaUrl(teacher.image)} alt="" /> : <i><FiUsers /></i>}<div><h3>{teacher.name}</h3><p>Serving with TribePetra Kids</p></div></div>
-    <div className="quick-duty"><small><FiCalendar />{date}</small><b>{roles.length ? [...new Set(roles)].join(" · ") : "No role recorded for this Sunday"}</b></div>
-    <dl className="quick-contact" aria-busy={loading}><div><dt><FiPhone />Phone number</dt><dd>{loading ? "Loading…" : phone ? <a href={`tel:${phone.replace(/[^+\d]/g, "")}`}>{phone}</a> : "Not recorded"}</dd></div><div><dt><FiMail />Email address</dt><dd>{loading ? "Loading…" : contact?.email ? <a href={`mailto:${contact.email}`}>{contact.email}</a> : "Not recorded"}</dd></div></dl>{error && <p className="quick-error" role="alert">{error}</p>}
+    <div className="quick-duty"><small><FiCalendar />{date}</small><div className="quick-role-list">{loading ? <span>Loading duties…</span> : roles.length ? [...new Set(roles)].map(role => <b key={role}>{role}</b>) : <span>No role recorded for this Sunday</span>}</div></div>
+    <dl className="quick-contact" aria-busy={loading}>
+      <div><dt><FiPhone />Phone number</dt><dd>{loading ? "Loading…" : phone ? <a href={`tel:${phone.replace(/[^+\d]/g, "")}`}>{phone}</a> : "Not recorded"}</dd></div>
+      <div><dt><FiMessageCircle />WhatsApp</dt><dd>{loading ? "Loading…" : whatsappDigits ? <a href={`https://wa.me/${whatsappDigits}`} target="_blank" rel="noreferrer">{whatsapp}</a> : "Not recorded"}</dd></div>
+      <div><dt><FiMail />Email address</dt><dd>{loading ? "Loading…" : contact?.email ? <a href={`mailto:${contact.email}`}>{contact.email}</a> : "Not recorded"}</dd></div>
+      <div><dt>Emergency contact</dt><dd>{loading ? "Loading…" : contact?.emergencyContact || "Not recorded or not available to your role"}</dd></div>
+      <div><dt><FiPhone />Emergency phone</dt><dd>{loading ? "Loading…" : contact?.emergencyPhone ? <a href={`tel:${contact.emergencyPhone.replace(/[^+\d]/g, "")}`}>{contact.emergencyPhone}</a> : "Not recorded or not available to your role"}</dd></div>
+    </dl>{error && <p className="quick-error" role="alert">{error}</p>}
   </QuickDialog>;
 }

@@ -19,7 +19,7 @@ function api_sunday_schedule(PDO $db): never {
     if (api_method() !== 'PUT') api_error('METHOD_NOT_ALLOWED', 'Use GET or PUT.', 405);
     $theme = trim((string)($v['theme'] ?? ''));
     $sessions = $v['sessions'] ?? [];
-    if (strlen($theme)>150 || !is_array($sessions) || count($sessions)<1 || count($sessions)>12) api_error('VALIDATION_ERROR', 'Choose 1–12 services and a theme of up to 150 characters.', 422);
+    if (strlen($theme)>150 || !is_array($sessions) || count($sessions)<1 || count($sessions)>3) api_error('VALIDATION_ERROR', 'Choose 1–3 services and a theme of up to 150 characters.', 422);
     $ids = array_map('intval', array_column($existing, 'id'));
     $keep = []; $prepared = []; $previousEnd = '';
     foreach ($sessions as $i=>$row) {

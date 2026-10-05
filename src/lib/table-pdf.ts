@@ -1,5 +1,5 @@
 /** Small, dependency-free table exporter. Produces a real PDF, not a popup. */
-type TableReport = {title:string;subtitle?:string;columns:string[];rows:string[][];widths?:number[]};
+export type TableReport = {title:string;subtitle?:string;columns:string[];rows:string[][];widths?:number[];photos?:({hex:string;width:number;height:number}|null)[]};
 const ascii=(value:string)=>value.normalize("NFKD").replace(/[\u0300-\u036f]/g,"").replace(/[\u2018\u2019]/g,"'").replace(/[\u2013\u2014]/g,"-").replace(/[^\x20-\x7e]/g," ");
 const escape=(value:string)=>ascii(value).replace(/([\\()])/g,"\\$1");
 function wrap(value:string,width:number):string[] {
@@ -11,7 +11,7 @@ function wrap(value:string,width:number):string[] {
   }
   if(line)lines.push(line);return lines.length?lines:["-"];
 }
-export function createTablePdf({title,subtitle="",columns,rows,widths}:TableReport):Blob {
+export function createTablePdf({title,subtitle="",columns,rows,widths,photos}:TableReport):Blob {
   const w=842,h=595,margin=30,available=w-margin*2;
   const weights=widths||columns.map(()=>1),total=weights.reduce((a,b)=>a+b,0);
   const sizes=weights.map(value=>available*value/total);const pages:string[]=[];
@@ -26,16 +26,19 @@ export function createTablePdf({title,subtitle="",columns,rows,widths}:TableRepo
   };
   const finish=()=>{rule(h-32);text(`TPK Service Report | Page ${pages.length+1}`,margin,h-18,8);pages.push(commands.join("\n"));};
   start();
-  for(const row of rows){
-    const cells=columns.map((_,i)=>wrap(String(row[i]??"-"),sizes[i]));const height=Math.max(28,Math.max(...cells.map(cell=>cell.length))*12+14);
+  for(const [rowIndex,row] of rows.entries()){
+    const photo=photos?.[rowIndex];
+    const cells=columns.map((_,i)=>photo&&i===0?[]:wrap(String(row[i]??"-"),sizes[i]));const height=Math.max(photos?48:28,Math.max(...cells.map(cell=>cell.length))*12+14);
     if(y+height>h-43){finish();start();}
-    rule(y);let x=margin;cells.forEach((lines,i)=>{lines.forEach((line,j)=>text(line,x+7,y+16+j*12));x+=sizes[i];});y+=height;
+    rule(y);if(photo){const size=Math.min(34,sizes[0]-14);commands.push(`q ${size} 0 0 ${size} ${margin+7} ${h-y-7-size} cm /I${rowIndex} Do Q`);}let x=margin;cells.forEach((lines,i)=>{lines.forEach((line,j)=>text(line,x+7,y+16+j*12));x+=sizes[i];});y+=height;
   }
   if(!rows.length)text("No records in this view.",margin+7,y+21);
   rule(y);finish();
   const objects:string[]=["<< /Type /Catalog /Pages 2 0 R >>", "", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>"];
+  const imageRefs:string[]=[];
+  photos?.forEach((photo,index)=>{if(!photo)return;const id=objects.length+1;const encoded=photo.hex+">";objects.push(`<< /Type /XObject /Subtype /Image /Width ${photo.width} /Height ${photo.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter [/ASCIIHexDecode /DCTDecode] /Length ${encoded.length} >>\nstream\n${encoded}\nendstream`);imageRefs.push(`/I${index} ${id} 0 R`);});
   const pageIds:number[]=[];
-  for(const content of pages){const id=objects.length+1;pageIds.push(id);objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${w} ${h}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${id+1} 0 R >>`);objects.push(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`);}
+  for(const content of pages){const id=objects.length+1;pageIds.push(id);objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${w} ${h}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> /XObject << ${imageRefs.join(" ")} >> >> /Contents ${id+1} 0 R >>`);objects.push(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`);}
   objects[1]=`<< /Type /Pages /Kids [${pageIds.map(id=>`${id} 0 R`).join(" ")}] /Count ${pageIds.length} >>`;
   let pdf="%PDF-1.4\n";const offsets=[0];objects.forEach((object,i)=>{offsets.push(pdf.length);pdf+=`${i+1} 0 obj\n${object}\nendobj\n`;});
   const xref=pdf.length;pdf+=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n${offsets.slice(1).map(offset=>`${String(offset).padStart(10,"0")} 00000 n \n`).join("")}trailer\n<< /Size ${objects.length+1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;

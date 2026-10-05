@@ -2,6 +2,7 @@
   display: grid;
   gap: 7px;
 }
+.upcoming-service-list{display:grid;gap:12px;margin-top:20px}.upcoming-service-list>div{display:flex;align-items:center;gap:14px;padding:18px;border:1px solid #ede1d3;border-radius:12px;background:#fffaf3}.upcoming-service-list>div>i{display:grid;place-items:center;width:44px;height:44px;flex:none;background:#fff0e3;color:#d65c32;border-radius:12px;font-size:21px}.upcoming-service-list section{display:grid;gap:5px;min-width:0;flex:1}.upcoming-service-list small{font-size:11px;color:#a75a35}.upcoming-service-list b{font-size:14px;overflow-wrap:anywhere}.upcoming-service-list span{font-size:11px;color:#728096}.upcoming-service-list a{display:grid;place-items:center;min-width:40px;min-height:40px;border:1px solid #eddcc9;background:#fff;border-radius:9px;color:#b75832}@media(max-width:500px){.upcoming-service-list>div{padding:14px;gap:10px}.upcoming-service-list b{font-size:13px}}
 
 .team-person {
   display: flex;

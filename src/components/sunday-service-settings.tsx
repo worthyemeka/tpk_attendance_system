@@ -36,9 +36,10 @@ export function SundayServiceSettings() {
     return ()=> {cancelled=true;};
   },[date,session]);
 
-  const changeCount = (count:number) => setServices(current=>Array.from({length:count},(_,index)=> current[index] || { startTime:"",endTime:"" }));
+  const changeCount = (count:number) => setServices(current=>Array.from({length:Math.max(1,Math.min(3,count))},(_,index)=> current[index] || { startTime:"",endTime:"" }));
   async function save(event:React.FormEvent) {
     event.preventDefault();if(!session||loading||saving)return;
+    if(services.length>3){setError("This existing schedule has more than three services. Reconcile its records before reducing the schedule; no services have been removed.");return;}
     setSaving(true);setError("");setMessage("");
     try {
       const response=await fetch(`${apiBase}/api/v1/service-sessions/sunday-schedule`,{method:"PUT",headers:{...authHeaders(session),"Content-Type":"application/json"},body:JSON.stringify({serviceDate:date,theme,sessions:services})});
@@ -53,7 +54,7 @@ export function SundayServiceSettings() {
   }
 
   return <article className="panel sunday-settings"><header className="schedule-heading"><div><p className="eyebrow">Service planning</p><h2>Sunday services</h2><p>Choose a Sunday, then set its theme and service times.</p></div><span>Super Admin</span></header><form onSubmit={save}>
-    <div className="schedule-controls"><label>Sunday date<input required type="date" value={date} onChange={event=>setDate(event.target.value)} disabled={saving}/></label><label>Number of services<select data-dropdown-native value={services.length} onChange={event=>changeCount(Number(event.target.value))} disabled={loading||saving}>{Array.from({length:12},(_,i)=><option value={i+1} key={i}>{i+1} service{i===0?"":"s"}</option>)}</select></label><label>Service theme <small>Optional · for example, Thanksgiving</small><input maxLength={120} placeholder="e.g. Thanksgiving" value={theme} onChange={event=>setTheme(event.target.value)} disabled={loading||saving}/></label></div>
+    <div className="schedule-controls"><label>Sunday date<input required type="date" value={date} onChange={event=>setDate(event.target.value)} disabled={saving}/></label><label>Number of services<select data-dropdown-native value={services.length} onChange={event=>changeCount(Number(event.target.value))} disabled={loading||saving}>{Array.from({length:3},(_,i)=><option value={i+1} key={i}>{i+1} service{i===0?"":"s"}</option>)}</select></label><label>Service theme <small>Optional · for example, Thanksgiving</small><input maxLength={120} placeholder="e.g. Thanksgiving" value={theme} onChange={event=>setTheme(event.target.value)} disabled={loading||saving}/></label></div>
     {loading?<p>Loading Sunday schedule…</p>:services.map((service,index)=><div className="service-times" key={service.id||`new-${index}`}><div className="service-time-name"><i>{index+1}</i><span><b>{services.length===1?(theme||"Single service"):`Service ${index+1}`}</b><small>{services.length===1?"One service this Sunday":"Scheduled service"}</small></span></div><label>Starts<input type="time" required value={service.startTime} disabled={saving} onChange={event=>setServices(current=>current.map((item,i)=>i===index?{...item,startTime:event.target.value}:item))}/></label><label>Ends<input type="time" required value={service.endTime} disabled={saving} onChange={event=>setServices(current=>current.map((item,i)=>i===index?{...item,endTime:event.target.value}:item))}/></label></div>)}
     <small className="schedule-help">With one service, the theme becomes its name in the dropdown. Existing attendance and assignments remain linked to their service.</small>
     {error&&<p className="schedule-error" role="alert">{error}</p>}{message&&<p className="schedule-success" role="status">{message}</p>}

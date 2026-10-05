@@ -6,6 +6,7 @@ import { TeacherQuickView, type TeacherQuickTarget } from "@/components/dashboar
 import { useEffect, useState } from "react";
 import {
   FiCheckCircle,
+  FiCalendar,
   FiChevronRight,
   FiClock,
   FiUsers,
@@ -68,6 +69,8 @@ type Dashboard = {
     serviceSessionId: number;
     duties: number;
     filled: number;
+    teachers?: number;
+    serviceName?: string;
   }[];
 };
 const empty: Dashboard = {
@@ -137,6 +140,7 @@ export default function AccountOverview() {
   const viewingToday = sundayContext.selectedSundayDate === todayInLagos;
   const viewingHistorical = Boolean(sundayContext.selectedSundayDate && !viewingToday);
   const { metrics, classes } = dashboard;
+  const upcomingSundays = dashboard.upcomingRoster.filter(item => new Date(`${item.assignmentDate}T12:00:00Z`).getUTCDay() === 0);
   const personalAssignments = dashboard.personalAssignments?.length
     ? dashboard.personalAssignments
     : dashboard.personalAssignment
@@ -316,22 +320,13 @@ export default function AccountOverview() {
                     Manage Roster <FiChevronRight />
                   </Link>
                 </div>
-                {dashboard.upcomingRoster.length ? (
-                  <div className="summary-list">
-                    {dashboard.upcomingRoster.map((item, index) => (
+                {upcomingSundays.length ? (
+                  <div className="upcoming-service-list">
+                    {upcomingSundays.map((item) => (
                       <div
                         key={`${item.assignmentDate}-${item.serviceSessionId}`}
                       >
-                        <b>
-                          {index === 0
-                            ? new Intl.DateTimeFormat("en-NG", {
-                                dateStyle: "medium",
-                              }).format(new Date(item.assignmentDate))
-                            : item.assignmentDate}
-                        </b>
-                        <span>
-                          {item.duties} duties · {item.filled} filled
-                        </span>
+                        <i><FiCalendar /></i><section><small>Sunday · {new Intl.DateTimeFormat("en-NG", {day:"numeric",month:"short",year:"numeric",timeZone:"UTC"}).format(new Date(`${item.assignmentDate}T12:00:00Z`))}</small><b>{item.serviceName || "Scheduled service"}</b><span>{item.duties} assignments{item.teachers != null ? ` · ${item.teachers} teachers` : ""}</span></section><Link href={`/account/roster?date=${item.assignmentDate}`} aria-label={`View roster for ${item.assignmentDate}`}><FiChevronRight /></Link>
                       </div>
                     ))}
                   </div>
