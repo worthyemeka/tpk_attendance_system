@@ -3,7 +3,9 @@
   "version": "0.2.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/prepare-video-trimmer.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/prepare-video-trimmer.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

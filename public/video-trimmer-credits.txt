@@ -1,0 +1,15 @@
+TPK's optional on-device video trimmer uses ffmpeg.wasm.
+
+JavaScript wrapper: @ffmpeg/ffmpeg 0.12.15, MIT.
+Project, source and license: https://github.com/ffmpegwasm/ffmpeg.wasm
+
+WebAssembly processor: @ffmpeg/core 0.12.10, GPL-2.0-or-later.
+Corresponding source and reproducible build scripts:
+https://github.com/ffmpegwasm/ffmpeg.wasm/tree/main/packages/core
+https://github.com/ffmpegwasm/ffmpeg.wasm/tree/main
+FFmpeg source: https://github.com/ffmpegwasm/FFmpeg
+License: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+
+The pinned public npm distributions are installed at build time and their
+unmodified processor files are served from /vendor/video-trimmer/. Media is
+processed on the user's device, not sent to ffmpeg.wasm or a third-party CDN.

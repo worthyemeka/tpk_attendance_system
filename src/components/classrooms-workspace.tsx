@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { TeacherQuickView, type TeacherQuickTarget } from "@/components/dashboard-quick-views";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -23,6 +24,8 @@ import { MonthPicker } from "@/components/month-picker";
 import "./classroom-refinements.css";
 import "./classrooms-overview.css";
 import { DiscussionThread, AssemblyAttachment, type AssemblyMedia } from "./classroom-discussion-thread";
+import { VideoTrimmer } from "./video-trimmer";
+import { TOTAL_UPLOAD_BYTES, VIDEO_UPLOAD_BYTES } from "@/lib/video-trim";
 import {
   useSundayContext,
   serviceDisplayLabel,
@@ -457,6 +460,7 @@ function AssemblyView({ groups, loading, isSuperAdmin, onRefresh }: { groups: As
   const [activityName, setActivityName] = useState("");
   const [activityNotes, setActivityNotes] = useState("");
   const [attachments, setAttachments] = useState<File[]>([]);
+  const [trimming, setTrimming] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [leaderId, setLeaderId] = useState("");
   const [note, setNote] = useState("");
@@ -465,7 +469,7 @@ function AssemblyView({ groups, loading, isSuperAdmin, onRefresh }: { groups: As
   useEffect(() => { if (selectedGroup >= groups.length) setSelectedGroup(0); }, [groups.length, selectedGroup]);
   const canManage = Boolean(group?.canManage);
   const submitActivity = async () => {
-    if (saving || !session || !group?.serviceSession?.id || !activityName.trim()) return;
+    if (saving || trimming || !session || !group?.serviceSession?.id || !activityName.trim()) return;
     if (attachments.length > 6 || attachments.reduce((sum, f) => sum + f.size, 0) > 25 * 1024 * 1024 || attachments.some((f) => f.size > (f.type.startsWith("image/") ? 5 : 20) * 1024 * 1024)) {
       setMessage("Attach up to six files: pictures up to 5 MB, videos up to 20 MB, 25 MB total."); return;
     }
@@ -519,10 +523,11 @@ function AssemblyView({ groups, loading, isSuperAdmin, onRefresh }: { groups: As
       <label>Activity Name<input disabled={saving} maxLength={180} value={activityName} onChange={(e) => setActivityName(e.target.value)} placeholder="e.g. Opening prayer" /></label>
       <label>Led By<select disabled={saving} value={leaderId} onChange={(e) => setLeaderId(e.target.value)}><option value="">Choose a teacher (optional)</option>{(group.leaders || group.team).map((teacher) => <option key={teacher.userId} value={teacher.userId}>{teacher.name}</option>)}</select></label>
       <label>Notes <small>(optional)</small><textarea disabled={saving} value={activityNotes} onChange={(e) => setActivityNotes(e.target.value)} placeholder="Add context for the team…" /></label>
-      <label className="media-picker">Attach pictures or videos <small>Optional · up to 6 files. Pictures: 5 MB each. Videos: 20 MB each. Maximum 25 MB total. Only share media suitable for the authorised team.</small><input disabled={saving} type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" multiple onChange={(e) => setAttachments(Array.from(e.target.files || []))} />{attachments.length > 0 && <ul className="media-selected">{attachments.map((file, index) => <li key={`${file.name}-${index}`}>{file.name} · {(file.size / 1024 / 1024).toFixed(1)} MB</li>)}</ul>}</label>
+      <div className="media-picker"><label htmlFor="assembly-activity-media">Attach pictures or videos</label><small>Optional · up to 6 files. Pictures: 5 MB each. Videos: 20 MB each. Maximum 25 MB total. Use Trim video for a shorter clip before uploading. Only share media suitable for the authorised team.</small><input id="assembly-activity-media" disabled={saving || Boolean(trimming)} type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" multiple onChange={(e) => { setAttachments(Array.from(e.target.files || [])); setMessage(""); e.target.value = ""; }} />{attachments.length > 0 && <><ul className="media-selected">{attachments.map((file, index) => <li key={`${file.name}-${index}`}><span>{file.name} · {(file.size / 1024 / 1024).toFixed(1)} MB</span><div className="media-file-actions">{(file.type.startsWith("video/") || /\.(mp4|mov|webm)$/i.test(file.name)) && <button type="button" disabled={saving || Boolean(trimming)} onClick={() => setTrimming(file)}>Trim video<span className="sr-only">: {file.name}</span></button>}<button type="button" disabled={saving || Boolean(trimming)} aria-label={`Remove ${file.name}`} onClick={() => setAttachments((files) => files.filter((_, i) => i !== index))}>Remove</button></div></li>)}</ul><p className={`media-total ${attachments.reduce((sum, file) => sum + file.size, 0) > TOTAL_UPLOAD_BYTES ? "over-limit" : ""}`}>{(attachments.reduce((sum, file) => sum + file.size, 0) / 1024 / 1024).toFixed(1)} MB of 25 MB total{attachments.reduce((sum, file) => sum + file.size, 0) > TOTAL_UPLOAD_BYTES ? " · Trim a video or remove an attachment before saving." : ""}</p></>}</div>
       {message && <p role="alert" className="interaction-error">{message}</p>}
-      <footer><button disabled={saving} onClick={() => setShowActivity(false)}>Cancel</button><button className="primary" onClick={() => void submitActivity()} disabled={saving || !activityName.trim()}>{saving ? "Saving activity…" : "Save Activity"}</button></footer>
+      <footer><button disabled={saving || Boolean(trimming)} onClick={() => setShowActivity(false)}>Cancel</button><button className="primary" onClick={() => void submitActivity()} disabled={saving || Boolean(trimming) || !activityName.trim()}>{saving ? "Saving activity…" : "Save Activity"}</button></footer>
     </section></div>}
+    {trimming && <VideoTrimmer file={trimming} budget={Math.max(0, Math.min(VIDEO_UPLOAD_BYTES, TOTAL_UPLOAD_BYTES - attachments.filter((file) => file !== trimming).reduce((sum, file) => sum + file.size, 0)))} onClose={() => setTrimming(null)} onUse={(clip) => { setAttachments((files) => files.map((file) => file === trimming ? clip : file)); setTrimming(null); setMessage("Trimmed video attached. The original file is unchanged."); }} />}
   </section>;
 }
 
@@ -530,6 +535,7 @@ export function ClassroomDetail({ classId }: { classId: number }) {
   const session = useMemo(() => readTeacherSession(), []);
   const searchParams = useSearchParams();
   const context = useSundayContext();
+  const [quickTeacher, setQuickTeacher] = useState<TeacherQuickTarget | null>(null);
   const requestedServiceId = Number(searchParams.get("serviceSessionId")) || 0;
   const active = context.services.find((service) => service.id === requestedServiceId)
     || context.selectedService;
@@ -720,16 +726,18 @@ export function ClassroomDetail({ classId }: { classId: number }) {
         <div className="teacher-cards">
           {data.teachers.map((teacher) => (
             <article key={teacher.userId} className="teacher-card">
-              <Link
-                href={`/account/team?member=${teacher.userId}`}
-                aria-label={`View ${teacher.name}'s profile`}
+              <button
+                type="button"
+                className="teacher-quick-trigger"
+                onClick={() => setQuickTeacher({ userId: teacher.userId, name: teacher.name, image: teacher.profileImageUrl, date: data.serviceSession?.serviceDate, roles: [`${teacher.dutyName || "Class teacher"} · ${data.class.name}`] })}
+                aria-label={`View ${teacher.name}'s contact details`}
               >
                 <Avatar teacher={teacher} />
-              </Link>
+              </button>
               <div>
-                <Link href={`/account/team?member=${teacher.userId}`}>
+                <button type="button" className="teacher-quick-trigger" onClick={() => setQuickTeacher({ userId: teacher.userId, name: teacher.name, image: teacher.profileImageUrl, date: data.serviceSession?.serviceDate, roles: [`${teacher.dutyName || "Class teacher"} · ${data.class.name}`] })}>
                   <b>{teacher.name}</b>
-                </Link>
+                </button>
                 <small>{teacher.dutyName || "Class teacher"}</small>
                 <small>
                   Assigned {formatDate(data.serviceSession?.serviceDate)}
@@ -871,6 +879,7 @@ export function ClassroomDetail({ classId }: { classId: number }) {
           }}
         />
       )}
+      {quickTeacher && <TeacherQuickView teacher={quickTeacher} close={() => setQuickTeacher(null)} />}
       <style jsx>{styles}</style>
     </section>
   );
