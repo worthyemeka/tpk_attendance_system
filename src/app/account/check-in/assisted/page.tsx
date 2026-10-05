@@ -8,7 +8,7 @@ import { readActiveService, subscribeToActiveService, type ActiveService } from 
 
 type Child = { firstName: string; lastName: string; dateOfBirth: string; gender: "" | "MALE" | "FEMALE"; classId: string; careInformation: string };
 type ClassOption = { id: number; name: string; ageLabel?: string };
-type Service = { id: number; name: string; serviceDate: string; serviceType: "FIRST_SERVICE" | "SECOND_SERVICE"; isOpen: boolean };
+type Service = { id: number; name: string; serviceDate: string; serviceType: string; isOpen: boolean };
 type Guardian = { firstName: string; lastName: string; phone: string; secondaryPhone: string; relationship: string; email: string; address: string };
 type Pickup = { mode: "SELF" | "OTHER"; fullName: string; relationship: string; phone: string };
 type RegisteredFamily = { id: number; familyName: string; familyCode: string; phone: string; email?: string; homeAddress?: string; children: Array<{ id: number; firstName: string; lastName: string; dateOfBirth: string; gender?: "MALE" | "FEMALE"; classId?: number | null }>; guardians: Array<{ firstName: string; lastName: string; primaryPhone: string; secondaryPhone?: string; email?: string; relationship?: string; primaryGuardian?: boolean }> };
@@ -16,7 +16,7 @@ type RegisteredFamily = { id: number; familyName: string; familyCode: string; ph
 const blankChild = (): Child => ({ firstName: "", lastName: "", dateOfBirth: "", gender: "", classId: "", careInformation: "" });
 
 export default function AssistedCheckInPage() {
-  const session = readTeacherSession();
+  const session = useMemo(() => readTeacherSession(), []);
   const [services, setServices] = useState<Service[]>([]);
   const [classes, setClasses] = useState<ClassOption[]>([]);
   const [activeService, setActiveService] = useState<ActiveService | null | undefined>();
@@ -37,10 +37,13 @@ export default function AssistedCheckInPage() {
     if (!session || !registeredPhone.trim()) return;
     setRegisteredBusy(true); setError(""); setRegisteredFamily(null);
     try {
-      const search = new URLSearchParams({ search: registeredPhone.trim(), limit: "10" });
+      const phoneDigits = registeredPhone.replace(/\D/g, "");
+      if (phoneDigits.length < 10) throw new Error("Enter the guardian’s full phone number.");
+      const search = new URLSearchParams({ search: phoneDigits.slice(-10), limit: "10" });
       const matchesResponse = await fetch(`${apiBase}/api/v1/families?${search}`, { headers: authHeaders(session) });
       const matches = await matchesResponse.json();
       if (!matchesResponse.ok || !matches.success || !matches.data?.length) throw new Error("No registered family was found with that phone number.");
+      if (matches.data.length > 1) throw new Error("More than one family uses that phone number. Please open the correct family in the Families directory before checking in.");
       const familyResponse = await fetch(`${apiBase}/api/v1/families/${matches.data[0].id}`, { headers: authHeaders(session) });
       const familyResult = await familyResponse.json();
       if (!familyResponse.ok || !familyResult.success) throw new Error(familyResult.error?.message || "We could not load that family.");
@@ -62,7 +65,7 @@ export default function AssistedCheckInPage() {
       .then(async (response) => {
         const result = await response.json();
         if (!response.ok || !result.success) throw new Error(result.error?.message || "We could not load services.");
-        const items = (result.data || []).filter((service: Service) => service.serviceType === "FIRST_SERVICE" || service.serviceType === "SECOND_SERVICE");
+        const items = result.data || [];
         setServices(items);
         const selected = readActiveService();
         const matching = selected?.id ? items.find((service: Service) => service.id === selected.id) : undefined;
@@ -89,7 +92,9 @@ export default function AssistedCheckInPage() {
 
   useEffect(() => subscribeToActiveService((service) => {
     setActiveService(service);
-    if (service?.id) setServiceId(String(service.id));
+    setCanOperate(false);
+    setPermissionLoaded(false);
+    setServiceId(service?.id ? String(service.id) : "");
   }), []);
 
   useEffect(() => {
@@ -106,7 +111,7 @@ export default function AssistedCheckInPage() {
       name: activeService.label,
       serviceDate: activeService.serviceDate || "",
       serviceType: fallbackType,
-      isOpen: true,
+      isOpen: false,
     }, ...services];
   }, [activeService, services]);
 

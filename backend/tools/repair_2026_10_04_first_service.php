@@ -95,6 +95,14 @@ try {
     foreach ($updateSessionRefs as $table) {
         if (!$hasTable($table)) continue;
         foreach ($mapFirst as $secondId => $firstId) {
+            if ($table === 'service_pickup_codes') {
+                // Sequences start at 1 per service. Offset the moved sequences
+                // while retaining the display codes and QR tokens already issued.
+                $max = $db->prepare('SELECT COALESCE(MAX(sequence_number),0) FROM service_pickup_codes WHERE service_session_id=?');
+                $max->execute([$firstId]);
+                $offset = (int)$max->fetchColumn();
+                $execute('UPDATE service_pickup_codes SET sequence_number=sequence_number+? WHERE service_session_id=? ORDER BY sequence_number DESC', [$offset,$secondId]);
+            }
             $execute("UPDATE `{$table}` SET service_session_id=? WHERE service_session_id=?", [$firstId, $secondId]);
         }
     }
@@ -119,6 +127,9 @@ try {
     }
 
     foreach ($oldIds as $secondId) $execute('DELETE FROM service_sessions WHERE id=?', [$secondId]);
+    if ($hasTable('sunday_service_plans')) foreach ($firstByCampus as $campus => $firstIds) {
+        $execute('INSERT INTO sunday_service_plans(campus_id,service_date) VALUES(?,?) ON DUPLICATE KEY UPDATE service_date=VALUES(service_date)', [$campus,$date]);
+    }
     $db->commit();
 } catch (Throwable $error) {
     if ($db->inTransaction()) $db->rollBack();

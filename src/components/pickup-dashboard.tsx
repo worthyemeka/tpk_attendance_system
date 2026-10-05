@@ -4,6 +4,8 @@ import { Fragment, type FormEvent, useCallback, useEffect, useMemo, useRef, useS
 import { FiCheckCircle, FiChevronRight, FiClock, FiDownload, FiHelpCircle, FiSearch, FiUsers } from "react-icons/fi";
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
 import { readActiveService, subscribeToActiveService } from "@/lib/active-service";
+import { downloadTablePdf } from "@/lib/table-pdf";
+import { parseCampusTime } from "@/lib/campus-time";
 
 type Child = { attendanceId: number; firstName: string; lastName: string; className?: string; guardianName?: string; checkedInAt?: string; pickedUpAt?: string; serviceDate?: string; serviceName?: string; pickupCode?: string | null; pickupTicketUrl?: string | null };
 type Dashboard = { service?: { id: number; name: string; serviceDate: string } | null; canOperate?: boolean; checkedIn: number; pickedUp: number; stillPresent: number; items: Child[]; queue: "PRESENT" | "COMPLETED" };
@@ -11,23 +13,11 @@ type Pickup = { id: number; pickupCode: string; surname: string; serviceName: st
 type VerificationMethod = "PICKUP_CODE" | "QR_CODE" | "ASSISTED_BIRTH_DATE";
 type Scope = "CURRENT";
 
-const stamp = (value?: string) => value ? new Intl.DateTimeFormat("en-NG", { hour: "numeric", minute: "2-digit", timeZone: "Africa/Lagos" }).format(new Date(value)) : "—";
+const stamp = (value?: string) => {const date=value?parseCampusTime(value):null;return date&&!Number.isNaN(date.getTime())?new Intl.DateTimeFormat("en-NG",{hour:"numeric",minute:"2-digit",timeZone:"Africa/Lagos"}).format(date):"—";};
 const initials = (first: string, last: string) => `${first[0] || ""}${last[0] || ""}`.toUpperCase();
 const dayLabel = (date?: string) => date ? new Intl.DateTimeFormat("en-NG", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date(`${date}T12:00:00`)) : "Sunday service";
-const printValue = (value: unknown) => String(value ?? "—").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] || character);
-function openPickupPrintReport(title: string, rows: string[][]) {
-  const report = window.open("", "_blank");
-  if (!report) {
-    window.alert("Please allow pop-ups for this site to export the pickup table.");
-    return;
-  }
-  const body = rows.map((row) => `<tr>${row.map((cell) => `<td>${printValue(cell)}</td>`).join("")}</tr>`).join("");
-  report.document.write(`<!doctype html><html><head><title>${printValue(title)}</title><style>body{font:14px Arial,sans-serif;color:#1c2d4d;padding:32px}h1{font-size:22px;margin:0 0 6px}p{color:#697792;margin:0 0 22px}table{width:100%;border-collapse:collapse}th,td{text-align:left;border:1px solid #dfe4eb;padding:9px}th{background:#f6f1ea;font-size:11px;text-transform:uppercase;letter-spacing:.04em}td{font-size:12px}@media print{body{padding:0}}</style></head><body><h1>${printValue(title)}</h1><p>Exported ${printValue(new Intl.DateTimeFormat("en-NG", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Lagos" }).format(new Date()))}</p><table><thead><tr><th>#</th><th>Child</th><th>Class</th><th>Guardian</th><th>Pickup code</th><th>Time</th><th>Status</th></tr></thead><tbody>${body}</tbody></table></body></html>`);
-  report.document.close();
-  window.setTimeout(() => {
-    report.focus();
-    report.print();
-  }, 250);
+function openPickupPrintReport(title:string,rows:string[][],subtitle:string) {
+  downloadTablePdf("tpk-pickup-report.pdf",{title,subtitle,columns:["#","Child","Class","Guardian","Pickup code","Time","Status"],widths:[25,145,85,145,87,76,81],rows});
 }
 
 export function PickupDashboard() {
@@ -69,8 +59,8 @@ export function PickupDashboard() {
   useEffect(() => { const openAssisted = () => setAssisted(window.location.hash === "#assisted"); openAssisted(); window.addEventListener("hashchange", openAssisted); return () => window.removeEventListener("hashchange", openAssisted); }, []);
 
   async function lookup(event: FormEvent) { event.preventDefault(); if (!session || !code.trim()) return; setBusy(true); setMessage(""); setPickup(null); try { const entered=code.trim(); const response = await fetch(`${apiBase}/api/v1/pickup-codes?code=${encodeURIComponent(entered)}`, { headers: { ...authHeaders(session), "Cache-Control": "no-cache" }, cache: "no-store" }); const result = await response.json(); if (!response.ok || !result.success) throw new Error(result.error?.message || "We could not find that pickup code."); setPickup(result.data); setVerificationMethod(entered.startsWith("TPK-PICKUP:") || /^[a-f0-9]{64}$/i.test(entered) ? "QR_CODE" : "PICKUP_CODE"); } catch (reason) { setMessage(reason instanceof Error ? reason.message : "We could not find that pickup code."); } finally { setBusy(false); } }
-  async function assistedLookup(event: FormEvent) { event.preventDefault(); if (!session) return; if (!dashboard.canOperate) { setMessage("Pick-up is read-only unless you are today’s Assembly lead."); return; } setBusy(true); setMessage(""); try { const response = await fetch(`${apiBase}/api/v1/pickup-codes/assisted-lookup`, { method: "POST", headers: { ...authHeaders(session), "Content-Type": "application/json" }, body: JSON.stringify({ ...assistedValues, serviceSessionId }) }); const result = await response.json(); if (!response.ok || !result.success) throw new Error(result.error?.message || "We could not verify this child."); setPickup(result.data); setVerificationMethod("ASSISTED_BIRTH_DATE"); setAssisted(false); } catch (reason) { setMessage(reason instanceof Error ? reason.message : "We could not verify this child."); } finally { setBusy(false); } }
-  async function complete() { if (!session || !pickup) return; if (!dashboard.canOperate) { setMessage("Pick-up is read-only unless you are today’s Assembly lead."); return; } setBusy(true); setMessage(""); try { const response = await fetch(`${apiBase}/api/v1/pickup-codes/${pickup.id}/complete`, { method: "POST", headers: { ...authHeaders(session), "Content-Type": "application/json" }, body: JSON.stringify({ verificationMethod }) }); const result = await response.json(); if (!response.ok || !result.success) throw new Error(result.error?.message || "We could not complete pickup."); setMessage(`${result.data.childrenReleased} child${result.data.childrenReleased === 1 ? "" : "ren"} safely released.`); setPickup(null); setCode(""); await load(); } catch (reason) { setMessage(reason instanceof Error ? reason.message : "We could not complete pickup."); } finally { setBusy(false); } }
+  async function assistedLookup(event: FormEvent) { event.preventDefault(); if (!session) return; if (!dashboard.canOperate) { setMessage("Only the assigned service leadership or Assembly team can complete pickup."); return; } setBusy(true); setMessage(""); try { const response = await fetch(`${apiBase}/api/v1/pickup-codes/assisted-lookup`, { method: "POST", headers: { ...authHeaders(session), "Content-Type": "application/json" }, body: JSON.stringify({ ...assistedValues, serviceSessionId }) }); const result = await response.json(); if (!response.ok || !result.success) throw new Error(result.error?.message || "We could not verify this child."); setPickup(result.data); setVerificationMethod("ASSISTED_BIRTH_DATE"); setAssisted(false); } catch (reason) { setMessage(reason instanceof Error ? reason.message : "We could not verify this child."); } finally { setBusy(false); } }
+  async function complete() { if (!session || !pickup) return; if (!dashboard.canOperate) { setMessage("Only the assigned service leadership or Assembly team can complete pickup."); return; } setBusy(true); setMessage(""); try { const response = await fetch(`${apiBase}/api/v1/pickup-codes/${pickup.id}/complete`, { method: "POST", headers: { ...authHeaders(session), "Content-Type": "application/json" }, body: JSON.stringify({ verificationMethod }) }); const result = await response.json(); if (!response.ok || !result.success) throw new Error(result.error?.message || "We could not complete pickup."); setMessage(`${result.data.childrenReleased} child${result.data.childrenReleased === 1 ? "" : "ren"} safely released.`); setPickup(null); setCode(""); await load(); } catch (reason) { setMessage(reason instanceof Error ? reason.message : "We could not complete pickup."); } finally { setBusy(false); } }
   const count = queue === "PRESENT" ? dashboard.stillPresent : dashboard.pickedUp;
   const exportPdf = () => openPickupPrintReport(`TPK ${queue === "PRESENT" ? "Still Present" : "Completed Pickups"} Report`, dashboard.items.map((child, index) => [
     String(index + 1),
@@ -80,7 +70,7 @@ export function PickupDashboard() {
     child.pickupCode || "—",
     stamp(queue === "PRESENT" ? child.checkedInAt : child.pickedUpAt),
     queue === "PRESENT" ? "Still Present" : "Picked Up",
-  ]));
+  ]), `${dayLabel(dashboard.service?.serviceDate)} - ${dashboard.service?.name || "Service"}`);
 
   return <section className="pickup-dashboard"><header><div><p className="eyebrow">Sunday</p><h1>Pick-Up</h1><p className="intro">Enter a parent&apos;s pickup code to find and safely release their child or children.</p></div></header>
     <section className="pickup-metrics"><Metric icon={<FiUsers />} value={dashboard.checkedIn} title="Checked In" text="This service" tone="green" /><Metric icon={<FiCheckCircle />} value={dashboard.pickedUp} title="Picked Up" text="Safely collected" tone="blue" /><Metric icon={<FiClock />} value={dashboard.stillPresent} title="Still Present" text="Awaiting pickup" tone="amber" /></section>

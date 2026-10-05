@@ -100,7 +100,7 @@ function monthOptions(items: ServiceSessionContext[], selectedDate?: string | nu
 }
 
 function pickService(items: ServiceSessionContext[], date: string, preferredId?: number, preferredType?: string) {
-  const choices = items.filter((item) => item.serviceDate === date && (item.serviceType === "FIRST_SERVICE" || item.serviceType === "SECOND_SERVICE")).sort((left, right) => (left.startsAt || "").localeCompare(right.startsAt || ""));
+  const choices = items.filter((item) => item.serviceDate === date).sort((left, right) => (left.startsAt || "").localeCompare(right.startsAt || ""));
   if (!choices.length) return null;
   const byId = choices.find((item) => item.id === preferredId);
   if (byId) return byId;
@@ -162,7 +162,7 @@ export function SundayContextProvider({ children }: { children: React.ReactNode 
   const selectedYear = selectedDate ? Number(selectedDate.slice(0, 4)) : null;
   const selectedMonth = selectedDate ? Number(selectedDate.slice(5, 7)) : null;
   const sundays = selectedYear && selectedMonth ? sundayOptions(selectedYear, selectedMonth) : [];
-  const services = useMemo(() => items.filter((item) => item.serviceDate === selectedDate && (item.serviceType === "FIRST_SERVICE" || item.serviceType === "SECOND_SERVICE")).sort((left, right) => (left.startsAt || "").localeCompare(right.startsAt || "")), [items, selectedDate]);
+  const services = useMemo(() => items.filter((item) => item.serviceDate === selectedDate).sort((left, right) => (left.startsAt || "").localeCompare(right.startsAt || "")), [items, selectedDate]);
   const months = useMemo(() => monthOptions(items, selectedDate), [items, selectedDate]);
 
   const publish = useCallback((date: string, service: ServiceSessionContext | null) => {

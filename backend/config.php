@@ -72,6 +72,16 @@ function tpk_ensure_sunday_sessions(PDO $db, int $campusId, ?DateTimeImmutable $
     $zone = new DateTimeZone('Africa/Lagos');
     $date = $serviceDate ? $serviceDate->setTimezone($zone) : new DateTimeImmutable('today', $zone);
     if ($date->format('w') !== '0') $date = $date->modify('next sunday');
+    $hasPlans = $db->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='sunday_service_plans'")->fetchColumn();
+    if ($hasPlans) {
+        $plan = $db->prepare('SELECT 1 FROM sunday_service_plans WHERE campus_id=? AND service_date=?');
+        $plan->execute([$campusId,$date->format('Y-m-d')]);
+        if ($plan->fetchColumn()) {
+            $configured = $db->prepare('SELECT id,name,service_date AS serviceDate,service_type AS serviceType FROM service_sessions WHERE campus_id=? AND service_date=? ORDER BY service_order,starts_at');
+            $configured->execute([$campusId,$date->format('Y-m-d')]);
+            return $configured->fetchAll();
+        }
+    }
     $specifications = [
         ['First Service', 'FIRST_SERVICE', 1, '08:30:00', '10:15:00'],
         ['Second Service', 'SECOND_SERVICE', 2, '10:30:00', '12:15:00'],
@@ -101,7 +111,7 @@ function json_response(mixed $data, int $status = 200): never {
     header('Access-Control-Allow-Origin: ' . tpk_cors_origin());
     header('Vary: Origin');
     header('Access-Control-Allow-Headers: Content-Type, Authorization');
-    header('Access-Control-Allow-Methods: GET, POST, PATCH, DELETE, OPTIONS');
+    header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
     echo json_encode($data, JSON_UNESCAPED_SLASHES);
     exit;
 }

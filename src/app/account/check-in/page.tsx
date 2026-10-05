@@ -6,6 +6,8 @@ import { useSearchParams } from "next/navigation";
 import { FiCheck, FiClock, FiDownload, FiExternalLink, FiSearch } from "react-icons/fi";
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
 import { readActiveService, subscribeToActiveService } from "@/lib/active-service";
+import { downloadTablePdf } from "@/lib/table-pdf";
+import { parseCampusTime } from "@/lib/campus-time";
 
 type CheckInRow = { id: number; firstName: string; lastName: string; className?: string; status: string; source?: "ASSISTED" | "PARENT_QR"; checkedInAt?: string | null; firstVisit: boolean; guardianFirstName?: string; guardianLastName?: string; checkInFormUrl?: string | null };
 type RequestChild = { id: number; firstName: string; lastName?: string };
@@ -14,22 +16,14 @@ type ExportSort = "lastNameAsc" | "lastNameDesc" | "firstNameAsc" | "firstNameDe
 
 function formatCheckInTime(value?: string | null) {
   if (!value) return "—";
-  const date = new Date(value);
+  const date = parseCampusTime(value);
   if (Number.isNaN(date.getTime())) return "—";
   return new Intl.DateTimeFormat("en-NG", { timeStyle: "short", timeZone: "Africa/Lagos" }).format(date);
 }
 
-const printValue = (value: unknown) => String(value ?? "—").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] || character);
-
-function openPrintReport(title: string, headers: string[], rows: string[][]) {
-  const report = window.open("", "_blank", "noopener,noreferrer");
-  if (!report) return;
-  const head = headers.map((header) => `<th>${printValue(header)}</th>`).join("");
-  const body = rows.map((row) => `<tr>${row.map((cell) => `<td>${printValue(cell)}</td>`).join("")}</tr>`).join("");
-  report.document.write(`<!doctype html><html><head><title>${printValue(title)}</title><style>body{font:14px Arial,sans-serif;color:#1c2d4d;padding:32px}h1{font-size:22px;margin:0 0 6px}p{color:#697792;margin:0 0 22px}table{width:100%;border-collapse:collapse}th,td{text-align:left;border:1px solid #dfe4eb;padding:9px}th{background:#f6f1ea;font-size:11px;text-transform:uppercase;letter-spacing:.04em}td{font-size:12px}@media print{body{padding:0}}</style></head><body><h1>${printValue(title)}</h1><p>Exported ${printValue(new Intl.DateTimeFormat("en-NG", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Lagos" }).format(new Date()))}</p><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></body></html>`);
-  report.document.close();
-  report.focus();
-  report.print();
+function openPrintReport(title:string,columns:string[],rows:string[][]) {
+  const service=readActiveService();
+  downloadTablePdf("tpk-check-in-report.pdf",{title,columns,rows,widths:[150,95,150,65,70,110,110],subtitle:`${service?.serviceDate||""} - ${service?.label||"Service"}`});
 }
 
 export default function AccountCheckInPage() {

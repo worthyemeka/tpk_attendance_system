@@ -4,7 +4,7 @@ declare(strict_types=1);
 function api_classroom_context_sessions(PDO $db, array $actor): array {
     $requested = (int)($_GET['serviceSessionId'] ?? 0);
     if ($requested > 0) {
-        $s = $db->prepare("SELECT id,name,service_type AS serviceType,service_date AS serviceDate,starts_at AS startsAt FROM service_sessions WHERE id=? AND campus_id=? AND service_type IN ('FIRST_SERVICE','SECOND_SERVICE') LIMIT 1");
+        $s = $db->prepare("SELECT id,name,service_type AS serviceType,service_date AS serviceDate,starts_at AS startsAt FROM service_sessions WHERE id=? AND campus_id=? AND service_type IS NOT NULL LIMIT 1");
         $s->execute([$requested, (int)$actor['campus_id']]);
         $row = $s->fetch();
         if (!$row) api_error('SERVICE_SESSION_NOT_FOUND', 'This service is not available for your campus.', 404);
@@ -20,7 +20,7 @@ function api_classroom_context_sessions(PDO $db, array $actor): array {
     if ($scope === 'ALL' && $actor['access_level'] !== 'TPK_SUPER_ADMIN') api_error('FORBIDDEN', 'Only a Super Admin can compare all services.', 403);
     $date = trim((string)($_GET['date'] ?? ''));
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) $date = (new DateTimeImmutable('now', new DateTimeZone('Africa/Lagos')))->format('Y-m-d');
-    $where = ['campus_id=?', 'service_date=?', "service_type IN ('FIRST_SERVICE','SECOND_SERVICE')"];
+    $where = ['campus_id=?', 'service_date=?', "service_type IS NOT NULL"];
     $params = [(int)$actor['campus_id'], $date];
     if ($scope !== 'ALL') { $where[] = 'service_type=?'; $params[] = $scope; }
     $s = $db->prepare('SELECT id,name,service_type AS serviceType,service_date AS serviceDate,starts_at AS startsAt FROM service_sessions WHERE '.implode(' AND ', $where).' ORDER BY starts_at');

@@ -75,9 +75,11 @@ type Assignment = {
   serviceName?: string | null;
   serviceType?: string | null;
 };
+type RosterService = { id:number;name:string;serviceDate:string;serviceType:string };
 type Management = {
   month: string;
   sundays: string[];
+  sessions: RosterService[];
   state: { status: "DRAFT" | "PUBLISHED"; publishedAt?: string | null };
   permissions?: { isSuperAdmin: boolean; locked: boolean };
   teachers: Teacher[];
@@ -94,7 +96,7 @@ type Management = {
 type ModalState = {
   type: "SUNDAY" | "NON_TEACHING";
   date: string;
-  serviceType: "FIRST_SERVICE" | "SECOND_SERVICE";
+  serviceType: string;
   dutyId: string;
   classId: string;
   teacherIds: number[];
@@ -254,11 +256,17 @@ export default function RosterPage() {
   }, [monthDate]);
   const openAssign = (preset?: Partial<ModalState>) => {
     if (readOnly) return;
-    const fresh = stateFor(monthDate);
+    const fresh = { ...stateFor(monthDate), date:data?.sundays[0] || stateFor(monthDate).date };
     setModal({ ...fresh, ...preset, teacherIds: preset?.teacherIds || [] });
     setTeacherSearch("");
     setTeacherMenu(null);
   };
+  useEffect(() => {
+    if (!modal || modal.type !== "SUNDAY") return;
+    const options=(data?.sessions||[]).filter(item=>item.serviceDate===modal.date);
+    if(options.length && !options.some(item=>item.serviceType===modal.serviceType))
+      setModal(current=>current?{...current,serviceType:options[0].serviceType}:current);
+  },[data,modal]);
   const dutyByCode = (code: string) =>
     data?.duties.find((item) => item.code === code);
   const cellAssignments = (
@@ -324,6 +332,7 @@ export default function RosterPage() {
           dutyTypeId: Number(modal.dutyId),
           assignmentDate: modal.date,
           serviceType: modal.type === "SUNDAY" ? modal.serviceType : undefined,
+          serviceSessionId: modal.type==="SUNDAY" ? data?.sessions.find(item=>item.serviceDate===modal.date&&item.serviceType===modal.serviceType)?.id : undefined,
           classId: modal.classId ? Number(modal.classId) : null,
           replaceAssignmentId: modal.replaceAssignmentId,
         }),
@@ -858,6 +867,7 @@ export default function RosterPage() {
         <AssignModal
           modal={modal}
           setModal={setModal}
+          services={data?.sessions || []}
           duties={data?.duties || []}
           classes={data?.classes || []}
           teachers={data?.teachers || []}
@@ -1303,6 +1313,7 @@ function NonTeachingList({
   );
 }
 function AssignModal({
+  services,
   modal,
   setModal,
   duties,
@@ -1317,6 +1328,7 @@ function AssignModal({
   onClose,
   onSave,
 }: {
+  services: RosterService[];
   modal: ModalState;
   setModal: (value: ModalState) => void;
   duties: Duty[];
@@ -1331,6 +1343,7 @@ function AssignModal({
   onClose: () => void;
   onSave: (event: FormEvent) => void;
 }) {
+  const serviceOptions=services.filter(item=>item.serviceDate===modal.date);
   const availableDuties = duties.filter((item) =>
     modal.type === "SUNDAY"
       ? item.category !== "NON_TEACHING"
@@ -1425,8 +1438,8 @@ function AssignModal({
                       })
                     }
                   >
-                    <option value="FIRST_SERVICE">First Service</option>
-                    <option value="SECOND_SERVICE">Second Service</option>
+                    {!serviceOptions.length&&<option value="">No service configured</option>}
+                    {serviceOptions.map(item=><option key={item.id} value={item.serviceType}>{item.name}</option>)}
                   </select>
                 </label>
                 <label>
@@ -1565,9 +1578,7 @@ function AssignModal({
             {modal.type === "SUNDAY" && (
               <p>
                 <FiUsers />
-                {modal.serviceType === "FIRST_SERVICE"
-                  ? "First Service"
-                  : "Second Service"}
+                {serviceOptions.find(item=>item.serviceType===modal.serviceType)?.name || "Choose service"}
               </p>
             )}
             <p>

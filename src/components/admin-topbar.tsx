@@ -12,6 +12,10 @@ type ContextMenu = "month" | "sunday" | "service" | null;
 
 function serviceState(service: ServiceSessionContext | null): "UPCOMING" | "LIVE" | "COMPLETED" | "NONE" {
   if (!service) return "NONE";
+  const today=new Intl.DateTimeFormat("en-CA",{timeZone:"Africa/Lagos",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+  const time=new Intl.DateTimeFormat("en-GB",{timeZone:"Africa/Lagos",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).format(new Date());
+  if(service.serviceDate>today || (service.serviceDate===today&&time<"06:00"))return "UPCOMING";
+  if(service.serviceDate<today || time>="14:00")return "COMPLETED";
   return service.isOpen === false ? "COMPLETED" : "LIVE";
 }
 
@@ -65,7 +69,7 @@ export function AdminTopbar() {
   }, [context.selectedServiceSessionId, session?.staffUserId, session?.sessionToken]);
 
   const state = serviceState(context.selectedService);
-  const stateLabel = state === "LIVE" ? "Check-in open" : state === "COMPLETED" ? "Service closed" : "No service configured";
+  const stateLabel = state === "LIVE" ? "Check-in open" : state === "COMPLETED" ? "Service completed" : state === "UPCOMING" ? "Check-in opens Sunday · 6:00 AM" : "No service configured";
   const link = typeof window === "undefined" ? "/check-in/parent" : `${window.location.origin}/check-in/parent`;
   const isPickupPage = pathname === "/account/pick-up";
   const selectedMonthKey = context.selectedYear && context.selectedMonth ? `${context.selectedYear}-${String(context.selectedMonth).padStart(2, "0")}` : "";

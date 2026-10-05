@@ -43,27 +43,26 @@ function public_split_name(string $name): array {
 }
 function public_current_session(PDO $db, int $campusId): ?array {
     $now = new DateTimeImmutable('now', new DateTimeZone('Africa/Lagos'));
-    if ($now->format('w') !== '0') return null;
+    if ($now->format('w') !== '0' || $now->format('H:i')<'06:00' || $now->format('H:i')>='14:00') return null;
     tpk_ensure_sunday_sessions($db, $campusId, $now);
-    $statement = $db->prepare("SELECT id,campus_id,service_date,service_type,starts_at,ends_at FROM service_sessions WHERE campus_id=? AND service_date=? AND service_type IN ('FIRST_SERVICE','SECOND_SERVICE') AND is_open=1 ORDER BY starts_at ASC,id ASC LIMIT 1");
+    $statement = $db->prepare("SELECT id,campus_id,service_date,service_type,starts_at,ends_at FROM service_sessions WHERE campus_id=? AND service_date=? AND service_type IS NOT NULL AND is_open=1 ORDER BY starts_at ASC,id ASC LIMIT 1");
     $statement->execute([$campusId, $now->format('Y-m-d')]);
     return $statement->fetch() ?: null;
 }
 
 function public_session_for_request(PDO $db, int $campusId, int $requestedId, ?string $requestedType = null): ?array {
     $now = new DateTimeImmutable('now', new DateTimeZone('Africa/Lagos'));
-    if ($now->format('w') !== '0') return null;
+    if ($now->format('w') !== '0' || $now->format('H:i')<'06:00' || $now->format('H:i')>='14:00') return null;
     tpk_ensure_sunday_sessions($db, $campusId, $now);
     $type = strtoupper(trim((string)$requestedType));
-    if ($type !== 'FIRST_SERVICE' && $type !== 'SECOND_SERVICE') $type = '';
+    if ($requestedId) {
+        $selected = $db->prepare("SELECT id,campus_id,service_date,service_type,starts_at,ends_at FROM service_sessions WHERE id=? AND campus_id=? AND service_date=? AND service_type IS NOT NULL AND is_open=1 LIMIT 1");
+        $selected->execute([$requestedId,$campusId,$now->format('Y-m-d')]);
+        return $selected->fetch() ?: null;
+    }
     if ($type !== '') {
         $selected = $db->prepare("SELECT id,campus_id,service_date,service_type,starts_at,ends_at FROM service_sessions WHERE campus_id=? AND service_date=? AND service_type=? AND is_open=1 LIMIT 1");
         $selected->execute([$campusId, $now->format('Y-m-d'), $type]);
-        if ($row = $selected->fetch()) return $row;
-    }
-    if ($requestedId) {
-        $selected = $db->prepare("SELECT id,campus_id,service_date,service_type,starts_at,ends_at FROM service_sessions WHERE id=? AND campus_id=? AND service_date=? AND service_type IN ('FIRST_SERVICE','SECOND_SERVICE') AND is_open=1 LIMIT 1");
-        $selected->execute([$requestedId, $campusId, $now->format('Y-m-d')]);
         if ($row = $selected->fetch()) return $row;
     }
     return public_current_session($db, $campusId);
@@ -101,9 +100,9 @@ function public_session_endpoint(PDO $db): never {
     $campus = public_campus($db);
     $now = new DateTimeImmutable('now', new DateTimeZone('Africa/Lagos'));
     $services = [];
-    if ($now->format('w') === '0') {
+    if ($now->format('w') === '0' && $now->format('H:i')>='06:00' && $now->format('H:i')<'14:00') {
         tpk_ensure_sunday_sessions($db, (int)$campus['id'], $now);
-        $available = $db->prepare("SELECT id,service_date AS serviceDate,service_type AS serviceType,name,starts_at AS startsAt,ends_at AS endsAt FROM service_sessions WHERE campus_id=? AND service_date=? AND service_type IN ('FIRST_SERVICE','SECOND_SERVICE') AND is_open=1 ORDER BY starts_at ASC,id ASC");
+        $available = $db->prepare("SELECT id,service_date AS serviceDate,service_type AS serviceType,name,starts_at AS startsAt,ends_at AS endsAt FROM service_sessions WHERE campus_id=? AND service_date=? AND service_type IS NOT NULL AND is_open=1 ORDER BY starts_at ASC,id ASC");
         $available->execute([(int)$campus['id'], $now->format('Y-m-d')]);
         $services = $available->fetchAll();
     }
