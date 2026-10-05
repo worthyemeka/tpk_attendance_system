@@ -15,10 +15,11 @@ const labelFor = (value: Date) => new Intl.DateTimeFormat("en-NG", { month: "lon
 
 export function MonthPicker({ value, onChange, className = "", ariaLabel = "Choose month" }: MonthPickerProps) {
   const selected = startOfMonth(value);
+  const selectedYear = selected.getUTCFullYear();
   const [open, setOpen] = useState(false);
   const [viewYear, setViewYear] = useState(selected.getUTCFullYear());
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => setViewYear(selected.getUTCFullYear()), [selected]);
+  useEffect(() => setViewYear(selectedYear), [selectedYear]);
   useEffect(() => {
     const close = (event: MouseEvent) => { if (!ref.current?.contains(event.target as Node)) setOpen(false); };
     const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };

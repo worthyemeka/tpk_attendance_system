@@ -19,6 +19,7 @@ import {
 } from "react-icons/fi";
 import { apiBase, authHeaders, mediaUrl, readTeacherSession } from "@/lib/session";
 import { StatCard, type StatCardTone } from "@/components/stat-card";
+import { MonthPicker } from "@/components/month-picker";
 import "./classroom-refinements.css";
 import {
   useSundayContext,
@@ -874,14 +875,15 @@ function WeeklyReviews({
           </p>
           </div>
         </div>
-        <label className="discussion-month">
+        <div className="discussion-month">
           <span>Review month</span>
-          <input
-            type="month"
-            value={month}
-            onChange={(event) => setMonth(event.target.value)}
+          <MonthPicker
+            value={new Date(`${month}-01T00:00:00Z`)}
+            onChange={(value) => setMonth(value.toISOString().slice(0, 7))}
+            className="discussion-month-picker"
+            ariaLabel="Choose review month"
           />
-        </label>
+        </div>
       </header>
       {data.canManage && (
         <section className="review-form" aria-busy={saving}>
