@@ -192,6 +192,7 @@ export function ClassroomsOverview() {
   const context = useSundayContext();
   const isSuperAdmin = session?.accessLevel === "TPK_SUPER_ADMIN";
   const [data, setData] = useState<Overview>(emptyOverview);
+  const [classOptions, setClassOptions] = useState<{ id: number; name: string }[]>([]);
   const [assembly, setAssembly] = useState<{ groups: AssemblyGroup[] }>({ groups: [] });
   const [activeTab, setActiveTab] = useState<"classrooms" | "assembly">("classrooms");
   const [localScope, setLocalScope] = useState("THIS");
@@ -218,13 +219,21 @@ export function ClassroomsOverview() {
       if (query) p.set("search", query);
       if (classId) p.set("classId", classId);
       if (status) p.set("status", status);
-      const r = await fetch(`${apiBase}/api/v1/classrooms?${p}`, {
-        headers: authHeaders(session),
-      });
-      const b = await r.json();
+      // Filter choices come from the full configured list, not the filtered
+      // classroom cards. Searching or selecting a status must not hide Teens.
+      const [r, classResponse] = await Promise.all([
+        fetch(`${apiBase}/api/v1/classrooms?${p}`, { headers: authHeaders(session) }),
+        fetch(`${apiBase}/api/v1/classes`, { headers: authHeaders(session) }),
+      ]);
+      const [b, classBody] = await Promise.all([r.json(), classResponse.json()]);
       if (!r.ok || !b.success)
         throw new Error(b.error?.message || "We could not load classrooms.");
-      if (version === requestVersion.current) setData(b.data);
+      if (!classResponse.ok || !classBody.success)
+        throw new Error(classBody.error?.message || "We could not load class choices.");
+      if (version === requestVersion.current) {
+        setData(b.data);
+        setClassOptions(classBody.data);
+      }
       const a = await fetch(`${apiBase}/api/v1/assembly?${p.toString()}`, { headers: authHeaders(session) });
       const assemblyBody = await a.json();
       if (!a.ok || !assemblyBody.success) throw new Error(assemblyBody.error?.message || "We could not load assembly. Please retry.");
@@ -338,11 +347,12 @@ export function ClassroomsOverview() {
           {serviceOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
         </AppSelect>
         <AppSelect
+          aria-label="Filter by classroom"
           value={classId}
           onChange={(event) => setClassId(event.target.value)}
         >
           <option value="">All Classes</option>
-          {classes.map((item) => (
+          {classOptions.map((item) => (
             <option key={item.id} value={item.id}>
               {item.name}
             </option>

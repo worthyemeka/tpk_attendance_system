@@ -27,6 +27,7 @@ import { FaWhatsapp } from "react-icons/fa";
 import { apiBase, authHeaders, mediaUrl, readTeacherSession } from "@/lib/session";
 import { printBrandedDocument } from "@/lib/branded-print";
 import { downloadWeeklyRosterPdf } from "@/lib/weekly-roster-pdf";
+import { sundayRosterColumns, matchesSundayRosterColumn, type SundayRosterColumn, type RosterClass } from "@/lib/sunday-roster-columns";
 import { downloadTablePdf, loadPdfAvatar } from "@/lib/table-pdf";
 import { MonthPicker } from "@/components/month-picker";
 import { DataViewToggle, type DataView } from "@/components/data-view-toggle";
@@ -52,7 +53,7 @@ type Duty = {
   category: "FIRST_SERVICE" | "SECOND_SERVICE" | "NON_TEACHING";
   requiresClass: boolean;
 };
-type ClassRoom = { id: number; name: string };
+type ClassRoom = RosterClass;
 type Assignment = {
   id: number;
   userId: number;
@@ -105,31 +106,6 @@ type ModalState = {
   replaceAssignmentId?: number;
 };
 
-const sundayColumns = [
-  { label: "First Service", sub: "Team", code: "FIRST_SERVICE_TEAM" },
-  {
-    label: "Tribe A",
-    sub: "9–11",
-    code: "CLASS_TEACHER",
-    className: "Tribe A",
-  },
-  { label: "Tribe B", sub: "6–8", code: "CLASS_TEACHER", className: "Tribe B" },
-  { label: "Tribe C", sub: "3–5", code: "CLASS_TEACHER", className: "Tribe C" },
-  { label: "Teacher at Door", code: "TEACHER_AT_DOOR" },
-  { label: "Assembly", code: "ASSEMBLY" },
-  { label: "Attendance", code: "ATTENDANCE" },
-  { label: "Head of Service", code: "HEAD_OF_SERVICE" },
-  {
-    label: "Assistant Head 1",
-    sub: "Service leadership",
-    code: "ASSISTANT_HEAD_OF_SERVICE_1",
-  },
-  {
-    label: "Assistant Head 2",
-    sub: "Service leadership",
-    code: "ASSISTANT_HEAD_OF_SERVICE_2",
-  },
-] as const;
 const formatMonth = (date: Date) =>
   new Intl.DateTimeFormat("en-NG", {
     month: "long",
@@ -169,6 +145,7 @@ export default function RosterPage() {
       new Date(Date.UTC(new Date().getFullYear(), new Date().getMonth(), 1)),
   );
   const [data, setData] = useState<Management | null>(null);
+  const sundayColumns = useMemo(() => sundayRosterColumns(data?.classes || []), [data?.classes]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -274,13 +251,12 @@ export default function RosterPage() {
     data?.duties.find((item) => item.code === code);
   const cellAssignments = (
     date: string,
-    column: (typeof sundayColumns)[number],
+    column: SundayRosterColumn,
   ) =>
     visibleAssignments.filter(
       (item) =>
         item.assignmentDate === date &&
-        item.dutyCode === column.code &&
-        (!("className" in column) || item.className === column.className),
+        matchesSundayRosterColumn(item, column),
     );
   const nonTeachingAssignments = (date: string, code: string) =>
     visibleAssignments.filter(
@@ -723,16 +699,13 @@ export default function RosterPage() {
         )}
         {tab === "SUNDAY" && display === "GRID" ? (
           <SundayGrid
+            columns={sundayColumns}
             dates={(data?.sundays || []).filter(
               (date) => !sundayFilter || date === sundayFilter,
             )}
             assignments={cellAssignments}
             onAssign={(date, column) => {
               const duty = dutyByCode(column.code);
-              const classroom =
-                "className" in column
-                  ? data?.classes.find((item) => item.name === column.className)
-                  : undefined;
               openAssign({
                 type: "SUNDAY",
                 date,
@@ -741,7 +714,7 @@ export default function RosterPage() {
                     ? "FIRST_SERVICE"
                     : "SECOND_SERVICE",
                 dutyId: duty ? String(duty.id) : "",
-                classId: classroom ? String(classroom.id) : "",
+                classId: column.classId ? String(column.classId) : "",
               });
             }}
             onTeacher={setTeacherMenu}
@@ -750,16 +723,14 @@ export default function RosterPage() {
           />
         ) : tab === "SUNDAY" && display === "LIST" ? (
           <SundayList
+            columns={sundayColumns}
             dates={(data?.sundays || []).filter(
               (date) => !sundayFilter || date === sundayFilter,
             )}
             assignments={cellAssignments}
             onAssign={(date, column) => {
               const duty = dutyByCode(column.code);
-              const classroom = "className" in column
-                ? data?.classes.find((item) => item.name === column.className)
-                : undefined;
-              openAssign({ type: "SUNDAY", date, serviceType: column.code === "FIRST_SERVICE_TEAM" ? "FIRST_SERVICE" : "SECOND_SERVICE", dutyId: duty ? String(duty.id) : "", classId: classroom ? String(classroom.id) : "" });
+              openAssign({ type: "SUNDAY", date, serviceType: column.code === "FIRST_SERVICE_TEAM" ? "FIRST_SERVICE" : "SECOND_SERVICE", dutyId: duty ? String(duty.id) : "", classId: column.classId ? String(column.classId) : "" });
             }}
             onTeacher={setTeacherMenu}
             loading={loading}
@@ -767,6 +738,7 @@ export default function RosterPage() {
           />
         ) : tab === "SUNDAY" ? (
           <SundayCalendar
+            columns={sundayColumns}
             onDownload={(date) => void exportWeek(date)}
             downloading={Boolean(downloadingWeek)}
             dates={(data?.sundays || []).filter(
@@ -775,10 +747,7 @@ export default function RosterPage() {
             assignments={cellAssignments}
             onAssign={(date, column) => {
               const duty = dutyByCode(column.code);
-              const classroom = "className" in column
-                ? data?.classes.find((item) => item.name === column.className)
-                : undefined;
-              openAssign({ type: "SUNDAY", date, serviceType: column.code === "FIRST_SERVICE_TEAM" ? "FIRST_SERVICE" : "SECOND_SERVICE", dutyId: duty ? String(duty.id) : "", classId: classroom ? String(classroom.id) : "" });
+              openAssign({ type: "SUNDAY", date, serviceType: column.code === "FIRST_SERVICE_TEAM" ? "FIRST_SERVICE" : "SECOND_SERVICE", dutyId: duty ? String(duty.id) : "", classId: column.classId ? String(column.classId) : "" });
             }}
             onTeacher={setTeacherMenu}
             loading={loading}
@@ -993,6 +962,7 @@ function Teachers({
   );
 }
 function SundayGrid({
+  columns,
   dates,
   assignments,
   onAssign,
@@ -1000,9 +970,10 @@ function SundayGrid({
   loading,
   readOnly,
 }: {
+  columns: SundayRosterColumn[];
   dates: string[];
-  assignments: (date: string, column: (typeof sundayColumns)[number]) => Assignment[];
-  onAssign: (date: string, column: (typeof sundayColumns)[number]) => void;
+  assignments: (date: string, column: SundayRosterColumn) => Assignment[];
+  onAssign: (date: string, column: SundayRosterColumn) => void;
   onTeacher: (item: Assignment) => void;
   loading: boolean;
   readOnly: boolean;
@@ -1016,7 +987,7 @@ function SundayGrid({
             <i><FiCalendar /></i>
           </header>
           <div className="roster-grid-roles">
-            {sundayColumns.map((column) => {
+            {columns.map((column) => {
               const items = assignments(date, column);
               return <section key={column.label}>
                 <div><b>{column.label}</b>{"sub" in column && <small>{column.sub}</small>}</div>
@@ -1032,6 +1003,7 @@ function SundayGrid({
 }
 
 function SundayCalendar({
+  columns,
   dates,
   assignments,
   onAssign,
@@ -1042,12 +1014,13 @@ function SundayCalendar({
   onDownload,
   downloading,
 }: {
+  columns: SundayRosterColumn[];
   dates: string[];
   assignments: (
     date: string,
-    column: (typeof sundayColumns)[number],
+    column: SundayRosterColumn,
   ) => Assignment[];
-  onAssign: (date: string, column: (typeof sundayColumns)[number]) => void;
+  onAssign: (date: string, column: SundayRosterColumn) => void;
   onTeacher: (item: Assignment) => void;
   loading: boolean;
   readOnly: boolean;
@@ -1070,7 +1043,7 @@ function SundayCalendar({
         <thead>
           <tr>
             <th>Date</th>
-            {sundayColumns.map((column) => (
+            {columns.map((column) => (
               <th key={column.label}>
                 {column.label}
                 {"sub" in column && <small>{column.sub}</small>}
@@ -1085,7 +1058,7 @@ function SundayCalendar({
               <td>
                 <b>{formatDate(date).replace(" ", "\n")}</b>
               </td>
-              {sundayColumns.map((column) => {
+              {columns.map((column) => {
                 const items = assignments(date, column);
                 return (
                   <td key={column.label}>
@@ -1112,7 +1085,7 @@ function SundayCalendar({
           ))}
           {!dates.length && (
             <tr>
-              <td colSpan={sundayColumns.length + 2} className="empty">
+              <td colSpan={columns.length + 2} className="empty">
                 {loading
                   ? "Loading monthly duties…"
                   : "No Sunday duties match these filters."}
@@ -1125,6 +1098,7 @@ function SundayCalendar({
   );
 }
 function SundayList({
+  columns,
   dates,
   assignments,
   onAssign,
@@ -1132,9 +1106,10 @@ function SundayList({
   loading,
   readOnly,
 }: {
+  columns: SundayRosterColumn[];
   dates: string[];
-  assignments: (date: string, column: (typeof sundayColumns)[number]) => Assignment[];
-  onAssign: (date: string, column: (typeof sundayColumns)[number]) => void;
+  assignments: (date: string, column: SundayRosterColumn) => Assignment[];
+  onAssign: (date: string, column: SundayRosterColumn) => void;
   onTeacher: (item: Assignment) => void;
   loading: boolean;
   readOnly: boolean;
@@ -1145,7 +1120,7 @@ function SundayList({
         <article key={date} className="roster-day-card">
           <header><div><span>Sunday</span><h2>{formatDate(date)}</h2></div><FiCalendar /></header>
           <div className="roster-duty-items">
-            {sundayColumns.map((column) => {
+            {columns.map((column) => {
               const items = assignments(date, column);
               return <section key={column.label}>
                 <div><b>{column.label}</b>{"sub" in column && <small>{column.sub}</small>}</div>
