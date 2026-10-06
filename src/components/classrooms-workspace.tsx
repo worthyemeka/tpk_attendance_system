@@ -499,7 +499,10 @@ function AssemblyView({ groups, loading, isSuperAdmin, onRefresh }: { groups: As
   const noteCount = visibleGroups.reduce((sum, item) => sum + item.notes.length, 0);
   const refreshHistory = async () => { setHistoryRetry((v) => v + 1); await onRefresh(); };
   const changeMonth = (value: Date) => {
-    setHistoryMonth(value.toISOString().slice(0, 7)); setHistorySunday(""); setHistoryService(""); setNote(""); setMessage("");
+    const nextMonth = value.toISOString().slice(0, 7);
+    if (nextMonth === historyMonth) return;
+    setHistoryLoading(true); setHistoryError("");
+    setHistoryMonth(nextMonth); setHistorySunday(""); setHistoryService(""); setNote(""); setMessage("");
   };
   useEffect(() => { if (selectedGroup >= groups.length) setSelectedGroup(0); }, [groups.length, selectedGroup]);
   const canManage = Boolean(programmeGroup?.canManage);

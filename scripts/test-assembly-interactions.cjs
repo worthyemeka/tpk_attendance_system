@@ -1,0 +1,47 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+const ts = require('typescript');
+const React = require('react');
+const { renderToStaticMarkup } = require('react-dom/server');
+const root = path.resolve(__dirname, '..');
+const source = fs.readFileSync(path.join(root, 'src/components/classroom-discussion-thread.tsx'), 'utf8');
+let states = [], index = 0;
+const hooks = { ...React, useEffect: () => {}, useRef: () => ({ current: null }), useState: initial => [index < states.length ? states[index++] : (index++, initial), () => {}] };
+const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2020 } }).outputText;
+const loaded = { exports: {} };
+new Function('require', 'module', 'exports', code)(name => {
+  if (name === 'react') return hooks;
+  if (name.endsWith('.css')) return {};
+  if (name === '@/lib/session') return {};
+  if (name === './teacher-attribution') return { TeacherAttribution: ({ name }) => React.createElement('span', null, name), PostedTime: () => null };
+  return require(name);
+}, loaded, loaded.exports);
+const thread = { replies: [{ id: 9, author: 'Auntie Grace', body: 'Thank you!', createdAt: '2026-10-05' }], reactions: { LIKE: 2, APPLAUSE: 3, HEART: 0 }, myReaction: 'APPLAUSE', canInteract: true };
+function render(component, props, values) { states = values; index = 0; return renderToStaticMarkup(React.createElement(component, props)); }
+const assembly = render(loaded.exports.AssemblyNoteReactions, { noteId: 1 }, [thread]);
+assert.match(assembly, /Well done<span>3<\/span>/);
+assert.match(assembly, /aria-pressed="true"/);
+assert.equal((assembly.match(/<svg/g) || []).length, 3, 'Each reaction uses an icon.');
+assert.doesNotMatch(assembly, /👏|<form|reply-1/, 'Assembly notes have reactions without adding a reply form.');
+const classroom = render(loaded.exports.DiscussionThread, { reviewId: 1 }, [thread]);
+assert.match(classroom, /reply-1/);
+assert.match(classroom, /Thank you!/);
+assert.doesNotMatch(classroom, /👏/, 'Classroom applause uses the same icon.');
+const unavailable = render(loaded.exports.AssemblyNoteReactions, { noteId: 1 }, [{ ...thread, canInteract: false }]);
+assert.match(unavailable, /Reactions will be available after the system update/);
+assert.equal((unavailable.match(/disabled=""/g) || []).length, 3);
+const attachment = { id: 1, mimeType: 'video/mp4', name: 'Assembly.mp4', url: '/protected/video', size: 100 };
+assert.match(render(loaded.exports.AssemblyAttachment, { item: attachment }, ['blob:sample', false, 'data:image/jpeg;base64,sample', false, true, 0]), /class="assembly-video-cover"/);
+assert.match(render(loaded.exports.AssemblyAttachment, { item: attachment }, ['blob:sample', false, '', true, true, 0]), /assembly-video-cover is-playing/);
+
+// Execute the actual chooser against a controlled-select restoration fixture.
+const dropdown = fs.readFileSync(path.join(root, 'src/components/app-dropdown.tsx'), 'utf8');
+const chooser = dropdown.match(/const choose = \(index: number\) => \{([\s\S]*?)\n  \};/)[1];
+let controlled = 'old', events = [], result = '';
+const field = { value: 'old', disabled: false, dispatchEvent: e => { events.push(e.type); if (e.type === 'change') controlled = field.value; else field.value = controlled; } };
+const choose = new Function('choices', 'select', 'setValue', 'setOpen', 'trigger', 'index', chooser);
+choose([{ value: 'new' }], { current: field }, v => result = v, () => {}, { current: { focus() {} } }, 0);
+assert.equal(result, 'new');
+assert.deepEqual(events, ['change', 'input'], 'Notify change before React restores the select.');
+console.log('Assembly interaction rendering and dropdown checks passed (13 cases).');

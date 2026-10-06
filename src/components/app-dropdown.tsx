@@ -71,8 +71,10 @@ export const AppSelect = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTML
     const choice = choices[index], field = select.current;
     if (!field || !choice || choice.disabled || field.disabled) return;
     field.value = choice.value;
-    field.dispatchEvent(new Event("input", { bubbles: true }));
+    // React restores controlled selects after input events. Notify change first,
+    // otherwise that restoration can discard the choice before onChange sees it.
     field.dispatchEvent(new Event("change", { bubbles: true }));
+    field.dispatchEvent(new Event("input", { bubbles: true }));
     setValue(field.value);
     setOpen(false);
     trigger.current?.focus({ preventScroll: true });

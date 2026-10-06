@@ -45,8 +45,12 @@ body .assembly-history-controls header>span{flex-shrink:0;padding:7px 10px;borde
 body .assembly-history-filters{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) minmax(0,1.5fr);gap:16px;border:0;padding:0;margin:0;min-width:0}
 body .assembly-history-filters>div,body .assembly-history-filters>label{display:grid;align-content:start;gap:8px;min-width:0;font:700 12px var(--font-body);color:#52617a}
 body .assembly-history-filters .tpk-month-picker{width:100%;min-width:0}
-body .assembly-history-filters .tpk-month-picker-trigger{flex:1;min-width:0}
+body .assembly-history-filters .tpk-month-picker-trigger{flex:1;min-width:0;gap:8px;padding:0 10px;font:700 13px var(--font-body)}
+body .assembly-history-filters .tpk-month-picker-trigger strong{font:inherit;white-space:nowrap}
+body .assembly-history-filters .tpk-month-picker-arrow{width:36px;flex-shrink:0}
+body .assembly-history-filters .tpk-month-picker-popover{width:min(310px,100%)}
 body .assembly-history-filters .app-select{width:100%;min-width:0}
+body .assembly-history-filters .app-select>select{height:46px;padding:0 12px;border:1px solid #d8dee8;border-radius:10px;font:600 13px var(--font-body)}
 body .assembly-history-controls>small,body .assembly-history-controls>p{display:block;margin:14px 0 0;font:500 12px/1.6 var(--font-body);color:#738199}
 body .cw-page .assembly-record-service{display:flex!important;align-items:center;flex-wrap:wrap;gap:8px!important;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #edf0f4;font:500 12px/1.6 var(--font-body);color:#738199}
 body .assembly-record-service>b{font:700 13px var(--font-body);color:#334962}
