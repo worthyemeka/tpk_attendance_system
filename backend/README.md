@@ -123,11 +123,13 @@ The public lookup returns only a guardian first name and the minimal child check
 
 ## Teacher service attendance and welfare
 
-Apply `backend/database/2026_teacher_attendance.sql` before releasing the matching frontend and backend. The migration adds attendance, daily-question, expected-teacher, welfare-assignment and event-history tables; it does not change existing staff access levels.
+Apply `backend/database/2026_teacher_attendance.sql`, then `2026_teacher_attendance_simple.sql`, before releasing the matching frontend and backend. The upgrade links Sunday attendance to the existing Sunday schedule and adds private Wednesday absence reasons. Preserve a database backup and existing attendance/history when linking legacy services. Manual lead records are retained as history but no longer grant access.
 
-Super Admin creates Sunday or MDWK (Wednesday) sessions, sets the question and accepted answers, and explicitly appoints Teacher Welfare Leads. Every verified ACTIVE or PROBATION teacher is expected, irrespective of roster assignments. Newly active teachers are included while a session remains open. Once the session ends, unsigned teachers are absent. Welfare cases are generated idempotently on the next attendance poll/read; no background scheduler is required while the workspace is being polled.
+Sunday services are synchronised from Sunday Schedule, including each configured service’s name and times. Each Sunday service has separate attendance, as requested. Wednesday MDWK is automatic: teachers confirm their own attendance from Overview before **21:00 Africa/Lagos**, with no QR or security question. After the deadline, an unsigned teacher is absent and can submit a private absence reason. Only that teacher, Super Admins and active Teachers Welfare subunit members can read it; ordinary follow-up assignees and public registers never receive it.
 
-Only Super Admin or appointed Welfare Leads can display/refresh the service QR or assign welfare calls. A regular teacher can see the attendance register and update only their own assigned welfare tasks. Answers and QR tokens are stored as hashes. QR links expire after five minutes (or service close), and accounts are limited to five wrong answers per fifteen minutes. Changing the daily question invalidates the existing QR. QR plus a shared daily question discourages remote sign-in but cannot prove physical presence: attendees can still share both with someone off-site.
+Every verified ACTIVE or PROBATION teacher is expected, irrespective of roster assignments. Newly active teachers are included while a session remains open. Past services are not invented or backfilled. Run `backend/scripts/finalize_teacher_attendance.php` once a minute from the server scheduler to prepare today’s register and queue absentee follow-ups after closing, even when no dashboard is open. Attendance reads also queue cases idempotently.
+
+Only Super Admins or active **Teachers Welfare** subunit members can display/refresh the Sunday QR or assign follow-up calls. There is no separate lead appointment step. A regular teacher can see the register and update only their assigned follow-ups. Super Admins set Sunday questions; accepted answers are entered as visible removable badges, while answers and QR tokens remain hashed in storage. QR links expire after five minutes (or service close), and accounts are limited to five wrong answers per fifteen minutes. Changing the question invalidates the existing QR. QR plus a shared question discourages remote sign-in but cannot prove physical presence: attendees can still share both with someone off-site.
 
 Children's Check-In is readable by all campus teachers. Parent-request approval, desk tools and pickup-ticket bearer links remain restricted to authorised operators; widening register visibility does not widen approval rights.
 
@@ -140,7 +142,7 @@ php backend/scripts/test_teacher_attendance.php
 php backend/scripts/test_checkin_visibility.php
 ```
 
-For an explicit real-MySQL smoke check after deploying the tables, run `TPK_MYSQL_SMOKE=1 php backend/scripts/test_teacher_attendance_mysql.php`. It reads curriculum/classes and verifies Sunday/MDWK expectation, QR answers, repeat sign-in, absence and welfare SQL using connection-local temporary attendance tables. It does not create staff sessions or persistent attendance/welfare records; it is not a substitute for HTTP authentication tests. The test skips unless explicitly enabled.
+For a real-MySQL smoke check after deploying the tables, run `TPK_MYSQL_SMOKE=1 php backend/scripts/test_teacher_attendance_mysql.php`. It reads curriculum/classes and verifies configured Sunday linking, MDWK’s 9pm cutoff, private reasons, repeated attendance, absence and subunit-based follow-up permissions using connection-local temporary attendance, schedule and assignment tables. It does not create staff sessions or persistent attendance/welfare records; it is not a substitute for HTTP authentication tests. The test skips unless explicitly enabled.
 
 ### Events & Conferences and current age groups
 

@@ -26,7 +26,7 @@ export function MdwkAttendanceCard() {
       setOffset(parseCampusTime(response.serverTime).getTime() - Date.now());
     } catch (e) { setError(e instanceof Error ? e.message : "Wednesday attendance could not be loaded."); }
   }, []);
-  useEffect(() => { void load();const timer = window.setInterval(() => {setClock(Date.now());void load();}, 30_000);return () => window.clearInterval(timer); }, [load]);
+  useEffect(() => { void load();const timer = window.setInterval(() => void load(), 30_000);const clockTimer=window.setInterval(()=>setClock(Date.now()),1000);return () => {window.clearInterval(timer);window.clearInterval(clockTimer);}; }, [load]);
   const today = data?.serverTime.slice(0, 10);
   const current = data?.services.find(s => s.startsAt.slice(0, 10) === today);
   const missed = data?.services.filter(s => s.canExplain) || [];

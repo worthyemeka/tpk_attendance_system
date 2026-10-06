@@ -27,7 +27,7 @@ class TeacherStatement extends PDOStatement {
   elseif(str_contains($sql,'SET question=')){$db->service['question']=$p[0];$db->service['answer_hashes_json']=$p[1];$db->service['qr_hash']=null;}
   elseif(str_contains($sql,'SELECT cases.*'))$this->rows=$p[0]===21&&$p[1]===1?[['id'=>21,'assigned_to'=>7,'staff_user_id'=>8]]:[];
   elseif(str_contains($sql,'SELECT id FROM staff_users'))$this->rows=$p[0]===7&&$p[1]===1?[['id'=>7]]:[];
-  elseif(str_contains($sql,'SELECT id,kind,name'))$this->rows=[['id'=>11,'kind'=>'SUNDAY','name'=>'Service','startsAt'=>$db->service['starts_at'],'endsAt'=>$db->service['ends_at']]];
+  elseif(str_contains($sql,'SELECT id,kind,name'))$this->rows=[['id'=>11,'kind'=>'SUNDAY','name'=>'Service','startsAt'=>$db->service['starts_at'],'endsAt'=>$db->service['ends_at'],'hasQuestion'=>'1']];
   elseif(str_contains($sql,'attendance.checked_in_at AS checkedInAt'))$this->rows=[['id'=>7,'name'=>'Sample Teacher','checkedInAt'=>$db->attendance[7]??null,'status'=>isset($db->attendance[7])?'PRESENT':($db->service['ends_at']<=api_teacher_now()->format('Y-m-d H:i:s')?'ABSENT':'AWAITING')]];
   elseif(str_contains($sql,'SELECT cases.id'))$this->rows=[['id'=>21,'serviceId'=>11,'teacherId'=>8,'assignedTo'=>7]];
   elseif(str_starts_with($sql,'SELECT reason FROM teacher_service_absence_reasons'))$this->rows=[['reason'=>'Private absence explanation']];

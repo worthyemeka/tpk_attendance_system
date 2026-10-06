@@ -25,17 +25,20 @@ try {
     $curriculum=smokeResult(fn()=>api_curriculum($db));
     smokeCheck($curriculum['available']&&count($curriculum['classes'])>0,'Live curriculum storage/classes unavailable');
     echo "PASS: curriculum reads the installed MySQL schema and existing classes.\n";
-    foreach(['teacher_services','teacher_service_expected','teacher_service_attendance','teacher_welfare_leads','teacher_signin_attempts','teacher_welfare_cases','teacher_welfare_events'] as $table){
+    foreach(['ministry_sub_units','staff_sub_unit_assignments','service_sessions','sunday_service_plans','teacher_services','teacher_service_expected','teacher_service_attendance','teacher_service_absence_reasons','teacher_welfare_leads','teacher_signin_attempts','teacher_welfare_cases','teacher_welfare_events'] as $table){
+        $copy=in_array($table,['ministry_sub_units','staff_sub_unit_assignments'],true)?$db->query('SELECT * FROM `'.$table.'`')->fetchAll():[];
         $definition=$db->query('SHOW CREATE TABLE `'.$table.'`')->fetch(PDO::FETCH_NUM)[1];
         // MySQL rejects self-named LIKE aliases and foreign keys on temporary tables.
         $definition=preg_replace('/^CREATE TABLE /','CREATE TEMPORARY TABLE ',$definition);
         $definition=preg_replace('/^\s*CONSTRAINT[^\n]*\n/m','',$definition);
         $definition=preg_replace('/,\s*\)/',')',$definition);
         $db->exec($definition);$temporary[]=$table;
+        foreach($copy as $row){$columns=implode(',',array_map(fn($c)=>'`'.$c.'`',array_keys($row)));$marks=implode(',',array_fill(0,count($row),'?'));$db->prepare('INSERT INTO `'.$table.'`('.$columns.') VALUES('.$marks.')')->execute(array_values($row));}
     }
     $nextSunday=api_teacher_now()->modify('next sunday')->format('Y-m-d');
     $smokeInput=['kind'=>'SUNDAY','date'=>$nextSunday,'name'=>'Temporary diagnostic','startTime'=>'08:00','endTime'=>'13:00','question'=>'Diagnostic colour?','answers'=>['Blue']];
-    $service=smokeResult(fn()=>api_teacher_create_service($db));$id=(int)$service['id'];
+    // Fixture creation bypasses the removed manual creation API, not permissions.
+    $values=api_teacher_service_values($smokeInput);$db->prepare('INSERT INTO teacher_services(campus_id,kind,name,starts_at,ends_at,question,answer_hashes_json,created_by) VALUES(?,?,?,?,?,?,?,?)')->execute(array_merge([$owner['campus_id']],$values,[$owner['id']]));$id=(int)$db->lastInsertId();api_teacher_expected($db,$id,(int)$owner['campus_id']);
     $q=$db->prepare("SELECT COUNT(*) FROM staff_users WHERE campus_id=? AND is_active=1 AND account_status='VERIFIED' AND team_status<>'INACTIVE'");$q->execute([$owner['campus_id']]);$expected=(int)$q->fetchColumn();
     smokeCheck((int)$db->query('SELECT COUNT(*) FROM teacher_service_expected')->fetchColumn()===$expected,'Not every active teacher was expected');
     $q=$db->prepare('UPDATE teacher_services SET starts_at=?,ends_at=? WHERE id=?');$q->execute([api_teacher_now()->modify('-5 minutes')->format('Y-m-d H:i:s'),api_teacher_now()->modify('+1 hour')->format('Y-m-d H:i:s'),$id]);
@@ -55,19 +58,35 @@ try {
     if($register['cases']){
         $caseId=(int)$register['cases'][0]['id'];
         $smokeInput=['assignedTo'=>(int)$owner['id']];smokeResult(fn()=>api_teacher_welfare_case($db,$caseId));
-        $smokeInput=['enabled'=>true];smokeResult(fn()=>api_teacher_welfare_lead($db,(int)$owner['id']));
+        $db->prepare('DELETE FROM staff_sub_unit_assignments WHERE staff_user_id=?')->execute([$owner['id']]);
+        $db->prepare('INSERT INTO teacher_welfare_leads(staff_user_id,campus_id,appointed_by) VALUES(?,?,?)')->execute([$owner['id'],$owner['campus_id'],$owner['id']]);
         $smokeActor['access_level']='TPK_ADMIN';
-        smokeCheck(api_teacher_welfare_manager($db,$smokeActor),'Appointed welfare lead lacks manager permission');
+        smokeCheck(!api_teacher_welfare_manager($db,$smokeActor),'Manual lead still grants welfare access');
+        $unit=$db->prepare("SELECT id FROM ministry_sub_units WHERE campus_id=? AND name='Teachers Welfare'");$unit->execute([$owner['campus_id']]);$unitId=$unit->fetchColumn();
+        $db->prepare('INSERT INTO staff_sub_unit_assignments(staff_user_id,sub_unit_id,assigned_by_staff_user_id) VALUES(?,?,?)')->execute([$owner['id'],$unitId,$owner['id']]);
+        smokeCheck(api_teacher_welfare_manager($db,$smokeActor),'Existing welfare subunit lacks permission');
         $smokeInput=['status'=>'CONTACTED','note'=>'Temporary diagnostic outcome'];smokeResult(fn()=>api_teacher_welfare_case($db,$caseId));
         smokeCheck($db->query('SELECT status FROM teacher_welfare_cases WHERE id='.$caseId)->fetchColumn()==='CONTACTED','Welfare outcome not saved');
         $smokeActor=$owner;
     }
     $smokeInput=['kind'=>'MDWK','date'=>api_teacher_now()->modify('next wednesday')->format('Y-m-d'),'name'=>'Temporary MDWK diagnostic','startTime'=>'18:00','endTime'=>'20:00','question'=>'Diagnostic colour?','answers'=>['Blue']];
-    $mdwk=smokeResult(fn()=>api_teacher_create_service($db));
-    $q=$db->prepare('SELECT COUNT(*) FROM teacher_service_expected WHERE service_id=?');$q->execute([(int)$mdwk['id']]);
+    $values=api_teacher_service_values($smokeInput);$db->prepare('INSERT IGNORE INTO teacher_services(campus_id,kind,name,starts_at,ends_at,question,answer_hashes_json,created_by) VALUES(?,?,?,?,?,?,?,?)')->execute(array_merge([$owner['campus_id']],$values,[$owner['id']]));$q=$db->prepare("SELECT id FROM teacher_services WHERE campus_id=? AND kind='MDWK' AND starts_at=?");$q->execute([$owner['campus_id'],$values[2]]);$wid=(int)$q->fetchColumn();api_teacher_expected($db,$wid,(int)$owner['campus_id']);
+    $q=$db->prepare('SELECT COUNT(*) FROM teacher_service_expected WHERE service_id=?');$q->execute([$wid]);
     smokeCheck((int)$q->fetchColumn()===$expected,'MDWK does not expect every active teacher');
+    $smokeInput=['attended'=>true];$date=substr($values[2],0,10);$zone=new DateTimeZone('Africa/Lagos');
+    smokeResult(fn()=>api_teacher_confirm_mdwk($db,$wid,new DateTimeImmutable($date.' 20:59:59',$zone)));smokeResult(fn()=>api_teacher_confirm_mdwk($db,$wid,new DateTimeImmutable($date.' 20:59:59',$zone)));smokeReject(fn()=>api_teacher_confirm_mdwk($db,$wid,new DateTimeImmutable($date.' 21:00:00',$zone)),'SIGNIN_CLOSED');
+    smokeCheck((int)$db->query('SELECT COUNT(*) FROM teacher_service_attendance WHERE service_id='.$wid)->fetchColumn()===1,'Repeated Wednesday confirmation duplicated');
+    smokeReject(fn()=>api_teacher_qr($db,$wid),'MDWK_NO_QR');smokeReject(fn()=>api_teacher_security($db,$wid),'MDWK_NO_QUESTION');
+    $q=$db->prepare("SELECT id,campus_id,name,access_level FROM staff_users WHERE id<>? AND campus_id=? AND is_active=1 AND account_status='VERIFIED' AND team_status<>'INACTIVE' ORDER BY id LIMIT 1");$q->execute([$owner['id'],$owner['campus_id']]);$regular=$q->fetch();$regular['access_level']='TPK_ADMIN';
+    $db->prepare('DELETE FROM staff_sub_unit_assignments WHERE staff_user_id=?')->execute([$regular['id']]);
+    $db->prepare("UPDATE teacher_services SET starts_at='2000-01-05 00:00:00',ends_at='2000-01-05 21:00:00' WHERE id=?")->execute([$wid]);$smokeActor=$regular;$smokeInput=['reason'=>'Private diagnostic reason'];smokeResult(fn()=>api_teacher_absence_reason($db,$wid));
+    $smokeActor=$owner;$_GET=['month'=>'2000-01','serviceId'=>$wid];$managed=smokeResult(fn()=>api_teacher_attendance($db));$case=array_values(array_filter($managed['cases'],fn($c)=>(int)$c['teacherId']===(int)$regular['id']))[0];smokeCheck($case['absenceReason']==='Private diagnostic reason','Super cannot read absence reason');
+    foreach($managed['items'] as $row)smokeCheck(!array_key_exists('reason',$row)&&!array_key_exists('absenceReason',$row),'Public register exposed private reason');
+    $smokeInput=['assignedTo'=>(int)$regular['id']];$other=array_values(array_filter($managed['cases'],fn($c)=>(int)$c['teacherId']!==(int)$regular['id']))[0];smokeResult(fn()=>api_teacher_welfare_case($db,(int)$other['id']));
+    $smokeActor=$regular;$assigned=smokeResult(fn()=>api_teacher_attendance($db));foreach($assigned['cases'] as $row)smokeCheck(!array_key_exists('absenceReason',$row),'Ordinary follow-up assignee exposed private reason');
+    $smokeActor=$owner;$_GET=['month'=>api_teacher_now()->format('Y-m')];$scheduled=smokeResult(fn()=>api_teacher_attendance($db));$linked=(int)$db->query('SELECT COUNT(*) FROM teacher_services WHERE service_session_id IS NOT NULL')->fetchColumn();smokeCheck($linked>0,'Sunday services not linked to configured sessions');
     echo "PASS: MySQL service creation, all-active expectation, QR challenge, answer verification, repeat sign-in, absence and idempotent welfare queue.\n";
-    echo "PASS: MDWK expectation, Super Admin welfare assignment and appointed-lead outcome updates.\n";
+    echo "PASS: scheduled Sunday linking, MDWK cutoff/idempotence, no Wednesday QR/question, private absence reasons and subunit-based welfare access.\n";
 } finally {
     if($db->inTransaction())$db->rollBack();
     foreach(array_reverse($temporary) as $table)$db->exec('DROP TEMPORARY TABLE `'.$table.'`');

@@ -61,7 +61,7 @@ function api_teacher_attendance(PDO $db): never {
     if(!preg_match('/^\d{4}-(0[1-9]|1[0-2])$/',$month))api_error('VALIDATION_ERROR','Choose a valid month.',422);
     $start=$month.'-01';$end=(new DateTimeImmutable($start))->modify('+1 month')->format('Y-m-d');
     api_teacher_sync_services($db,$actor,$start,$end);
-    $s=$db->prepare("SELECT id,kind,name,starts_at AS startsAt,ends_at AS endsAt,(question<>'') AS hasQuestion FROM teacher_services WHERE campus_id=? AND starts_at>=? AND starts_at<? ORDER BY starts_at");$s->execute([$actor['campus_id'],$start,$end]);$services=$s->fetchAll();
+    $s=$db->prepare("SELECT id,kind,name,starts_at AS startsAt,ends_at AS endsAt,(question<>'') AS hasQuestion FROM teacher_services WHERE campus_id=? AND starts_at>=? AND starts_at<? ORDER BY starts_at");$s->execute([$actor['campus_id'],$start,$end]);$services=$s->fetchAll();foreach($services as &$row)$row['hasQuestion']=(bool)$row['hasQuestion'];unset($row);
     $now=api_teacher_now()->format('Y-m-d H:i:s');foreach($services as $row)if($now<$row['endsAt'])api_teacher_expected($db,(int)$row['id'],(int)$actor['campus_id']);
     api_teacher_queue_welfare($db,$actor);
     $id=(int)($_GET['serviceId']??0);$rows=[];
