@@ -12,10 +12,10 @@ type ContextMenu = "month" | "sunday" | "service" | null;
 
 function serviceState(service: ServiceSessionContext | null): "UPCOMING" | "LIVE" | "COMPLETED" | "NONE" {
   if (!service) return "NONE";
-  const today=new Intl.DateTimeFormat("en-CA",{timeZone:"Africa/Lagos",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
-  const time=new Intl.DateTimeFormat("en-GB",{timeZone:"Africa/Lagos",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).format(new Date());
-  if(service.serviceDate>today || (service.serviceDate===today&&time<"06:00"))return "UPCOMING";
-  if(service.serviceDate<today || time>="14:00")return "COMPLETED";
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const time = new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date());
+  if (service.serviceDate > today || (service.serviceDate === today && time < "06:00")) return "UPCOMING";
+  if (service.serviceDate < today || time >= "14:00") return "COMPLETED";
   return service.isOpen === false ? "COMPLETED" : "LIVE";
 }
 
@@ -80,41 +80,41 @@ export function AdminTopbar() {
     </div>
     <div className="universal-actions">
       <div className="universal-context-controls" aria-label="Sunday service context">
-      <div className="service-menu context-select">
-        <button className="service-menu-trigger" onClick={() => setMenu(menu === "month" ? null : "month")} aria-expanded={menu === "month"} disabled={context.loading || !context.months.length}>
-          <span className="service-menu-label">{context.loading ? "Loading month…" : context.months.find((item) => item.key === selectedMonthKey)?.label || "Choose month"}</span><FiChevronDown />
-        </button>
-        {menu === "month" && <div className="service-menu-options">
-          {context.months.map((item) => <button key={item.key} onClick={() => { context.selectMonth(item.key); setMenu(null); }}>
-            {item.key === selectedMonthKey && <FiCheck />}<span>{item.label}</span>
-          </button>)}
-        </div>}
-      </div>
-      <div className="service-menu context-select">
-        <button className="service-menu-trigger" onClick={() => setMenu(menu === "sunday" ? null : "sunday")} aria-expanded={menu === "sunday"} disabled={context.loading || !context.sundays.length}>
-          <span className="service-menu-label">{selectedSunday?.label || "Choose Sunday"}</span><FiChevronDown />
-        </button>
-        {menu === "sunday" && <div className="service-menu-options">
-          {context.sundays.map((item) => <button key={item.date} onClick={() => { context.selectSunday(item.date); setMenu(null); }}>
-            {item.date === context.selectedSundayDate && <FiCheck />}<span>{item.label}</span>
-          </button>)}
-        </div>}
-      </div>
-      <div className="service-menu context-select context-service-select">
-        <button className="service-menu-trigger" onClick={() => { if (context.error) { context.retry(); return; } setMenu(menu === "service" ? null : "service"); }} aria-expanded={menu === "service"} disabled={!context.services.length && !context.error} title={context.error || (context.selectedService ? serviceDisplayLabel(context.selectedService) : undefined)}>
-          <span className="service-menu-label">{context.loading ? "Loading service…" : context.error ? "Retry service context" : context.selectedService ? serviceDisplayLabel(context.selectedService) : "No service configured"}</span><FiChevronDown />
-        </button>
-        {menu === "service" && <div className="service-menu-options">
-          {context.services.map((item) => <button key={item.id} onClick={() => { context.selectService(item.id); setMenu(null); }}>
-            {item.id === context.selectedServiceSessionId && <FiCheck />}<span>{serviceDisplayLabel(item)}</span>
-          </button>)}
-        </div>}
-      </div>
+        <div className="service-menu context-select">
+          <button className="service-menu-trigger" onClick={() => setMenu(menu === "month" ? null : "month")} aria-expanded={menu === "month"} disabled={context.loading || !context.months.length}>
+            <span className="service-menu-label">{context.loading ? "Loading month…" : context.months.find((item) => item.key === selectedMonthKey)?.label || "Choose month"}</span><FiChevronDown />
+          </button>
+          {menu === "month" && <div className="service-menu-options">
+            {context.months.map((item) => <button key={item.key} onClick={() => { context.selectMonth(item.key); setMenu(null); }}>
+              {item.key === selectedMonthKey && <FiCheck />}<span>{item.label}</span>
+            </button>)}
+          </div>}
+        </div>
+        <div className="service-menu context-select">
+          <button className="service-menu-trigger" onClick={() => setMenu(menu === "sunday" ? null : "sunday")} aria-expanded={menu === "sunday"} disabled={context.loading || !context.sundays.length}>
+            <span className="service-menu-label">{selectedSunday?.label || "Choose Sunday"}</span><FiChevronDown />
+          </button>
+          {menu === "sunday" && <div className="service-menu-options">
+            {context.sundays.map((item) => <button key={item.date} onClick={() => { context.selectSunday(item.date); setMenu(null); }}>
+              {item.date === context.selectedSundayDate && <FiCheck />}<span>{item.label}</span>
+            </button>)}
+          </div>}
+        </div>
+        <div className="service-menu context-select context-service-select">
+          <button className="service-menu-trigger" onClick={() => { if (context.error) { context.retry(); return; } setMenu(menu === "service" ? null : "service"); }} aria-expanded={menu === "service"} disabled={!context.services.length && !context.error} title={context.error || (context.selectedService ? serviceDisplayLabel(context.selectedService) : undefined)}>
+            <span className="service-menu-label">{context.loading ? "Loading service…" : context.error ? "Retry service context" : context.selectedService ? serviceDisplayLabel(context.selectedService) : "No service configured"}</span><FiChevronDown />
+          </button>
+          {menu === "service" && <div className="service-menu-options">
+            {context.services.map((item) => <button key={item.id} onClick={() => { context.selectService(item.id); setMenu(null); }}>
+              {item.id === context.selectedServiceSessionId && <FiCheck />}<span>{serviceDisplayLabel(item)}</span>
+            </button>)}
+          </div>}
+        </div>
       </div>
       <div className="universal-operation-controls">
-      {canViewCheckIn && <span className={`universal-open ${state === "LIVE" ? "" : "closed"}`} title={stateLabel}><i /><span className="status-full">{stateLabel}</span><span className="status-compact">{state === "LIVE" ? "Open" : state === "COMPLETED" ? "Done" : "Closed"}</span></span>}
-      {canViewCheckIn && <button className="universal-qr" onClick={() => setQr(true)} title="View Check-In QR"><FiGrid /><span>View Check-In QR</span></button>}
-      {canAssistedCheckIn && <Link className="universal-assist" href={isPickupPage ? "/account/pick-up#assisted" : "/account/check-in/assisted"}><span className="assist-full">{isPickupPage ? "Start Assisted Pick-Up" : "Assisted Check-In"}</span><span className="assist-compact">Assisted</span></Link>}
+        {canViewCheckIn && <span className={`universal-open ${state === "LIVE" ? "" : "closed"}`} title={stateLabel}><i /><span className="status-full">{stateLabel}</span><span className="status-compact">{state === "LIVE" ? "Open" : state === "COMPLETED" ? "Done" : "Closed"}</span></span>}
+        {canViewCheckIn && <button className="universal-qr" onClick={() => setQr(true)} title="View Check-In QR"><FiGrid /><span>View Check-In QR</span></button>}
+        {canAssistedCheckIn && <Link className="universal-assist" href={isPickupPage ? "/account/pick-up#assisted" : "/account/check-in/assisted"}><span className="assist-full">{isPickupPage ? "Start Assisted Pick-Up" : "Assisted Check-In"}</span><span className="assist-compact">Assisted</span></Link>}
       </div>
     </div>
     {canViewCheckIn && qr && <div className="modal-backdrop"><div className="qr-modal">
@@ -123,7 +123,7 @@ export function AdminTopbar() {
       <p>Place this QR on the entrance poster. It opens the public, password-free form.</p>
       <img className="qr-image" src="/brand/TribePetra_Kids_CheckIn_QR.png" alt="TribePetra Kids parent check-in QR code" /><code>{link}</code>
       <div className="modal-actions">
-      <button className="quiet-button" onClick={async () => { await navigator.clipboard?.writeText(link); setCopied(true); }}><FiCopy />{copied ? "Link copied" : "Copy link"}</button>
+        <button className="quiet-button" onClick={async () => { await navigator.clipboard?.writeText(link); setCopied(true); }}><FiCopy />{copied ? "Link copied" : "Copy link"}</button>
         <Link className="solid-button" href="/account/check-in/assisted">Open parent form</Link>
       </div>
     </div></div>}
