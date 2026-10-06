@@ -6,7 +6,8 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { FiAlertCircle, FiArrowLeft, FiArrowRight, FiCheck, FiEye, FiEyeOff } from "react-icons/fi";
 import { ParentPhotoSlider } from "@/components/parent-photo-slider";
 import { ProfilePhotoEditor } from "@/components/profile-photo-editor";
-import { apiBase, saveTeacherSession, type TeacherSession } from "@/lib/session";
+import { apiBase, saveTeacherSession } from "@/lib/session";
+import { teacherSessionFromResponse, validateTeacherSession } from "@/lib/teacher-session-lifecycle";
 
 const steps = ["Your details", "Contact", "Security"];
 const NIGERIA_COUNTRY_CODE = "+234";
@@ -93,6 +94,16 @@ export function TeacherAuth({ mode }: Props) {
   const loginReady = Boolean(login.identifier.trim() && login.password);
 
   useEffect(() => {
+    if (signup) return;
+    let cancelled = false;
+    // Verify the saved token with the server; a stale browser record is not a sign-in.
+    void validateTeacherSession().then(session => {
+      if (session && !cancelled) window.location.replace("/account/overview");
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [signup]);
+
+  useEffect(() => {
     if (!signup) return;
     // Browser password/address managers can fill native inputs after hydration
     // without dispatching input/change. Keep React state in sync so validation,
@@ -168,7 +179,7 @@ export function TeacherAuth({ mode }: Props) {
       const errorMessage = typeof payload?.error === "string" ? payload.error : payload?.error?.message;
       if (!response.ok) throw new Error(errorMessage || "The TPK sign-in service is temporarily unavailable.");
       if (!data?.teacher || !data?.sessionToken) throw new Error("The TPK sign-in service returned an incomplete session. Please try again.");
-      saveTeacherSession({ ...data.teacher, sessionToken: data.sessionToken } as TeacherSession);
+      saveTeacherSession({ ...teacherSessionFromResponse(data, data.sessionToken), lastActivityAt: Date.now() });
       const next = new URLSearchParams(window.location.search).get("next");
       window.location.replace(next && next.startsWith("/account/") ? next : "/account/overview");
     } catch (reason) { const message = reason instanceof Error ? reason.message : ""; setError(/failed to fetch|load failed|networkerror/i.test(message) ? "The TPK sign-in service cannot be reached right now. Please try again shortly or contact a Super Admin." : (message || "Please try again.")); } finally { setBusy(false); }

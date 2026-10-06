@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require __DIR__ . '/../config.php';
+require_once __DIR__ . '/staff-session.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') json_response([]);
 $db = db();
@@ -22,7 +23,7 @@ function teacher_response(array $teacher): array {
 function teacher_issue_session(PDO $db, int $staffId): string {
     $token = bin2hex(random_bytes(32));
     $db->prepare('DELETE FROM staff_sessions WHERE staff_user_id=? AND (expires_at < NOW() OR revoked_at IS NOT NULL)')->execute([$staffId]);
-    $db->prepare('INSERT INTO staff_sessions(staff_user_id,token_hash,expires_at) VALUES(?,?,DATE_ADD(NOW(), INTERVAL 12 HOUR))')->execute([$staffId, hash('sha256', $token)]);
+    $db->prepare('INSERT INTO staff_sessions(staff_user_id,token_hash,expires_at) VALUES(?,?,DATE_ADD(NOW(), INTERVAL 48 HOUR))')->execute([$staffId, hash('sha256', $token)]);
     return $token;
 }
 if ($method === 'GET' && $path === '/api/teachers/register') json_response(['endpoint' => '/api/teachers/register', 'method' => 'POST', 'message' => 'Submit teacher registration details to create a TPK account.']);
@@ -91,7 +92,20 @@ if ($method === 'POST' && $path === '/api/teachers/login') {
     $s->execute([$campusId, strtolower($identifier), $phone ?: '']); $teacher = $s->fetch();
     if (!$teacher || !password_verify($v['password'], $teacher['password_hash'])) json_response(['error' => 'Incorrect email, WhatsApp number, or password.'], 401);
     if (!(bool)$teacher['is_active'] || $teacher['team_status'] === 'INACTIVE') json_response(['error' => 'This team account is inactive. Please speak with a TPK Super Admin.'], 403);
-    json_response(['teacher' => teacher_response($teacher), 'sessionToken' => teacher_issue_session($db, (int)$teacher['staff_user_id'])]);
+    if ($teacher['account_status'] !== 'VERIFIED') json_response(['error' => 'Please speak with a TPK Super Admin to verify your account.'], 403);
+    $token = teacher_issue_session($db, (int)$teacher['staff_user_id']);
+    $session = tpk_staff_session($db, $token);
+    header('Cache-Control: no-store');
+    json_response(['teacher' => teacher_response($teacher), 'sessionToken' => $token] + tpk_staff_session_clock($session));
+}
+
+if (in_array($method, ['GET','POST'], true) && $path === '/api/teachers/session') {
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    $authorization = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+    if (!preg_match('/^Bearer\s+([a-f0-9]{64})$/i', $authorization, $match)) json_response(['error' => 'Sign in is required.'], 401);
+    $session = tpk_staff_session($db, $match[1], $method === 'POST');
+    if (!$session) json_response(['error' => 'Your sign-in session has expired. Please sign in again.'], 401);
+    json_response(['teacher' => teacher_response($session)] + tpk_staff_session_clock($session));
 }
 
 if ($method === 'POST' && $path === '/api/teachers/logout') {

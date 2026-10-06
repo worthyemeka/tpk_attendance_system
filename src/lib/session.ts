@@ -11,6 +11,9 @@ export type TeacherSession = {
   role: "TPK Teacher";
   profileImageUrl?: string | null;
   sessionToken: string;
+  /** Browser-clock deadline returned by the server, refreshed only by activity. */
+  expiresAt?: number;
+  lastActivityAt?: number;
 };
 
 // A production tunnel can be supplied when the PHP service lives outside
@@ -45,6 +48,11 @@ export function readTeacherSession(): TeacherSession | null {
   if (typeof window === "undefined") return null;
   try {
     const saved = JSON.parse(window.localStorage.getItem("tpk-teacher") || "null");
+    if (saved && ((typeof saved.expiresAt === "number" && saved.expiresAt <= Date.now()) ||
+      (typeof saved.lastActivityAt === "number" && Date.now() - saved.lastActivityAt >= 48 * 60 * 60 * 1000))) {
+      clearTeacherSession();
+      return null;
+    }
     return saved?.sessionToken && saved?.staffUserId ? saved as TeacherSession : null;
   } catch { return null; }
 }
@@ -54,7 +62,11 @@ export function saveTeacherSession(session: TeacherSession) {
   window.localStorage.setItem("tpk-teacher", JSON.stringify(session));
   window.dispatchEvent(new Event(teacherSessionChangedEvent));
 }
-export function clearTeacherSession() { window.localStorage.removeItem("tpk-teacher"); }
+export function clearTeacherSession() {
+  if (!window.localStorage.getItem("tpk-teacher")) return;
+  window.localStorage.removeItem("tpk-teacher");
+  window.dispatchEvent(new Event(teacherSessionChangedEvent));
+}
 export function authHeaders(session = readTeacherSession()): HeadersInit { return session ? { Authorization: `Bearer ${session.sessionToken}` } : {}; }
 export function isSuperAdmin(session = readTeacherSession()) { return session?.accessLevel === "TPK_SUPER_ADMIN"; }
 export function isFollowUpLead(session = readTeacherSession()) { return session?.accessLevel === "TPK_FOLLOW_UP_ADMIN"; }
