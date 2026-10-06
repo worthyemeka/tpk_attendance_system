@@ -22,6 +22,7 @@ import { useProfileDialog } from "@/components/use-profile-dialog";
 import "./followup-refinements.css";
 import { FollowupHistory } from "./followup-history";
 import { DirectoryPagination } from "./directory-pagination";
+import { followupAssignee, followupCompletion } from "@/lib/followup-completion";
 type Case = {
   id: number;
   familyId: number;
@@ -37,6 +38,8 @@ type Case = {
   guardianName?: string;
   guardianPhone?: string;
   ownerName: string;
+  ownerId?: number | string | null;
+  lastContactedAt?: string | null;
   followUpSentBy?: string | null;
 };
 type Detail = Omit<Case, "children"> & {
@@ -521,9 +524,11 @@ function Drawer({
 }) {
   useProfileDialog(close, ".followup .backdrop aside");
   const g = detail.primaryContact;
-  const [assignee, setAssignee] = useState("");
+  const [assignee, setAssignee] = useState(() => followupAssignee(detail.ownerId));
   const [recipientId, setRecipientId] = useState("");
-  useEffect(() => setAssignee(""), [detail.id]);
+  useEffect(() => setAssignee(followupAssignee(detail.ownerId)), [detail.id, detail.ownerId]);
+  const completion = followupCompletion(detail);
+  const assignedId = followupAssignee(detail.ownerId);
   useEffect(() => setRecipientId(followupRecipients[0] ? String(followupRecipients[0].id) : ""), [detail.id, followupRecipients]);
   const recipient = followupRecipients.find((person) => String(person.id) === recipientId);
   const recipientMessage = "TPK follow-up update\n\nPlease check your TPK board for the latest family follow-up details.";
@@ -544,6 +549,13 @@ function Drawer({
           {detail.childrenCount} {Number(detail.childrenCount) === 1 ? "child" : "children"} · {detail.missedSundays || 1} {(detail.missedSundays || 1) === 1 ? "Sunday" : "Sundays"}
           {" "}missed
         </p>
+        {completion && <div className="followup-complete" role="status">
+          <span className="followup-complete-icon"><FiCheckCircle /></span>
+          <div><h3>Family contacted</h3><p>{completion.sunday ? `Follow-up for the week of ${date(completion.sunday)} is complete.` : "This family’s follow-up is complete."} No further call is needed for this follow-up.</p>
+            {completion.contactedAt && <small>{completion.staffName ? `Contacted by ${completion.staffName} · ` : "Contact recorded · "}{date(completion.contactedAt)}</small>}
+            <button type="button" onClick={() => setTab("history")}>View follow-up history <FiChevronRight /></button>
+          </div>
+        </div>}
         <nav>
           {(["children", "contact", "history"] as const).map((x) => (
             <button
@@ -557,7 +569,7 @@ function Drawer({
         </nav>
         {tab === "children" && (
           <section>
-            <h3>Children Requiring Follow-Up</h3>
+            <h3>{completion ? "Children in this follow-up" : "Children Requiring Follow-Up"}</h3>
             {detail.children.map((c) => (
               <article className="child" key={c.id}>
                 <b>
@@ -574,18 +586,18 @@ function Drawer({
         )}
         {tab === "contact" && (
           <section>
-            {canManage && <div className="assignment-box">
+            {canManage && !completion && <div className="assignment-box">
               <span className="assignment-kicker">Follow-up lead</span>
-              <h3>Assign this family call</h3>
+              <h3>{assignedId ? "Assigned follow-up teacher" : "Assign this family call"}</h3>
               <p>Only the selected teacher will receive and see this task in My Follow-Ups.</p>
-              <div><AppSelect value={assignee} onChange={(event) => setAssignee(event.target.value)}><option value="">Choose a regular teacher</option>{assignees.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</AppSelect><button type="button" disabled={!assignee} onClick={() => assign(Number(assignee))}>Assign call</button></div>
+              <div><AppSelect aria-label="Assigned follow-up teacher" value={assignee} onChange={(event) => setAssignee(event.target.value)}><option value="">Choose a regular teacher</option>{assignedId && !assignees.some(person => String(person.id) === assignedId) && <option value={assignedId}>{detail.ownerName || "Assigned teacher"}</option>}{assignees.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</AppSelect><button type="button" disabled={!assignee || assignee === assignedId} onClick={() => assign(Number(assignee))}>{assignedId ? "Update teacher" : "Assign call"}</button></div>
             </div>}
             <div className="contact">
               <h3>Primary Contact</h3>
               <b>{g ? `${g.firstName} ${g.lastName}` : "Not recorded"}</b>
               <small>{g?.relationship || "Guardian"}</small>
               <p>{g?.primaryPhone || "Phone unavailable"}</p>
-              <div>
+              {!completion && <div>
                 <a href={g?.primaryPhone ? `tel:${g.primaryPhone}` : "#"}>
                   <FiPhone />
                   Call Guardian
@@ -601,9 +613,10 @@ function Drawer({
                   <FiMessageCircle />
                   WhatsApp
                 </a>
-              </div>
+              </div>}
             </div>
-            {followupRecipients.length > 0 && <div className="contact lead-contact">
+            {completion && <div className="contact followup-saved-summary"><h3>Saved follow-up</h3>{detail.ownerName && detail.ownerName !== "Unassigned" && <p><b>Assigned teacher</b><span>{detail.ownerName}</span></p>}{detail.reason && <p><b>Reason for absence</b><span>{detail.reason}</span></p>}{detail.notes && <p><b>Conversation notes</b><span>{detail.notes}</span></p>}{detail.expectedBack && <p><b>Expected back</b><span>{date(detail.expectedBack)}</span></p>}</div>}
+            {!completion && followupRecipients.length > 0 && <div className="contact lead-contact">
               <h3>Message a follow-up lead</h3>
               <small>Choose a lead and WhatsApp will open with a short dashboard prompt.</small>
               <AppSelect value={recipientId} onChange={(event) => setRecipientId(event.target.value)} aria-label="Follow-up lead">
@@ -613,7 +626,7 @@ function Drawer({
                 <FiMessageCircle /> Message selected lead
               </a>
             </div>}
-            <div className="record">
+            {!completion && <div className="record">
               <h3>Record Follow-Up</h3>
               {[
                 ["CONTACTED", "Yes, I spoke with them"],
@@ -664,7 +677,7 @@ function Drawer({
               <button className="save" onClick={save}>
                 Save Follow-Up
               </button>
-            </div>
+            </div>}
           </section>
         )}
         {tab === "history" && <FollowupHistory key={detail.id} entries={detail.history} />}

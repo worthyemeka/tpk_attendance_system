@@ -1,6 +1,14 @@
 <?php
 declare(strict_types=1);
 
+function api_teacher_photos(PDO $db): never {
+    $actor=api_actor($db);
+    // Photos only, including historical authors; never expose profile details.
+    $q=$db->prepare('SELECT u.id,p.profile_image_url AS profileImageUrl FROM staff_users u JOIN teacher_profiles p ON p.staff_user_id=u.id WHERE u.campus_id=? AND p.profile_image_url IS NOT NULL');
+    $q->execute([(int)$actor['campus_id']]);
+    api_ok($q->fetchAll());
+}
+
 /** Permissions follow the actual service/date, not the teacher's latest roster. */
 function api_service_duty(PDO $db, array $actor, int $sid, ?int $classId = null, array $codes = []): bool {
     $q=$db->prepare('SELECT id,service_date,service_type FROM service_sessions WHERE id=? AND campus_id=?');
