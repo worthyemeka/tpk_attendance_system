@@ -44,9 +44,10 @@ try {
     $q=$db->prepare('UPDATE teacher_services SET starts_at=?,ends_at=? WHERE id=?');$q->execute([api_teacher_now()->modify('-5 minutes')->format('Y-m-d H:i:s'),api_teacher_now()->modify('+1 hour')->format('Y-m-d H:i:s'),$id]);
     smokeReject(fn()=>api_teacher_qr($db,$id),'QR_NOT_REQUIRED');$_GET=[];
     smokeCheck(smokeResult(fn()=>api_teacher_challenge($db,$id))['question']==='Diagnostic colour?','Button challenge failed');
-    $smokeInput=['answer'=>'wrong'];smokeReject(fn()=>api_teacher_signin($db,$id),'ANSWER_INCORRECT');
-    smokeCheck((int)$db->query('SELECT COUNT(*) FROM teacher_service_attendance')->fetchColumn()===0,'Wrong answer recorded attendance');
-    $smokeInput['answer']=' BLUE ';smokeResult(fn()=>api_teacher_signin($db,$id));
+    $db->prepare("UPDATE teacher_services SET question='',answer_hashes_json='[]' WHERE id=?")->execute([$id]);
+    $smokeInput=['attended'=>false];smokeReject(fn()=>api_teacher_signin($db,$id),'VALIDATION_ERROR');
+    smokeCheck((int)$db->query('SELECT COUNT(*) FROM teacher_service_attendance')->fetchColumn()===0,'Missing confirmation recorded attendance');
+    $smokeInput=['attended'=>true,'teacherId'=>999999];smokeResult(fn()=>api_teacher_signin($db,$id));
     smokeCheck(smokeResult(fn()=>api_teacher_signin($db,$id))['alreadySignedIn']===true,'Repeat sign-in was not idempotent');
     $db->exec("UPDATE teacher_services SET ends_at='2000-01-01 00:00:00'");
     $_GET=['month'=>api_teacher_now()->format('Y-m'),'serviceId'=>$id];$register=smokeResult(fn()=>api_teacher_attendance($db));
@@ -86,7 +87,7 @@ try {
     $smokeInput=['assignedTo'=>(int)$regular['id']];$other=array_values(array_filter($managed['cases'],fn($c)=>(int)$c['teacherId']!==(int)$regular['id']))[0];smokeResult(fn()=>api_teacher_welfare_case($db,(int)$other['id']));
     $smokeActor=$regular;$assigned=smokeResult(fn()=>api_teacher_attendance($db));foreach($assigned['cases'] as $row)smokeCheck(!array_key_exists('absenceReason',$row),'Ordinary follow-up assignee exposed private reason');
     $smokeActor=$owner;$_GET=['month'=>api_teacher_now()->format('Y-m')];$scheduled=smokeResult(fn()=>api_teacher_attendance($db));$linked=(int)$db->query('SELECT COUNT(*) FROM teacher_services WHERE service_session_id IS NOT NULL')->fetchColumn();smokeCheck($linked>0,'Sunday services not linked to configured sessions');
-    echo "PASS: MySQL service creation, all-active expectation, QR challenge, answer verification, repeat sign-in, absence and idempotent welfare queue.\n";
+    echo "PASS: MySQL service creation, all-active expectation, question-free self-confirmation, repeat sign-in, absence and idempotent welfare queue.\n";
     echo "PASS: scheduled Sunday linking, MDWK cutoff/idempotence, no Wednesday QR/question, private absence reasons and subunit-based welfare access.\n";
 } finally {
     if($db->inTransaction())$db->rollBack();

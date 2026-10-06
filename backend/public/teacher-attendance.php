@@ -77,13 +77,12 @@ function api_teacher_create_service(PDO $db): never {
     api_actor($db,true);api_error('USE_SUNDAY_SCHEDULE','Sunday services come from Sunday Schedule. MDWK is available automatically every Wednesday.',409);
 }
 function api_teacher_qr(PDO $db,int $id): never {
-    api_actor($db);api_error('QR_NOT_REQUIRED','Sunday attendance uses the sign-in button and today’s question. Wednesday uses attendance confirmation.',409);
+    api_actor($db);api_error('QR_NOT_REQUIRED','Sunday attendance uses the I’m here button. Wednesday uses attendance confirmation.',409);
 }
 function api_teacher_signin_window(array $service): void {
     if($service['kind']!=='SUNDAY')api_error('MDWK_NO_QUESTION','Use Wednesday attendance confirmation.',409);
     $now=api_teacher_now()->format('Y-m-d H:i:s');
     if($now<$service['starts_at']||$now>=$service['ends_at'])api_error('SIGNIN_CLOSED','Teacher sign-in is closed for this service.',409);
-    if(trim($service['question'])==='')api_error('QUESTION_REQUIRED','The Super Admin has not set this service’s question yet.',409);
 }
 function api_teacher_security(PDO $db,int $id): never {
     $actor=api_actor($db,true);api_teacher_attendance_ready($db);$v=api_input();
@@ -109,13 +108,11 @@ function api_teacher_challenge(PDO $db,int $id): never {
 function api_teacher_signin(PDO $db,int $id): never {
     $actor=api_actor($db);api_teacher_attendance_ready($db);$v=api_input();$db->beginTransaction();
     try{$service=api_teacher_service($db,$actor,$id,true);api_teacher_signin_window($service);
+    // The authenticated teacher confirms their own presence. A knowledge
+    // question is no longer required; identity, campus and time checks remain.
+    if(($v['attended']??null)!==true){$db->rollBack();api_error('VALIDATION_ERROR','Confirm that you are here for this service.',422);}
     $s=$db->prepare('SELECT checked_in_at FROM teacher_service_attendance WHERE service_id=? AND staff_user_id=?');$s->execute([$id,$actor['id']]);if($existing=$s->fetch()){ $db->commit();api_ok(['teacherName'=>$actor['name'],'checkedInAt'=>$existing['checked_in_at'],'alreadySignedIn'=>true]); }
-    $now=api_teacher_now();$stamp=$now->format('Y-m-d H:i:s');$s=$db->prepare('SELECT attempts,window_started_at FROM teacher_signin_attempts WHERE service_id=? AND staff_user_id=? FOR UPDATE');$s->execute([$id,$actor['id']]);$attempt=$s->fetch();$recent=$attempt&&$attempt['window_started_at']>$now->modify('-15 minutes')->format('Y-m-d H:i:s');
-    if($recent&&(int)$attempt['attempts']>=5){$db->rollBack();api_error('RATE_LIMITED','Too many answers. Wait 15 minutes, or speak to a service lead.',429);}
-    $count=$recent?(int)$attempt['attempts']+1:1;$window=$recent?$attempt['window_started_at']:$stamp;
-    $db->prepare('INSERT INTO teacher_signin_attempts(service_id,staff_user_id,attempts,window_started_at) VALUES(?,?,?,?) ON DUPLICATE KEY UPDATE attempts=VALUES(attempts),window_started_at=VALUES(window_started_at)')->execute([$id,$actor['id'],$count,$window]);
-    $answer=is_string($v['answer']??null)?api_teacher_answer($v['answer']):'';$valid=false;if(strlen($answer)<=100&&$answer!=='')foreach(json_decode($service['answer_hashes_json'],true)?:[] as $hash)if(password_verify($answer,$hash)){$valid=true;break;}
-    if(!$valid){$db->commit();api_error('ANSWER_INCORRECT','That answer does not match today’s question. Please check with the service lead.',422);}
+    $stamp=api_teacher_now()->format('Y-m-d H:i:s');
     $db->prepare('INSERT IGNORE INTO teacher_service_expected(service_id,staff_user_id) VALUES(?,?)')->execute([$id,$actor['id']]);$db->prepare('INSERT INTO teacher_service_attendance(service_id,staff_user_id,checked_in_at) VALUES(?,?,?)')->execute([$id,$actor['id'],$stamp]);api_audit($db,$actor,'TEACHER_SIGNED_IN','TeacherService',$id);$db->commit();
     }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}api_ok(['teacherName'=>$actor['name'],'checkedInAt'=>$stamp]);
 }
