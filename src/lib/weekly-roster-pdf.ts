@@ -1,5 +1,5 @@
 import { mediaUrl } from "./session";
-import { downloadTablePdf } from "./table-pdf";
+import { downloadTablePdf, loadPdfAvatar } from "./table-pdf";
 
 export type WeeklyAssignment = {id:number;userId:number;assignmentDate:string;serviceSessionId?:number|null;teacherName:string;dutyName:string;className?:string|null;serviceName?:string|null;profileImageUrl?:string|null;status:string};
 export function rosterWeek(date:string) {
@@ -18,6 +18,25 @@ export function weeklyRosterRows(items:WeeklyAssignment[],date:string) {
     group.roles.add([item.dutyName,item.className].filter(Boolean).join(" - "));groups.set(key,group);
   }
   return [...groups.values()].sort((a,b)=>a.item.assignmentDate.localeCompare(b.item.assignmentDate)||a.item.teacherName.localeCompare(b.item.teacherName));
+}
+export function monthlyRosterRows(items:WeeklyAssignment[],month:string) {
+  if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))throw new Error("Choose a valid roster month.");
+  const dates=[...new Set(items.filter(item=>item.assignmentDate.startsWith(`${month}-`)).map(item=>item.assignmentDate))].sort();
+  return dates.flatMap(date=>weeklyRosterRows(items,date));
+}
+export async function downloadMonthlyRosterPdf(items:WeeklyAssignment[],month:string,personal=false) {
+  const groups=monthlyRosterRows(items,month);
+  if(!groups.length)throw new Error("There are no responsibilities to download for this month.");
+  const images=new Map<number,ReturnType<typeof loadPdfAvatar>>();
+  groups.forEach(({item})=>{if(!images.has(item.userId))images.set(item.userId,loadPdfAvatar(item.profileImageUrl));});
+  const photos=await Promise.all(groups.map(({item})=>images.get(item.userId)!));
+  const monthLabel=new Intl.DateTimeFormat("en-NG",{month:"long",year:"numeric",timeZone:"UTC"}).format(new Date(`${month}-01T12:00:00Z`));
+  const name=personal?groups[0].item.teacherName.replace(/[^a-z0-9]+/gi,"-")+"-":"";
+  await downloadTablePdf(`TPK-${name}${month}-roster.pdf`,{
+    title:personal?"My Teaching Roster":"Monthly Team Roster",subtitle:`${monthLabel} | All dates in the selected view`,
+    columns:["Photo","Teacher","Date","Service","Assigned roles"],widths:[.45,1.6,.8,1.6,2.1],photos,avatarNames:groups.map(({item})=>item.teacherName),
+    rows:groups.map(({item,roles})=>["",item.teacherName,label(item.assignmentDate),item.serviceName||"Ministry activity",[...roles].join("; ")]),
+  });
 }
 function avatar(source?:string|null):Promise<{hex:string;width:number;height:number}|null> {
   return new Promise(resolve=>{

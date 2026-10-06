@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { FiCalendar, FiDownload } from "react-icons/fi";
 import { apiBase, authHeaders, mediaUrl, readTeacherSession } from "@/lib/session";
-import { downloadWeeklyRosterPdf, type WeeklyAssignment } from "@/lib/weekly-roster-pdf";
+import { downloadMonthlyRosterPdf, downloadWeeklyRosterPdf, type WeeklyAssignment } from "@/lib/weekly-roster-pdf";
 import { QuickDialog } from "./dashboard-quick-views";
 import { PickupDashboard } from "./pickup-dashboard";
 import { ChildDirectory } from "./child-directory";
@@ -46,9 +46,13 @@ function RosterAttentionDialog({month,close}: {month:string;close:()=>void}) {
     setDownloading(date);setError("");
     try{await downloadWeeklyRosterPdf(visible,date);}catch{setError("We couldn’t download this roster. Please try again.");}finally{setDownloading("");}
   }
+  async function downloadAll(){
+    setDownloading("ALL");setError("");
+    try{await downloadMonthlyRosterPdf(visible,month,scope==="MY");}catch{setError("We couldn’t download this month’s roster. Please try again.");}finally{setDownloading("");}
+  }
   return <QuickDialog wide title={title} close={close}>
     <p className="quick-intro">Your serving dates and responsibilities, without leaving the overview.</p>
-    <div className="attention-roster-toolbar"><div role="group" aria-label="Roster scope"><button type="button" aria-pressed={scope==="MY"} onClick={()=>setScope("MY")}>My responsibilities</button><button type="button" aria-pressed={scope==="TEAM"} onClick={()=>setScope("TEAM")}>Full team</button></div><span>{loading?"Loading…":`${visible.length} ${visible.length===1?"responsibility":"responsibilities"}`}</span></div>
+    <div className="attention-roster-toolbar"><div role="group" aria-label="Roster scope"><button type="button" disabled={Boolean(downloading)} aria-pressed={scope==="MY"} onClick={()=>setScope("MY")}>My responsibilities</button><button type="button" disabled={Boolean(downloading)} aria-pressed={scope==="TEAM"} onClick={()=>setScope("TEAM")}>Full team</button></div><span>{loading?"Loading…":`${visible.length} ${visible.length===1?"responsibility":"responsibilities"}`}</span><button type="button" className="attention-download-all" disabled={loading||Boolean(downloading)||!visible.length} onClick={()=>void downloadAll()}><FiDownload/>{downloading==="ALL"?"Downloading…":"Download all dates · PDF"}</button></div>
     {error&&<div className="quick-error" role="alert">{error}<button type="button" onClick={()=>setRetry(value=>value+1)}>Try again</button></div>}
     {loading?<p className="quick-empty" role="status">Loading your roster…</p>:!dates.length&&!error?<p className="quick-empty">{scope==="MY"?"You have no responsibilities assigned for this month.":"No assignments have been published for this month."}</p>:<div className="attention-roster-dates">{dates.map(date=>{
       const entries=visible.filter(assignment=>assignment.assignmentDate===date);

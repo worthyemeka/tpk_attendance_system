@@ -1,7 +1,7 @@
 // Uses installed TypeScript to exercise the actual exporter, without connecting to an API.
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),ts=require('typescript');
 require.extensions['.ts']=(module,file)=>module._compile(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,file);
-const {rosterWeek,weeklyRosterRows}=require('../src/lib/weekly-roster-pdf.ts');
+const {rosterWeek,weeklyRosterRows,monthlyRosterRows}=require('../src/lib/weekly-roster-pdf.ts');
 const {createTablePdf}=require('../src/lib/table-pdf.ts');
 assert.deepEqual(rosterWeek('2026-10-08'),{start:'2026-10-04',end:'2026-10-10'});
 assert.deepEqual(rosterWeek('2027-01-01'),{start:'2026-12-27',end:'2027-01-02'});
@@ -12,5 +12,10 @@ assert.ok(rows.every(row=>row.item.assignmentDate==='2026-10-04'));
 assert.deepEqual(weeklyRosterRows([item(1,'2026-10-04','Attendance'),item(2,'2026-10-08','Prayers')],'2026-10-08').map(row=>row.item.assignmentDate),['2026-10-08']);
 assert.equal(weeklyRosterRows([item(1,'2026-10-08','Prayers')],'2026-10-04').length,0);
 assert.ok(rows.some(row=>row.item.serviceSessionId===102));
+const monthly=monthlyRosterRows([item(1,'2026-10-04','Attendance'),item(2,'2026-10-04','Prayers'),item(3,'2026-10-18','Assembly'),item(4,'2026-11-01','Attendance'),item(5,'2026-10-25','Attendance','CANCELLED'),item(6,'2026-10-18','Prayers','REPLACED'),item(7,'2026-10-18','First Service','ASSIGNED',1,102)],'2026-10');
+assert.equal(monthly.length,3);
+assert.deepEqual(monthly.map(group=>group.item.assignmentDate),['2026-10-04','2026-10-18','2026-10-18']);
+assert.equal([...monthly[0].roles].join(';'),'Attendance;Prayers');
+assert.throws(()=>monthlyRosterRows([],'2026-13'));
 const pdf=createTablePdf({title:'Weekly Roster',columns:['Teacher','Assigned roles'],rows:Array.from({length:30},()=>['Sample Teacher','Attendance; Head of Service']),photos:Array(30).fill(null)});
 pdf.text().then(text=>{assert.ok(text.startsWith('%PDF-1.4'));assert.ok(text.includes('Head of Service'));assert.ok(text.includes('/Count 4'));console.log('PASS: exact-date exports, stacked roles, cancelled exclusions, separate services and multipage PDF');});
