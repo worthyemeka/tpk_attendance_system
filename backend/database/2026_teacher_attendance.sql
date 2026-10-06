@@ -21,7 +21,8 @@ CREATE TABLE IF NOT EXISTS teacher_service_expected (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 CREATE TABLE IF NOT EXISTS teacher_service_attendance (
  service_id INT UNSIGNED NOT NULL, staff_user_id INT UNSIGNED NOT NULL,
- checked_in_at DATETIME NOT NULL, PRIMARY KEY(service_id,staff_user_id),
+ checked_in_at DATETIME NOT NULL,
+ attendance_mode VARCHAR(12) NULL, PRIMARY KEY(service_id,staff_user_id),
  FOREIGN KEY(service_id) REFERENCES teacher_services(id), FOREIGN KEY(staff_user_id) REFERENCES staff_users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 CREATE TABLE IF NOT EXISTS teacher_signin_attempts (

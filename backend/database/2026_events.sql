@@ -45,6 +45,19 @@ CREATE TABLE IF NOT EXISTS event_volunteers (
  FOREIGN KEY(event_id) REFERENCES ministry_events(id),
  FOREIGN KEY(staff_user_id) REFERENCES staff_users(id)
 );
+CREATE TABLE IF NOT EXISTS event_volunteer_assignments (
+ id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ event_id INT UNSIGNED NOT NULL,
+ staff_user_id INT UNSIGNED NOT NULL,
+ session_id INT UNSIGNED NULL,
+ group_id INT UNSIGNED NULL,
+ responsibility VARCHAR(120) NOT NULL,
+ INDEX event_roster(event_id,session_id),
+ FOREIGN KEY(event_id) REFERENCES ministry_events(id),
+ FOREIGN KEY(staff_user_id) REFERENCES staff_users(id),
+ FOREIGN KEY(session_id) REFERENCES event_sessions(id),
+ FOREIGN KEY(group_id) REFERENCES event_groups(id)
+);
 CREATE TABLE IF NOT EXISTS event_registrations (
  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
  event_id INT UNSIGNED NOT NULL,

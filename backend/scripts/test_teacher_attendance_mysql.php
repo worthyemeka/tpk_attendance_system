@@ -42,9 +42,9 @@ try {
     $q=$db->prepare("SELECT COUNT(*) FROM staff_users WHERE campus_id=? AND is_active=1 AND account_status='VERIFIED' AND team_status<>'INACTIVE'");$q->execute([$owner['campus_id']]);$expected=(int)$q->fetchColumn();
     smokeCheck((int)$db->query('SELECT COUNT(*) FROM teacher_service_expected')->fetchColumn()===$expected,'Not every active teacher was expected');
     $q=$db->prepare('UPDATE teacher_services SET starts_at=?,ends_at=? WHERE id=?');$q->execute([api_teacher_now()->modify('-5 minutes')->format('Y-m-d H:i:s'),api_teacher_now()->modify('+1 hour')->format('Y-m-d H:i:s'),$id]);
-    $qr=smokeResult(fn()=>api_teacher_qr($db,$id));$_GET=['token'=>$qr['token']];
-    smokeCheck(smokeResult(fn()=>api_teacher_challenge($db,$id))['question']==='Diagnostic colour?','QR challenge failed');
-    $smokeInput=['token'=>$qr['token'],'answer'=>'wrong'];smokeReject(fn()=>api_teacher_signin($db,$id),'ANSWER_INCORRECT');
+    smokeReject(fn()=>api_teacher_qr($db,$id),'QR_NOT_REQUIRED');$_GET=[];
+    smokeCheck(smokeResult(fn()=>api_teacher_challenge($db,$id))['question']==='Diagnostic colour?','Button challenge failed');
+    $smokeInput=['answer'=>'wrong'];smokeReject(fn()=>api_teacher_signin($db,$id),'ANSWER_INCORRECT');
     smokeCheck((int)$db->query('SELECT COUNT(*) FROM teacher_service_attendance')->fetchColumn()===0,'Wrong answer recorded attendance');
     $smokeInput['answer']=' BLUE ';smokeResult(fn()=>api_teacher_signin($db,$id));
     smokeCheck(smokeResult(fn()=>api_teacher_signin($db,$id))['alreadySignedIn']===true,'Repeat sign-in was not idempotent');
@@ -73,10 +73,11 @@ try {
     $values=api_teacher_service_values($smokeInput);$db->prepare('INSERT IGNORE INTO teacher_services(campus_id,kind,name,starts_at,ends_at,question,answer_hashes_json,created_by) VALUES(?,?,?,?,?,?,?,?)')->execute(array_merge([$owner['campus_id']],$values,[$owner['id']]));$q=$db->prepare("SELECT id FROM teacher_services WHERE campus_id=? AND kind='MDWK' AND starts_at=?");$q->execute([$owner['campus_id'],$values[2]]);$wid=(int)$q->fetchColumn();api_teacher_expected($db,$wid,(int)$owner['campus_id']);
     $q=$db->prepare('SELECT COUNT(*) FROM teacher_service_expected WHERE service_id=?');$q->execute([$wid]);
     smokeCheck((int)$q->fetchColumn()===$expected,'MDWK does not expect every active teacher');
-    $smokeInput=['attended'=>true];$date=substr($values[2],0,10);$zone=new DateTimeZone('Africa/Lagos');
+    $smokeInput=['attendanceMode'=>'ONLINE','attended'=>true];$date=substr($values[2],0,10);$zone=new DateTimeZone('Africa/Lagos');
     smokeResult(fn()=>api_teacher_confirm_mdwk($db,$wid,new DateTimeImmutable($date.' 20:59:59',$zone)));smokeResult(fn()=>api_teacher_confirm_mdwk($db,$wid,new DateTimeImmutable($date.' 20:59:59',$zone)));smokeReject(fn()=>api_teacher_confirm_mdwk($db,$wid,new DateTimeImmutable($date.' 21:00:00',$zone)),'SIGNIN_CLOSED');
     smokeCheck((int)$db->query('SELECT COUNT(*) FROM teacher_service_attendance WHERE service_id='.$wid)->fetchColumn()===1,'Repeated Wednesday confirmation duplicated');
-    smokeReject(fn()=>api_teacher_qr($db,$wid),'MDWK_NO_QR');smokeReject(fn()=>api_teacher_security($db,$wid),'MDWK_NO_QUESTION');
+    smokeCheck($db->query('SELECT attendance_mode FROM teacher_service_attendance WHERE service_id='.$wid)->fetchColumn()==='ONLINE','MDWK modality was not stored');
+    smokeReject(fn()=>api_teacher_qr($db,$wid),'QR_NOT_REQUIRED');smokeReject(fn()=>api_teacher_security($db,$wid),'MDWK_NO_QUESTION');
     $q=$db->prepare("SELECT id,campus_id,name,access_level FROM staff_users WHERE id<>? AND campus_id=? AND is_active=1 AND account_status='VERIFIED' AND team_status<>'INACTIVE' ORDER BY id LIMIT 1");$q->execute([$owner['id'],$owner['campus_id']]);$regular=$q->fetch();$regular['access_level']='TPK_ADMIN';
     $db->prepare('DELETE FROM staff_sub_unit_assignments WHERE staff_user_id=?')->execute([$regular['id']]);
     $db->prepare("UPDATE teacher_services SET starts_at='2000-01-05 00:00:00',ends_at='2000-01-05 21:00:00' WHERE id=?")->execute([$wid]);$smokeActor=$regular;$smokeInput=['reason'=>'Private diagnostic reason'];smokeResult(fn()=>api_teacher_absence_reason($db,$wid));
