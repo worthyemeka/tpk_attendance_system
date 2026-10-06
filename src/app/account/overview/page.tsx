@@ -326,7 +326,7 @@ export default function AccountOverview() {
                       <div
                         key={`${item.assignmentDate}-${item.serviceSessionId}`}
                       >
-                        <i><FiCalendar /></i><section><small>Sunday · {new Intl.DateTimeFormat("en-NG", {day:"numeric",month:"short",year:"numeric",timeZone:"UTC"}).format(new Date(`${item.assignmentDate}T12:00:00Z`))}</small><b>{item.serviceName || "Scheduled service"}</b><span>{item.duties} assignments{item.teachers != null ? ` · ${item.teachers} teachers` : ""}</span></section><Link href={`/account/roster?date=${item.assignmentDate}`} aria-label={`View roster for ${item.assignmentDate}`}><FiChevronRight /></Link>
+                        <i><FiCalendar /></i><section><small>Sunday · {new Intl.DateTimeFormat("en-NG", {day:"numeric",month:"short",year:"numeric",timeZone:"UTC"}).format(new Date(`${item.assignmentDate}T12:00:00Z`))}</small><b>{item.serviceName || "Scheduled service"}</b><span>{item.teachers != null ? `${item.teachers} teacher${Number(item.teachers) === 1 ? "" : "s"} assigned` : "Staffing count unavailable"}</span></section><Link href={`/account/roster?date=${item.assignmentDate}`} aria-label={`View roster for ${item.assignmentDate}`}><FiChevronRight /></Link>
                       </div>
                     ))}
                   </div>

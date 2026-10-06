@@ -437,9 +437,9 @@ export function ChildDirectory({needsClassAssignment=false}: {needsClassAssignme
             <h1>Children</h1>
             <p>Find a child, contact their guardian, or review their attendance.</p>
           </div>
-          <Link className="add-child" href="/account/check-in/assisted">
-            <b>+</b>Add Child
-          </Link>
+          {session?.accessLevel === "TPK_SUPER_ADMIN" && <Link className="add-child" href="/account/children/register">
+            <b>+</b>Register children
+          </Link>}
         </header>
         <section className="child-summary">
           <Card

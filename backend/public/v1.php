@@ -9,6 +9,7 @@ require_once __DIR__ . '/assembly-context.php';
 require_once __DIR__ . '/classroom-interactions.php';
 require_once __DIR__ . '/assembly-media.php';
 require_once __DIR__ . '/sunday-schedule.php';
+require_once __DIR__ . '/admin-registration.php';
 
 function api_ok(mixed $data, int $status = 200, ?array $meta = null): never {
     http_response_code($status); header('Content-Type: application/json; charset=utf-8');
@@ -1042,6 +1043,8 @@ try { $db=api_db();$path=api_path();$method=api_method();
     if($method==='GET'&&$path==='/api/v1/children')api_list_children($db);
     if($method==='GET'&&$path==='/api/v1/children/summary')api_children_summary($db);
     if($method==='GET'&&$path==='/api/v1/children/attendance-report')api_children_attendance_report($db);
+    if($method==='POST'&&$path==='/api/v1/children/registrations')api_register_children($db);
+    if($method==='GET'&&$path==='/api/v1/children/registrations/family')api_registration_family_lookup($db);
     if($method==='POST'&&$path==='/api/v1/children')api_create_child($db);
     if($method==='GET'&&preg_match('#^/api/v1/children/(\d+)/attendance$#',$path,$m))api_child_attendance($db,(int)$m[1]);
     if($method==='GET'&&preg_match('#^/api/v1/children/(\d+)/follow-ups$#',$path,$m))api_child_followups($db,(int)$m[1]);
