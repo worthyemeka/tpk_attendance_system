@@ -4,6 +4,7 @@ import Link from "next/link";
 import { AttentionPanel } from "@/components/attention-panel";
 import { EventHighlights } from "@/components/events-workspace";
 import { TeacherQuickView, type TeacherQuickTarget } from "@/components/dashboard-quick-views";
+import { MdwkAttendanceCard } from "@/components/mdwk-attendance-card";
 import { useEffect, useState } from "react";
 import {
   FiCheckCircle,
@@ -164,6 +165,7 @@ export default function AccountOverview() {
         </div>
       </header>
       <EventHighlights />
+      <MdwkAttendanceCard />
       {personalAssignments.length > 0 && (
         <section className="panel assignment-card">
           <div>

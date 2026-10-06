@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 function api_teacher_attendance_ready(PDO $db): void {
-    foreach (['teacher_services','teacher_service_expected','teacher_service_attendance','teacher_welfare_leads','teacher_signin_attempts','teacher_welfare_cases','teacher_welfare_events'] as $table)
+    foreach (['teacher_services','teacher_service_expected','teacher_service_attendance','teacher_service_absence_reasons','teacher_signin_attempts','teacher_welfare_cases','teacher_welfare_events'] as $table)
         if (!api_table_exists($db,$table)) api_error('TEACHER_ATTENDANCE_NOT_READY','Teacher check-in needs the backend and database update before it can be used.',503);
 }
 function api_teacher_now(): DateTimeImmutable { return new DateTimeImmutable('now',new DateTimeZone('Africa/Lagos')); }
@@ -14,13 +14,35 @@ function api_teacher_service_values(array $v): array {
     $start=(string)($v['startTime']??'');$end=(string)($v['endTime']??'');
     if (!preg_match('/^([01]\d|2[0-3]):[0-5]\d$/',$start)||!preg_match('/^([01]\d|2[0-3]):[0-5]\d$/',$end)||$end<=$start) api_error('VALIDATION_ERROR','Set a start and later closing time on the same service day.',422);
     $name=trim((string)($v['name']??''));$question=trim((string)($v['question']??''));$answers=$v['answers']??[];
+    if($kind==='MDWK') return [$kind,'MDWK',$date.' 00:00:00',$date.' 21:00:00','','[]'];
     if($name===''||strlen($name)>150||$question===''||strlen($question)>250||!is_array($answers)||count($answers)<1||count($answers)>5)api_error('VALIDATION_ERROR','Provide a name, today’s question and 1–5 accepted answers.',422);
     $hashes=[];foreach($answers as $answer){if(!is_string($answer)||api_teacher_answer($answer)===''||strlen($answer)>100)api_error('VALIDATION_ERROR','Accepted answers must be 1–100 characters.',422);$hashes[]=password_hash(api_teacher_answer($answer),PASSWORD_DEFAULT);}
     return [$kind,$name,$date.' '.$start.':00',$date.' '.$end.':00',$question,json_encode($hashes)];
 }
 function api_teacher_welfare_manager(PDO $db,array $actor): bool {
     if($actor['access_level']==='TPK_SUPER_ADMIN')return true;
-    $s=$db->prepare('SELECT 1 FROM teacher_welfare_leads WHERE staff_user_id=? AND campus_id=?');$s->execute([$actor['id'],$actor['campus_id']]);return(bool)$s->fetchColumn();
+    $s=$db->prepare("SELECT 1 FROM staff_sub_unit_assignments assignment JOIN ministry_sub_units unit ON unit.id=assignment.sub_unit_id JOIN staff_users staff ON staff.id=assignment.staff_user_id WHERE staff.id=? AND staff.campus_id=? AND unit.campus_id=staff.campus_id AND unit.name='Teachers Welfare' AND unit.is_active=1 AND staff.is_active=1 AND staff.account_status='VERIFIED' AND staff.team_status<>'INACTIVE' LIMIT 1");$s->execute([$actor['id'],$actor['campus_id']]);return(bool)$s->fetchColumn();
+}
+// Use the existing Sunday schedule. Wednesdays are a simple day-level confirmation.
+// Never backfill past services: that would invent historical absences.
+function api_teacher_sync_services(PDO $db,array $actor,string $start,string $end): void {
+    $now=api_teacher_now();$today=$now->format('Y-m-d');$zone=new DateTimeZone('Africa/Lagos');
+    $from=max($start,$today);if($from>=$end)return;
+    for($day=new DateTimeImmutable($from,$zone);$day->format('Y-m-d')<$end;$day=$day->modify('+1 day')){
+        $date=$day->format('Y-m-d');
+        if($day->format('w')==='0')tpk_ensure_sunday_sessions($db,(int)$actor['campus_id'],$day);
+        if($day->format('w')==='3'){
+            $db->prepare("INSERT IGNORE INTO teacher_services(campus_id,kind,name,starts_at,ends_at,question,answer_hashes_json,created_by) VALUES(?,'MDWK','MDWK',?,?,'','[]',?)")->execute([$actor['campus_id'],$date.' 00:00:00',$date.' 21:00:00',$actor['id']]);
+        }
+    }
+    $s=$db->prepare("SELECT id,name,starts_at,ends_at FROM service_sessions WHERE campus_id=? AND service_date>=? AND service_date<? AND DAYOFWEEK(service_date)=1 AND ends_at IS NOT NULL ORDER BY starts_at");$s->execute([$actor['campus_id'],$from,$end]);
+    foreach($s->fetchAll() as $session){
+        $db->prepare("INSERT IGNORE INTO teacher_services(campus_id,kind,name,starts_at,ends_at,question,answer_hashes_json,created_by,service_session_id) VALUES(?,'SUNDAY',?,?,?,'','[]',?,?)")->execute([$actor['campus_id'],$session['name'],$session['starts_at'],$session['ends_at'],$actor['id'],$session['id']]);
+        // Keep unstarted sessions in step with a changed Sunday schedule.
+        $db->prepare("UPDATE teacher_services SET name=?,starts_at=?,ends_at=? WHERE campus_id=? AND service_session_id=? AND starts_at>?")->execute([$session['name'],$session['starts_at'],$session['ends_at'],$actor['campus_id'],$session['id'],$now->format('Y-m-d H:i:s')]);
+    }
+    $s=$db->prepare('SELECT id FROM teacher_services WHERE campus_id=? AND starts_at>=? AND starts_at<? AND ends_at>?');$s->execute([$actor['campus_id'],$start,$end,$now->format('Y-m-d H:i:s')]);
+    foreach($s->fetchAll() as $row)api_teacher_expected($db,(int)$row['id'],(int)$actor['campus_id']);
 }
 function api_teacher_service(PDO $db,array $actor,int $id,bool $lock=false): array {
     $s=$db->prepare('SELECT * FROM teacher_services WHERE id=? AND campus_id=?'.($lock?' FOR UPDATE':''));$s->execute([$id,$actor['campus_id']]);$row=$s->fetch();
@@ -38,29 +60,30 @@ function api_teacher_attendance(PDO $db): never {
     $month=(string)($_GET['month']??api_teacher_now()->format('Y-m'));
     if(!preg_match('/^\d{4}-(0[1-9]|1[0-2])$/',$month))api_error('VALIDATION_ERROR','Choose a valid month.',422);
     $start=$month.'-01';$end=(new DateTimeImmutable($start))->modify('+1 month')->format('Y-m-d');
-    $s=$db->prepare('SELECT id,kind,name,starts_at AS startsAt,ends_at AS endsAt FROM teacher_services WHERE campus_id=? AND starts_at>=? AND starts_at<? ORDER BY starts_at DESC');$s->execute([$actor['campus_id'],$start,$end]);$services=$s->fetchAll();
+    api_teacher_sync_services($db,$actor,$start,$end);
+    $s=$db->prepare("SELECT id,kind,name,starts_at AS startsAt,ends_at AS endsAt,(question<>'') AS hasQuestion FROM teacher_services WHERE campus_id=? AND starts_at>=? AND starts_at<? ORDER BY starts_at");$s->execute([$actor['campus_id'],$start,$end]);$services=$s->fetchAll();
     $now=api_teacher_now()->format('Y-m-d H:i:s');foreach($services as $row)if($now<$row['endsAt'])api_teacher_expected($db,(int)$row['id'],(int)$actor['campus_id']);
     api_teacher_queue_welfare($db,$actor);
     $id=(int)($_GET['serviceId']??0);$rows=[];
     if($id){$service=api_teacher_service($db,$actor,$id);$s=$db->prepare("SELECT staff.id,staff.name,attendance.checked_in_at AS checkedInAt,CASE WHEN attendance.staff_user_id IS NOT NULL THEN 'PRESENT' WHEN ? >= service.ends_at THEN 'ABSENT' ELSE 'AWAITING' END AS status FROM teacher_service_expected expected JOIN teacher_services service ON service.id=expected.service_id JOIN staff_users staff ON staff.id=expected.staff_user_id LEFT JOIN teacher_service_attendance attendance ON attendance.service_id=expected.service_id AND attendance.staff_user_id=expected.staff_user_id WHERE expected.service_id=? AND service.campus_id=? ORDER BY staff.name");$s->execute([$now,$id,$actor['campus_id']]);$rows=$s->fetchAll();}
     $s=$db->prepare("SELECT cases.id,cases.service_id AS serviceId,cases.staff_user_id AS teacherId,teacher.name AS teacherName,cases.assigned_to AS assignedTo,assignee.name AS assignedName,cases.status,cases.note,service.name AS serviceName,DATE(service.starts_at) AS serviceDate,profile.whatsapp_number AS phone FROM teacher_welfare_cases cases JOIN teacher_services service ON service.id=cases.service_id JOIN staff_users teacher ON teacher.id=cases.staff_user_id LEFT JOIN staff_users assignee ON assignee.id=cases.assigned_to LEFT JOIN teacher_profiles profile ON profile.staff_user_id=teacher.id WHERE service.campus_id=? AND service.starts_at>=? AND service.starts_at<?".($manager?'':' AND cases.assigned_to=?').' ORDER BY service.starts_at DESC,teacher.name');$params=[$actor['campus_id'],$start,$end];if(!$manager)$params[]=$actor['id'];$s->execute($params);$cases=$s->fetchAll();
-    $teachers=[];$leads=[];if($manager){$s=$db->prepare("SELECT id,name FROM staff_users WHERE campus_id=? AND is_active=1 AND account_status='VERIFIED' AND team_status<>'INACTIVE' ORDER BY name");$s->execute([$actor['campus_id']]);$teachers=$s->fetchAll();}
-    if($super){$s=$db->prepare('SELECT staff_user_id AS id FROM teacher_welfare_leads WHERE campus_id=?');$s->execute([$actor['campus_id']]);$leads=$s->fetchAll();}
-    api_ok(['services'=>$services,'items'=>$rows,'cases'=>$cases,'teachers'=>$teachers,'leads'=>$leads,'canManage'=>$manager,'canConfigure'=>$super,'serverTime'=>$now]);
+    // Reasons never enter the public register or an ordinary assignee's response.
+    if($manager){$s=$db->prepare('SELECT reason FROM teacher_service_absence_reasons WHERE service_id=? AND staff_user_id=?');foreach($cases as &$case){$s->execute([$case['serviceId'],$case['teacherId']]);$case['absenceReason']=$s->fetchColumn()?:null;}unset($case);}
+    $teachers=[];if($manager){$s=$db->prepare("SELECT id,name FROM staff_users WHERE campus_id=? AND is_active=1 AND account_status='VERIFIED' AND team_status<>'INACTIVE' ORDER BY name");$s->execute([$actor['campus_id']]);$teachers=$s->fetchAll();}
+    api_ok(['services'=>$services,'items'=>$rows,'cases'=>$cases,'teachers'=>$teachers,'canManage'=>$manager,'canConfigure'=>$super,'serverTime'=>$now]);
 }
 function api_teacher_create_service(PDO $db): never {
-    $actor=api_actor($db,true);api_teacher_attendance_ready($db);[$kind,$name,$start,$end,$question,$hashes]=api_teacher_service_values(api_input());
-    if($end<=api_teacher_now()->format('Y-m-d H:i:s'))api_error('VALIDATION_ERROR','Do not create an already-finished attendance service.',422);
-    $db->beginTransaction();try{$db->prepare('INSERT INTO teacher_services(campus_id,kind,name,starts_at,ends_at,question,answer_hashes_json,created_by) VALUES(?,?,?,?,?,?,?,?)')->execute([$actor['campus_id'],$kind,$name,$start,$end,$question,$hashes,$actor['id']]);$id=(int)$db->lastInsertId();api_teacher_expected($db,$id,(int)$actor['campus_id']);api_audit($db,$actor,'TEACHER_SERVICE_CREATED','TeacherService',$id);$db->commit();}catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}api_ok(['id'=>$id],201);
+    api_actor($db,true);api_error('USE_SUNDAY_SCHEDULE','Sunday services come from Sunday Schedule. MDWK is available automatically every Wednesday.',409);
 }
 function api_teacher_qr(PDO $db,int $id): never {
     $actor=api_actor($db);api_teacher_attendance_ready($db);if(!api_teacher_welfare_manager($db,$actor))api_error('FORBIDDEN','Only a Teacher Welfare Lead or Super Admin may display the service QR.',403);
-    $db->beginTransaction();try{$service=api_teacher_service($db,$actor,$id,true);$now=api_teacher_now();if($now->format('Y-m-d H:i:s')<$service['starts_at']||$now->format('Y-m-d H:i:s')>=$service['ends_at']){ $db->rollBack();api_error('SIGNIN_CLOSED','The QR is available only while this service’s sign-in window is open.',409); }
+    $db->beginTransaction();try{$service=api_teacher_service($db,$actor,$id,true);if($service['kind']!=='SUNDAY')api_error('MDWK_NO_QR','Wednesday uses the confirmation button on Overview, not a QR.',409);if(!$service['question'])api_error('QUESTION_REQUIRED','Set today’s question before displaying the Sunday QR.',409);$now=api_teacher_now();if($now->format('Y-m-d H:i:s')<$service['starts_at']||$now->format('Y-m-d H:i:s')>=$service['ends_at']){ $db->rollBack();api_error('SIGNIN_CLOSED','The QR is available only while this service’s sign-in window is open.',409); }
     $token=bin2hex(random_bytes(32));$expires=min($now->modify('+5 minutes')->format('Y-m-d H:i:s'),$service['ends_at']);$db->prepare('UPDATE teacher_services SET qr_hash=?,qr_expires_at=? WHERE id=?')->execute([hash('sha256',$token),$expires,$id]);api_audit($db,$actor,'TEACHER_QR_ROTATED','TeacherService',$id);$db->commit();}catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}api_ok(['token'=>$token,'serviceId'=>$id,'expiresAt'=>$expires]);
 }
 function api_teacher_security(PDO $db,int $id): never {
     $actor=api_actor($db,true);api_teacher_attendance_ready($db);$v=api_input();
     $service=api_teacher_service($db,$actor,$id);
+    if($service['kind']!=='SUNDAY')api_error('MDWK_NO_QUESTION','Wednesday does not use a security question.',409);
     // Reuse strict question/answer validation without exposing saved answer hashes.
     $date=substr($service['starts_at'],0,10);
     $values=api_teacher_service_values(['kind'=>$service['kind'],'date'=>$date,'startTime'=>substr($service['starts_at'],11,5),'endTime'=>substr($service['ends_at'],11,5),'name'=>$service['name'],'question'=>$v['question']??'','answers'=>$v['answers']??[]]);
@@ -69,6 +92,7 @@ function api_teacher_security(PDO $db,int $id): never {
     api_audit($db,$actor,'TEACHER_SECURITY_QUESTION_UPDATED','TeacherService',$id);$db->commit();}catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}api_ok(['saved'=>true]);
 }
 function api_teacher_valid_qr(array $service,string $token): void {
+    if($service['kind']!=='SUNDAY')api_error('MDWK_NO_QR','Use the Wednesday confirmation button on Overview.',409);
     $now=api_teacher_now()->format('Y-m-d H:i:s');
     if($now<$service['starts_at']||$now>=$service['ends_at'])api_error('SIGNIN_CLOSED','Teacher sign-in is closed for this service.',409);
     if(!preg_match('/^[a-f0-9]{64}$/',$token)||empty($service['qr_hash'])||empty($service['qr_expires_at'])||$now>=$service['qr_expires_at']||!hash_equals($service['qr_hash'],hash('sha256',$token)))api_error('QR_EXPIRED','Scan the current church QR. This code is expired or has been replaced.',422);
@@ -91,9 +115,46 @@ function api_teacher_signin(PDO $db,int $id): never {
     }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}api_ok(['teacherName'=>$actor['name'],'checkedInAt'=>$stamp]);
 }
 function api_teacher_welfare_lead(PDO $db,int $teacherId): never {
-    $actor=api_actor($db,true);api_teacher_attendance_ready($db);$v=api_input();if(!is_bool($v['enabled']??null))api_error('VALIDATION_ERROR','Choose whether to appoint this lead.',422);
-    $s=$db->prepare("SELECT id FROM staff_users WHERE id=? AND campus_id=? AND is_active=1 AND account_status='VERIFIED' AND team_status<>'INACTIVE'");$s->execute([$teacherId,$actor['campus_id']]);if(!$s->fetch())api_error('TEACHER_NOT_FOUND','Choose an active teacher from this campus.',404);
-    if($v['enabled'])$db->prepare('INSERT INTO teacher_welfare_leads(staff_user_id,campus_id,appointed_by) VALUES(?,?,?) ON DUPLICATE KEY UPDATE appointed_by=VALUES(appointed_by)')->execute([$teacherId,$actor['campus_id'],$actor['id']]);else $db->prepare('DELETE FROM teacher_welfare_leads WHERE staff_user_id=? AND campus_id=?')->execute([$teacherId,$actor['campus_id']]);api_audit($db,$actor,$v['enabled']?'WELFARE_LEAD_APPOINTED':'WELFARE_LEAD_REMOVED','StaffUser',$teacherId);api_ok(['saved'=>true]);
+    api_actor($db,true);api_error('USE_SUB_UNIT','Welfare access comes from the Teachers Welfare subunit in Team.',409);
+}
+function api_teacher_mdwk_open(array $service,?DateTimeImmutable $now=null): bool {
+    $now=$now??api_teacher_now();$date=substr($service['starts_at'],0,10);
+    return $service['kind']==='MDWK'&&$now->format('Y-m-d')===$date&&$now->format('w')==='3'&&$now->format('H:i:s')<'21:00:00';
+}
+function api_teacher_my_mdwk(PDO $db): never {
+    $actor=api_actor($db);api_teacher_attendance_ready($db);$now=api_teacher_now();
+    $start=$now->format('Y-m-01');$end=$now->modify('first day of next month')->format('Y-m-d');
+    api_teacher_sync_services($db,$actor,$start,$end);api_teacher_queue_welfare($db,$actor);
+    $s=$db->prepare("SELECT service.id,service.name,service.starts_at AS startsAt,service.ends_at AS endsAt,attendance.checked_in_at AS checkedInAt,reason.reason FROM teacher_services service JOIN teacher_service_expected expected ON expected.service_id=service.id AND expected.staff_user_id=? LEFT JOIN teacher_service_attendance attendance ON attendance.service_id=service.id AND attendance.staff_user_id=expected.staff_user_id LEFT JOIN teacher_service_absence_reasons reason ON reason.service_id=service.id AND reason.staff_user_id=expected.staff_user_id WHERE service.campus_id=? AND service.kind='MDWK' AND service.starts_at>=? AND service.starts_at<? ORDER BY service.starts_at DESC");
+    // Own reasons only. Do not expose them via register, audit metadata or case notes.
+    $s->execute([$actor['id'],$actor['campus_id'],$now->modify('-35 days')->format('Y-m-d'),$end]);$rows=$s->fetchAll();
+    foreach($rows as &$row){$row['canConfirm']=api_teacher_mdwk_open(['kind'=>'MDWK','starts_at'=>$row['startsAt']],$now)&&!$row['checkedInAt'];$row['canExplain']=$row['endsAt']<=$now->format('Y-m-d H:i:s')&&!$row['checkedInAt'];}unset($row);
+    api_ok(['services'=>$rows,'serverTime'=>$now->format('Y-m-d H:i:s')]);
+}
+function api_teacher_confirm_mdwk(PDO $db,int $id,?DateTimeImmutable $now=null): never {
+    $actor=api_actor($db);api_teacher_attendance_ready($db);$v=api_input();
+    $now=$now??api_teacher_now();
+    if(($v['attended']??null)!==true)api_error('VALIDATION_ERROR','Confirm that you attended Wednesday service.',422);
+    $db->beginTransaction();try{
+        $service=api_teacher_service($db,$actor,$id,true);
+        if(!api_teacher_mdwk_open($service,$now))api_error('SIGNIN_CLOSED','Wednesday confirmation closes at 9pm Lagos time. You can still leave a private absence reason.',409);
+        $s=$db->prepare('SELECT 1 FROM teacher_service_expected WHERE service_id=? AND staff_user_id=?');$s->execute([$id,$actor['id']]);if(!$s->fetchColumn())api_error('FORBIDDEN','You are not on this service’s teacher register.',403);
+        $stamp=$now->format('Y-m-d H:i:s');
+        $db->prepare('INSERT IGNORE INTO teacher_service_attendance(service_id,staff_user_id,checked_in_at) VALUES(?,?,?)')->execute([$id,$actor['id'],$stamp]);
+        api_audit($db,$actor,'TEACHER_MDWK_CONFIRMED','TeacherService',$id);$db->commit();
+    }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}api_ok(['confirmed'=>true]);
+}
+function api_teacher_absence_reason(PDO $db,int $id): never {
+    $actor=api_actor($db);api_teacher_attendance_ready($db);$v=api_input();$reason=trim((string)($v['reason']??''));
+    if(strlen($reason)<2||strlen($reason)>4000)api_error('VALIDATION_ERROR','Add a reason between 2 and 4,000 characters.',422);
+    $db->beginTransaction();try{
+        $service=api_teacher_service($db,$actor,$id,true);
+        if($service['kind']!=='MDWK'||api_teacher_now()->format('Y-m-d H:i:s')<substr($service['starts_at'],0,10).' 21:00:00')api_error('REASON_NOT_AVAILABLE','Absence reasons are available after Wednesday confirmation closes.',409);
+        $s=$db->prepare('SELECT 1 FROM teacher_service_expected expected LEFT JOIN teacher_service_attendance attendance ON attendance.service_id=expected.service_id AND attendance.staff_user_id=expected.staff_user_id WHERE expected.service_id=? AND expected.staff_user_id=? AND attendance.staff_user_id IS NULL');$s->execute([$id,$actor['id']]);
+        if(!$s->fetchColumn())api_error('FORBIDDEN','You can only explain your own missed Wednesday service.',403);
+        $db->prepare('INSERT INTO teacher_service_absence_reasons(service_id,staff_user_id,reason) VALUES(?,?,?) ON DUPLICATE KEY UPDATE reason=VALUES(reason)')->execute([$id,$actor['id'],$reason]);
+        api_audit($db,$actor,'TEACHER_ABSENCE_REASON_SAVED','TeacherService',$id);$db->commit();
+    }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}api_ok(['saved'=>true]);
 }
 function api_teacher_welfare_case(PDO $db,int $id): never {
     $actor=api_actor($db);api_teacher_attendance_ready($db);$manager=api_teacher_welfare_manager($db,$actor);$v=api_input();$db->beginTransaction();
