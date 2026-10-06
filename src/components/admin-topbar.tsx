@@ -54,10 +54,8 @@ export function AdminTopbar() {
       .then((response) => response.json())
       .then((result) => {
         if (cancelled) return;
-        /* A successful check-in read already proves the server authorised this
-           viewer. The fallback keeps older API deployments usable while they
-           roll out the explicit permission field. */
-        setCanViewCheckIn(Boolean(result.success && (result.data?.canViewCheckin ?? true)));
+        /* Read-only teachers get the arrivals table, not parent QR or desk controls. */
+        setCanViewCheckIn(Boolean(result.success && result.data?.canOperate));
         setCanAssistedCheckIn(Boolean(result.success && result.data?.canAssistedCheckin));
       })
       .catch(() => {

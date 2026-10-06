@@ -120,3 +120,22 @@ All protected calls use `Authorization: Bearer <staff-session-token>`. Responses
 - `PATCH /api/v1/staff/:staffUserId/access-level`
 
 The public lookup returns only a guardian first name and the minimal child check-in state. Care, emergency and prayer data is not included in child-list or public responses.
+
+## Teacher service attendance and welfare
+
+Apply `backend/database/2026_teacher_attendance.sql` before releasing the matching frontend and backend. The migration adds attendance, daily-question, expected-teacher, welfare-assignment and event-history tables; it does not change existing staff access levels.
+
+Super Admin creates Sunday or MDWK (Wednesday) sessions, sets the question and accepted answers, and explicitly appoints Teacher Welfare Leads. Every verified ACTIVE or PROBATION teacher is expected, irrespective of roster assignments. Newly active teachers are included while a session remains open. Once the session ends, unsigned teachers are absent. Welfare cases are generated idempotently on the next attendance poll/read; no background scheduler is required while the workspace is being polled.
+
+Only Super Admin or appointed Welfare Leads can display/refresh the service QR or assign welfare calls. A regular teacher can see the attendance register and update only their own assigned welfare tasks. Answers and QR tokens are stored as hashes. QR links expire after five minutes (or service close), and accounts are limited to five wrong answers per fifteen minutes. Changing the daily question invalidates the existing QR. QR plus a shared daily question discourages remote sign-in but cannot prove physical presence: attendees can still share both with someone off-site.
+
+Children's Check-In is readable by all campus teachers. Parent-request approval, desk tools and pickup-ticket bearer links remain restricted to authorised operators; widening register visibility does not widen approval rights.
+
+The curriculum frontend falls back to the existing class directory only when the server returns `ROUTE_NOT_FOUND`. This notice is not a replacement for deploying the curriculum backend and its required database changes; uploads remain unavailable until that release is complete.
+
+Run isolated checks without database credentials or production writes:
+
+```sh
+php backend/scripts/test_teacher_attendance.php
+php backend/scripts/test_checkin_visibility.php
+```

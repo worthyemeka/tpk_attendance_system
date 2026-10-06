@@ -74,7 +74,7 @@ function api_register_children(PDO $db): never {
             $existing->execute([$actor['campus_id']]);
             foreach ($existing->fetchAll() as $row) {
                 $numbers = array_filter([api_phone($row['phone']), api_phone($row['secondary_phone'] ?? null)]);
-                if (in_array($phone, $numbers, true) || ($secondary && in_array($secondary, $numbers, true))) api_error('REGISTERED_FAMILY_FOUND', 'This number is already registered. Choose Existing family to add children without changing its saved details.', 409);
+                if (in_array($phone, $numbers, true) || ($secondary && in_array($secondary, $numbers, true))) api_error('REGISTERED_FAMILY_FOUND', 'This guardian number is already registered. Check the Children directory before adding duplicate household records. For an arrival, use Returning family in Desk Check-In.', 409);
             }
             do {
                 $code = 'TPK-'.date('Y').'-'.strtoupper(bin2hex(random_bytes(3)));

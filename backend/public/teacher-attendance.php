@@ -58,6 +58,16 @@ function api_teacher_qr(PDO $db,int $id): never {
     $db->beginTransaction();try{$service=api_teacher_service($db,$actor,$id,true);$now=api_teacher_now();if($now->format('Y-m-d H:i:s')<$service['starts_at']||$now->format('Y-m-d H:i:s')>=$service['ends_at']){ $db->rollBack();api_error('SIGNIN_CLOSED','The QR is available only while this service’s sign-in window is open.',409); }
     $token=bin2hex(random_bytes(32));$expires=min($now->modify('+5 minutes')->format('Y-m-d H:i:s'),$service['ends_at']);$db->prepare('UPDATE teacher_services SET qr_hash=?,qr_expires_at=? WHERE id=?')->execute([hash('sha256',$token),$expires,$id]);api_audit($db,$actor,'TEACHER_QR_ROTATED','TeacherService',$id);$db->commit();}catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}api_ok(['token'=>$token,'serviceId'=>$id,'expiresAt'=>$expires]);
 }
+function api_teacher_security(PDO $db,int $id): never {
+    $actor=api_actor($db,true);api_teacher_attendance_ready($db);$v=api_input();
+    $service=api_teacher_service($db,$actor,$id);
+    // Reuse strict question/answer validation without exposing saved answer hashes.
+    $date=substr($service['starts_at'],0,10);
+    $values=api_teacher_service_values(['kind'=>$service['kind'],'date'=>$date,'startTime'=>substr($service['starts_at'],11,5),'endTime'=>substr($service['ends_at'],11,5),'name'=>$service['name'],'question'=>$v['question']??'','answers'=>$v['answers']??[]]);
+    $db->beginTransaction();try{$service=api_teacher_service($db,$actor,$id,true);if($service['ends_at']<=api_teacher_now()->format('Y-m-d H:i:s')){$db->rollBack();api_error('SIGNIN_CLOSED','A finished service is read-only.',409);}
+    $db->prepare('UPDATE teacher_services SET question=?,answer_hashes_json=?,qr_hash=NULL,qr_expires_at=NULL WHERE id=?')->execute([$values[4],$values[5],$id]);
+    api_audit($db,$actor,'TEACHER_SECURITY_QUESTION_UPDATED','TeacherService',$id);$db->commit();}catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}api_ok(['saved'=>true]);
+}
 function api_teacher_valid_qr(array $service,string $token): void {
     $now=api_teacher_now()->format('Y-m-d H:i:s');
     if($now<$service['starts_at']||$now>=$service['ends_at'])api_error('SIGNIN_CLOSED','Teacher sign-in is closed for this service.',409);
