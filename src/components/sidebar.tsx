@@ -50,6 +50,7 @@ const superPeople: readonly Item[] = [
   ["Team", "/account/team", FiUsers],
 ];
 const superMinistry: readonly Item[] = [
+  ["Teacher Check-In", "/account/teacher-check-in", FiCheckSquare],
   ["Team & Roster", "/account/roster", FiClock],
   ["Relations & Follow-Up", "/account/relations", FiUserCheck],
   ["Classes & Curriculum", "/account/classes", FiBookOpen],
@@ -69,11 +70,13 @@ const serviceLeadPeople: readonly Item[] = [
   ["Team", "/account/team", FiUsers],
 ];
 const adminMinistry: readonly Item[] = [
+  ["Teacher Check-In", "/account/teacher-check-in", FiCheckSquare],
   ["My Roster", "/account/roster", FiClock],
   ["My Follow-Ups", "/account/relations", FiUserCheck],
   ["Classes & Curriculum", "/account/classes", FiBookOpen],
 ];
 const followUpLeadMinistry: readonly Item[] = [
+  ["Teacher Check-In", "/account/teacher-check-in", FiCheckSquare],
   ["My Roster", "/account/roster", FiClock],
   ["Relations & Follow-Up", "/account/relations", FiUserCheck],
   ["Classes & Curriculum", "/account/classes", FiBookOpen],
@@ -289,7 +292,7 @@ export function Sidebar() {
           <nav aria-label="Dashboard navigation">
             <Group
               title="Sunday"
-              items={(superAdmin || checkinVisible) ? (superAdmin ? superSunday : adminSunday) : adminSunday.filter((item) => item[1] !== "/account/check-in")}
+              items={superAdmin ? superSunday : adminSunday}
               onNavigate={closeMobileNav}
             />
             {superAdmin && (

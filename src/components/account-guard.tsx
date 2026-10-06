@@ -10,7 +10,7 @@ export function AccountGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [ready, setReady] = useState(false);
   useEffect(() => {
-    const expired = () => { setReady(false); router.replace(`/teacher/login?next=${encodeURIComponent(pathname)}`); };
+    const expired = () => { setReady(false); router.replace(`/teacher/login?next=${encodeURIComponent(pathname + window.location.search)}`); };
     const session = readTeacherSession();
     if (!session) { expired(); return; }
     setReady(true);

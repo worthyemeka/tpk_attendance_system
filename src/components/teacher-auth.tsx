@@ -98,7 +98,7 @@ export function TeacherAuth({ mode }: Props) {
     let cancelled = false;
     // Verify the saved token with the server; a stale browser record is not a sign-in.
     void validateTeacherSession().then(session => {
-      if (session && !cancelled) window.location.replace("/account/overview");
+      if (session && !cancelled) { const next = new URLSearchParams(window.location.search).get("next"); window.location.replace(next && next.startsWith("/account/") ? next : "/account/overview"); }
     }).catch(() => undefined);
     return () => { cancelled = true; };
   }, [signup]);

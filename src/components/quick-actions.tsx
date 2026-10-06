@@ -39,7 +39,7 @@ export function QuickActions() {
     ...(superAdmin ? [["Manage Roster", "Plan upcoming team duties", "/account/roster", FiClock] as [string, string, string, IconType]] : []),
     ...(superAdmin ? [
       ["Register Children", "Add profiles without checking in", "/account/children/register", FiUserPlus] as [string, string, string, IconType],
-      ["Sunday Schedule", "Set service times and theme", "/account/settings#sunday-schedule", FiCalendar] as [string, string, string, IconType],
+      ["Sunday Schedule", "Set service times and theme", "/account/settings/sunday-schedule", FiCalendar] as [string, string, string, IconType],
     ] : []),
   ];
   return <><section className="panel actions-panel"><div className="panel-heading"><div><h2>Quick Actions</h2><p>Common tasks</p></div></div><div className="action-list">{actions.map(([title, subtitle, href, Icon]) => title === "Find a Child" ? <button type="button" key={title} onClick={() => setFindingChild(true)}><Icon /><span><b>{title}</b><small>{subtitle}</small></span><FiChevronRight /></button> : <Link href={href} key={title}><Icon /><span><b>{title}</b><small>{subtitle}</small></span><FiChevronRight /></Link>)}</div></section>{findingChild && <FindChildDialog close={() => setFindingChild(false)} />}</>;
