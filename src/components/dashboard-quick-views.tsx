@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { FiArrowLeft, FiCalendar, FiMail, FiMessageCircle, FiPhone, FiSearch, FiUsers, FiX } from "react-icons/fi";
+import { FiArrowLeft, FiCalendar, FiMail, FiPhone, FiSearch, FiUsers, FiX } from "react-icons/fi";
+import { FaWhatsapp } from "react-icons/fa";
 import { apiBase, authHeaders, mediaUrl, readTeacherSession } from "@/lib/session";
 import { useProfileDialog } from "./use-profile-dialog";
 import "./dashboard-quick-views.css";
@@ -90,7 +91,7 @@ export function TeacherQuickView({ teacher, close }: { teacher: TeacherQuickTarg
     <div className="quick-duty"><small><FiCalendar />{date}</small><div className="quick-role-list">{loading ? <span>Loading duties…</span> : roles.length ? [...new Set(roles)].map(role => <b key={role}>{role}</b>) : <span>No role recorded for this Sunday</span>}</div></div>
     <dl className="quick-contact" aria-busy={loading}>
       <div><dt><FiPhone />Phone number</dt><dd>{loading ? "Loading…" : phone ? <a href={`tel:${phone.replace(/[^+\d]/g, "")}`}>{phone}</a> : "Not recorded"}</dd></div>
-      <div><dt><FiMessageCircle />WhatsApp</dt><dd>{loading ? "Loading…" : whatsappDigits ? <a href={`https://wa.me/${whatsappDigits}`} target="_blank" rel="noreferrer">{whatsapp}</a> : "Not recorded"}</dd></div>
+      <div><dt><FaWhatsapp aria-hidden="true" />WhatsApp</dt><dd>{loading ? "Loading…" : whatsappDigits ? <a href={`https://wa.me/${whatsappDigits}`} target="_blank" rel="noreferrer">{whatsapp}</a> : "Not recorded"}</dd></div>
       <div><dt><FiMail />Email address</dt><dd>{loading ? "Loading…" : contact?.email ? <a href={`mailto:${contact.email}`}>{contact.email}</a> : "Not recorded"}</dd></div>
       <div><dt>Emergency contact</dt><dd>{loading ? "Loading…" : contact?.emergencyContact || "Not recorded or not available to your role"}</dd></div>
       <div><dt><FiPhone />Emergency phone</dt><dd>{loading ? "Loading…" : contact?.emergencyPhone ? <a href={`tel:${contact.emergencyPhone.replace(/[^+\d]/g, "")}`}>{contact.emergencyPhone}</a> : "Not recorded or not available to your role"}</dd></div>

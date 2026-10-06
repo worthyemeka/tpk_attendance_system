@@ -35,7 +35,7 @@ export async function downloadWeeklyRosterPdf(items:WeeklyAssignment[],date:stri
   const photos=await Promise.all(groups.map(({item})=>images.get(item.userId)!));
   await downloadTablePdf(`TPK-${date}-roster.pdf`,{
     title:"Team Roster",subtitle:`${label(date)} | Assignments for this date only`,
-    columns:["Photo","Teacher","Date","Service","Assigned roles"],widths:[.45,1.6,.8,1.6,2.1],photos,
+    columns:["Photo","Teacher","Date","Service","Assigned roles"],widths:[.45,1.6,.8,1.6,2.1],photos,avatarNames:groups.map(({item})=>item.teacherName),
     rows:groups.map(({item,roles})=>[item.teacherName.split(/\s+/).slice(-2).map(word=>word[0]).join(""),item.teacherName,label(item.assignmentDate),item.serviceName||"Ministry activity",[...roles].join("; ")]),
   });
 }

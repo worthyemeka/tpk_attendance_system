@@ -8,12 +8,12 @@ import {
   FiCheckCircle,
   FiChevronRight,
   FiClock,
-  FiMessageCircle,
   FiPhone,
   FiSearch,
   FiUsers,
   FiX,
 } from "react-icons/fi";
+import { FaWhatsapp } from "react-icons/fa";
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
 import { StatCard, type StatCardTone } from "@/components/stat-card";
 import { DataViewToggle, type DataView } from "@/components/data-view-toggle";
@@ -610,7 +610,7 @@ function Drawer({
                   }
                   target="_blank"
                 >
-                  <FiMessageCircle />
+                  <FaWhatsapp aria-hidden="true" />
                   WhatsApp
                 </a>
               </div>}
@@ -623,7 +623,7 @@ function Drawer({
                 {followupRecipients.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
               </AppSelect>
               <a className="lead-contact-link" href={recipientHref} target="_blank" rel="noreferrer" aria-disabled={!recipient}>
-                <FiMessageCircle /> Message selected lead
+                <FaWhatsapp aria-hidden="true" /> Message selected lead
               </a>
             </div>}
             {!completion && <div className="record">

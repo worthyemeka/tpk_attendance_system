@@ -1,0 +1,32 @@
+// Exercise the production PDF writer and safe HTML identity fallback without an API.
+const fs=require('node:fs'),assert=require('node:assert/strict'),ts=require('typescript');
+require.extensions['.ts']=(module,file)=>module._compile(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,file);
+const {createTablePdf,pdfInitials}=require('../src/lib/table-pdf.ts');
+const {printIdentityHeader}=require('../src/lib/branded-print.ts');
+const session={staffUserId:1,sessionToken:'test-only',name:'Auntie Grace Bennett',firstName:'Grace',lastName:'Bennett'};
+global.window={localStorage:{getItem:()=>JSON.stringify(session)}};
+assert.equal(pdfInitials('Auntie Grace Bennett'),'GB');
+assert.equal(pdfInitials('Uncle Daniel James'),'DJ');
+assert.equal(pdfInitials('Hope'),'H');
+assert.equal(pdfInitials('  Grace   Bennett  '),'GB');
+assert.ok(printIdentityHeader().includes('Auntie Grace Bennett'));
+assert.ok(printIdentityHeader().includes('border-radius:50%'));
+assert.ok(printIdentityHeader({name:'<Teacher & Child>',profileImageUrl:'/sample.jpg'}).includes('&lt;Teacher &amp; Child&gt;'));
+assert.ok(printIdentityHeader({name:'Hope Williams',profileImageUrl:'/sample.jpg'}).includes('onerror="this.remove()"'));
+assert.ok(!printIdentityHeader({name:'Hope Williams'}).includes('<img'));
+const rows=Array.from({length:25},(_,i)=>[String(i+1),'',i%2?'Hope Williams':'Daniel James',`4 Oct 2026 - ${i+1}`]);
+const report={title:'Teaching roster',subtitle:'October 2026 | Wuse Campus',identity:{name:'Auntie Grace Bennett',label:'Teacher roster'},columns:['S/N','Avatar','Teacher','Date'],widths:[.35,.5,1.5,1],photoColumn:1,avatarNames:rows.map(row=>row[2]),rows};
+(async()=>{
+ const blob=createTablePdf(report),pdf=await blob.text(),pages=Number(pdf.match(/\/Count (\d+)/)[1]);
+ assert.ok(pages>1);
+ assert.equal((pdf.match(/\(Auntie Grace Bennett\)/g)||[]).length,pages);
+ assert.equal((pdf.match(/\(GB\)/g)||[]).length,pages);
+ assert.ok(pdf.includes('(HW)'));assert.ok(pdf.includes('(DJ)'));
+ assert.ok(pdf.includes('(October 2026 | Wuse Campus)'));
+ assert.ok(!pdf.includes('/H '));
+ const photo=fs.readFileSync('public/brand/petra-logo.jpg');
+ const withPhoto=await createTablePdf({...report,rows:rows.slice(0,1),identity:{...report.identity,photo:{hex:photo.toString('hex'),width:200,height:200}}}).text();
+ assert.ok(withPhoto.includes('/H '));assert.ok(withPhoto.includes('W n'));assert.ok(!withPhoto.includes('(GB)'));
+ if(process.argv[2])fs.writeFileSync(process.argv[2],Buffer.from(await blob.arrayBuffer()));
+ console.log('PASS: named headers repeat on every page, circular image clipping, initials fallback, selected month and escaped print identities');
+})().catch(error=>{console.error(error);process.exitCode=1;});

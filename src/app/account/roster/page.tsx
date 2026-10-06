@@ -16,7 +16,6 @@ import {
   FiChevronDown,
   FiDownload,
   FiMail,
-  FiMessageCircle,
   FiPhone,
   FiPlus,
   FiSearch,
@@ -24,9 +23,11 @@ import {
   FiUsers,
   FiX,
 } from "react-icons/fi";
+import { FaWhatsapp } from "react-icons/fa";
 import { apiBase, authHeaders, mediaUrl, readTeacherSession } from "@/lib/session";
 import { printBrandedDocument } from "@/lib/branded-print";
 import { downloadWeeklyRosterPdf } from "@/lib/weekly-roster-pdf";
+import { downloadTablePdf, loadPdfAvatar } from "@/lib/table-pdf";
 import { MonthPicker } from "@/components/month-picker";
 import { DataViewToggle, type DataView } from "@/components/data-view-toggle";
 import { useSundayContext } from "@/lib/sunday-context";
@@ -539,25 +540,7 @@ export default function RosterPage() {
       URL.revokeObjectURL(url);
       return;
     }
-    printBrandedDocument({
-      eyebrow: "Teaching roster",
-      title: item.teacherName + "’s " + formatMonth(monthDate) + " Roles",
-      subtitle: "TribePetra Kids · Petra Wuse Campus",
-      stats: [
-        { label: "Responsibilities", value: rows.length },
-        {
-          label: "Sunday roles",
-          value: rows.filter((row) => row.Service !== "Non-teaching duty").length,
-        },
-      ],
-      columns: ["Date", "Service", "Responsibility", "Status"],
-      rows: rows.map((row) => [
-        row.Date,
-        row.Service,
-        row.Responsibility,
-        row.Status,
-      ]),
-    });
+    void loadPdfAvatar(item.profileImageUrl).then(photo=>downloadTablePdf(`TPK-${item.teacherName.replace(/[^a-z0-9]+/gi,"-")}-${monthKey}-roster.pdf`,{identity:{name:item.teacherName,photo,label:"Teacher roster"},title:"Teaching roster",subtitle:`${formatMonth(monthDate)} | Wuse Campus`,columns:["Date","Service","Responsibility","Status"],widths:[.8,1.3,1.7,.8],rows:rows.map(row=>[row.Date,row.Service,row.Responsibility,row.Status])})).catch(reason=>setError(reason instanceof Error?reason.message:"We could not download this teacher’s roster."));
   }
   async function sendTeacherReminder(
     teacherId: number,
@@ -1738,6 +1721,7 @@ function TeacherProfileModal({
                   target="_blank"
                   rel="noreferrer"
                 >
+                  <FaWhatsapp aria-hidden="true" />
                   WhatsApp
                 </a>
               </div>
@@ -1782,7 +1766,7 @@ function TeacherProfileModal({
                       rel="noreferrer"
                       onClick={() => { if (phoneDigits) void onNotify("IN_APP"); }}
                     >
-                      <FiMessageCircle />
+                      <FaWhatsapp aria-hidden="true" />
                       <span><b>Send to teacher on WhatsApp</b><small>{phoneDigits ? "Opens WhatsApp with the roster message ready." : "No WhatsApp or mobile number recorded."}</small></span>
                     </a>
                     <a

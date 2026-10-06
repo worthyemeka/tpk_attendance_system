@@ -1,3 +1,7 @@
+import { mediaUrl, readTeacherSession } from "./session";
+import { pdfInitials } from "./table-pdf";
+export type PrintIdentity = {name:string;profileImageUrl?:string|null;label?:string};
+
 type PrintStat = { label: string; value: string | number; note?: string };
 type PrintSection = {
   title: string;
@@ -21,6 +25,7 @@ export function printBrandedDocument({
   rows,
   sections = [],
   confidential = true,
+  identity,
 }: {
   eyebrow: string;
   title: string;
@@ -30,6 +35,7 @@ export function printBrandedDocument({
   rows: (string | number | null | undefined)[][];
   sections?: PrintSection[];
   confidential?: boolean;
+  identity?:PrintIdentity;
 }) {
   // The noopener popup flag can make Safari/Chrome return null here, leaving
   // a PDF button that appears to do nothing. Open it during the click event,
@@ -49,6 +55,7 @@ export function printBrandedDocument({
       .table-title{display:flex;justify-content:space-between;align-items:end;margin:0 0 11px}.table-title h2{margin:0;font:700 20px Georgia,serif}.generated{padding:9px 12px;border-radius:9px;background:#fff7e9;color:#765321;font-size:9px}.generated b{display:block;color:#172a4c;font-size:10px}table{width:100%;border-collapse:separate;border-spacing:0;border:1px solid #dae3ef;border-radius:10px;overflow:hidden}th{padding:10px 8px;background:#f2f7fd;color:#315276;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.4px}td{padding:10px 8px;border-top:1px solid #e3e9f0;vertical-align:top;color:#31425f}tr:nth-child(even) td{background:#fcfdff}.details{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:20px}.detail{padding:13px;border:1px solid #e5e1da;border-radius:10px}.detail h3{margin:0 0 9px;font:700 15px Georgia,serif}.detail-row{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-top:1px solid #efede9}.detail-row:first-of-type{border-top:0}.detail-row span{color:#68758b}.notice{display:flex;gap:10px;margin-top:24px;padding:14px;border:1px solid #cfe4ff;border-radius:10px;background:#f1f8ff;color:#314d73}.notice b{display:block;margin-bottom:3px}.footer{position:fixed;bottom:10mm;left:15mm;right:15mm;display:flex;justify-content:space-between;align-items:end;color:#64718a;font-size:9px}.footer strong{display:block;color:#172a4c;letter-spacing:2px}.footer:before{content:"";position:absolute;left:0;top:-8px;width:4px;height:29px;border-radius:5px;background:#ff6039}@media print{.footer{position:fixed}}
     </style></head><body>
     <header class="brand"><div class="brand-left"><img src="${escapeHtml(window.location.origin)}/brand/petra-logo.jpg" alt="Petra Christian Centre" width="54" height="54" style="object-fit:contain"/><div class="campus">PETRA CHRISTIAN CENTRE<small>WUSE CAMPUS · PEOPLE · PURPOSE · POSSIBILITIES</small></div></div><img src="${escapeHtml(window.location.origin)}/brand/tpk-logo.png" alt="TribePetra Kids" width="64" height="64" style="object-fit:contain"/></header>
+    ${printIdentityHeader(identity)}
     <p class="eyebrow">${escapeHtml(eyebrow)}</p><h1>${escapeHtml(title)}</h1><p class="subtitle">${escapeHtml(subtitle)}</p>
     ${stats.length ? `<section class="stats">${stats.map((stat) => `<div class="stat"><strong>${escapeHtml(stat.value)}</strong><span>${escapeHtml(stat.label)}</span>${stat.note ? `<small>${escapeHtml(stat.note)}</small>` : ""}</div>`).join("")}</section>` : ""}
     <div class="table-title"><h2>Directory details</h2><div class="generated">Generated on<b>${escapeHtml(generated)}</b></div></div>
@@ -57,4 +64,13 @@ export function printBrandedDocument({
     ${confidential ? `<section class="notice"><div>ⓘ</div><div><b>Confidential information</b>This document contains TPK information. Please handle responsibly and share only with authorised Petra leaders.</div></section>` : ""}
     <footer class="footer"><div><strong>TRIBEPETRA KIDS · WUSE CAMPUS</strong>CHECK IN · BELONG · GROW</div><div>Generated from the TribePetra Kids Management System</div></footer><script>window.addEventListener('load',function(){window.focus();window.setTimeout(function(){window.print();},120);});</script></body></html>`);
   page.document.close();
+}
+
+/** Identity is explicit for another teacher's roster, otherwise the signed-in exporter. */
+export function printIdentityHeader(identity?:PrintIdentity):string {
+  const session=readTeacherSession();
+  const person=identity??(session?{name:session.name||`${session.firstName} ${session.lastName}`,profileImageUrl:session.profileImageUrl,label:"Downloaded by"}:undefined);
+  if(!person)return "";
+  const source=mediaUrl(person.profileImageUrl);
+  return `<section style="display:flex;align-items:center;gap:12px;margin:18px 0;break-inside:avoid"><span style="position:relative;display:inline-flex;align-items:center;justify-content:center;flex:none;width:44px;height:44px;border:1px solid #e8dccb;border-radius:50%;overflow:hidden;background:#f5efe5;color:#795b38;font:bold 14px Arial">${escapeHtml(pdfInitials(person.name))}${source?`<img alt="" src="${escapeHtml(source)}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" onerror="this.remove()"/>`:""}</span><div><small style="display:block;color:#68758b;margin-bottom:4px">${escapeHtml(person.label||"Downloaded by")}</small><strong style="font:700 14px Arial;color:#203451">${escapeHtml(person.name)}</strong></div></section>`;
 }
