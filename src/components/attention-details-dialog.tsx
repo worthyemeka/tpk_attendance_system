@@ -30,7 +30,7 @@ function RosterAttentionDialog({month,close}: {month:string;close:()=>void}) {
   const [scope,setScope]=useState<"MY"|"TEAM">("MY"),[downloading,setDownloading]=useState("");
   const title=new Intl.DateTimeFormat("en-NG",{month:"long",year:"numeric",timeZone:"UTC"}).format(new Date(`${month}-01T12:00:00Z`))+" roster";
   useEffect(()=>{
-    const controller=new AbortController();setLoading(true);setError("");
+    const controller=new AbortController();setLoading(true);setError("");setAssignments([]);
     async function load(){
       if(!session)throw new Error("Please sign in again to view your roster.");
       const response=await fetch(`${apiBase}/api/v1/roster/management?month=${Number(month.slice(5))}&year=${month.slice(0,4)}`,{headers:authHeaders(session),signal:controller.signal,cache:"no-store"});

@@ -45,7 +45,8 @@ function api_register_children(PDO $db): never {
             $class->execute([$classId, $actor['campus_id']]);
             if (!$class->fetchColumn()) api_error('CLASS_NOT_AVAILABLE', 'Choose an active class at this campus.', 422);
         } else {
-            $age = (new DateTimeImmutable($dob))->diff(new DateTimeImmutable('today'))->y;
+            $zone = new DateTimeZone('Africa/Lagos');
+            $age = (new DateTimeImmutable($dob, $zone))->diff(new DateTimeImmutable('today', $zone))->y;
             $class = $db->prepare('SELECT id FROM classes WHERE campus_id=? AND is_active=1 AND ? BETWEEN min_age AND max_age ORDER BY display_order,id LIMIT 1');
             $class->execute([$actor['campus_id'], $age]);
             $classId = (int)$class->fetchColumn();
@@ -60,7 +61,7 @@ function api_register_children(PDO $db): never {
     $secondary = api_phone($guardian['secondaryPhone'] ?? null);
     $email = trim((string)($guardian['email'] ?? ''));
     $address = trim((string)($guardian['address'] ?? ''));
-    if (!$familyId && (!$first || !$last || !$phone || !$relationship || !$address || strlen($first) > 100 || strlen($last) > 100 || strlen($relationship) > 80)) api_error('VALIDATION_ERROR', 'Complete the parent’s name, valid Nigerian phone number, relationship and address.', 422);
+    if (!$familyId && (!$first || !$last || !$phone || !$relationship || !$address || strlen($first) > 100 || strlen($last) > 100 || strlen($relationship) > 80 || strlen($email) > 254 || strlen($address) > 1000)) api_error('VALIDATION_ERROR', 'Complete the parent’s name, valid Nigerian phone number, relationship and address. Keep contact details concise.', 422);
     if (!$familyId && (($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) || (!empty($guardian['secondaryPhone']) && !$secondary))) api_error('VALIDATION_ERROR', 'Check the optional email address or second phone number.', 422);
 
     $db->beginTransaction();

@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FiArrowLeft, FiArrowRight, FiCheckCircle, FiInfo, FiLock, FiPlus, FiSearch, FiTrash2, FiUserPlus, FiUsers } from "react-icons/fi";
 import { AppSelect } from "./app-dropdown";
 import { RelationshipField, validRelationship } from "./relationship-field";
-import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
+import { apiBase, authHeaders, readTeacherSession, type TeacherSession } from "@/lib/session";
 import { campusToday, registrationEligibility, underThreeMessage } from "@/lib/registration-eligibility";
 import "./admin-child-registration.css";
 
@@ -18,7 +18,8 @@ const blankChild = (key:number):Child => ({key,firstName:"",lastName:"",dateOfBi
 const blankGuardian:Guardian = {firstName:"",lastName:"",phone:"",secondaryPhone:"",email:"",relationship:"",address:""};
 
 export function AdminChildRegistration() {
-  const session = useMemo(readTeacherSession, []);
+  const [session,setSession] = useState<TeacherSession|null>(null);
+  const [sessionReady,setSessionReady] = useState(false);
   const isSuper = session?.accessLevel === "TPK_SUPER_ADMIN";
   const [mode,setMode] = useState<"NEW"|"EXISTING">("NEW");
   const [guardian,setGuardian] = useState<Guardian>(blankGuardian);
@@ -37,6 +38,8 @@ export function AdminChildRegistration() {
   const [error,setError] = useState("");
   const [saved,setSaved] = useState<Saved|null>(null);
   const today = campusToday();
+
+  useEffect(()=>{setSession(readTeacherSession());setSessionReady(true);},[]);
 
   useEffect(() => {
     if (!isSuper || !session) return;
@@ -78,7 +81,7 @@ export function AdminChildRegistration() {
     setSaving(true);setError("");
     try {
       const payload={...(mode==="EXISTING"?{familyId:family!.familyId,guardianId:family!.guardianId}:{guardian}),children:children.map(({key,...child})=>({...child,classId:child.classId?Number(child.classId):null}))};
-      const response=await fetch(`${apiBase}/api/v1/children/registrations`,{method:"POST",headers:authHeaders(session),body:JSON.stringify(payload)});
+      const response=await fetch(`${apiBase}/api/v1/children/registrations`,{method:"POST",headers:{...authHeaders(session),"Content-Type":"application/json"},body:JSON.stringify(payload)});
       const body=await response.json();if(!response.ok||!body.success)throw new Error(body.error?.message||"We couldn’t save this registration.");
       setSaved(body.data);setReview(false);
     } catch(reason){setError(reason instanceof Error?reason.message:"Registration could not be saved.");}
@@ -86,6 +89,7 @@ export function AdminChildRegistration() {
   }
   function restart(){setSaved(null);setReview(false);setChildren([blankChild(nextKey.current++)]);setGuardian(blankGuardian);setFamily(null);setMatches([]);setPhone("");setLookupMessage("");setError("");}
 
+  if(!sessionReady)return <section className="admin-registration" aria-busy="true"><h1>Child registration</h1><p role="status">Loading your registration workspace…</p></section>;
   if(!isSuper)return <section className="admin-registration"><h1>Child registration</h1><p>Only TPK Super Admins can register children here.</p><Link href="/account/children">Back to children</Link></section>;
   return <section className="admin-registration">
     <Link className="registration-back" href="/account/children"><FiArrowLeft/>Back to children</Link>
