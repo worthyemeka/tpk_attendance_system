@@ -139,3 +139,5 @@ Run isolated checks without database credentials or production writes:
 php backend/scripts/test_teacher_attendance.php
 php backend/scripts/test_checkin_visibility.php
 ```
+
+For an explicit real-MySQL smoke check after deploying the tables, run `TPK_MYSQL_SMOKE=1 php backend/scripts/test_teacher_attendance_mysql.php`. It reads curriculum/classes and verifies Sunday/MDWK expectation, QR answers, repeat sign-in, absence and welfare SQL using connection-local temporary attendance tables. It does not create staff sessions or persistent attendance/welfare records; it is not a substitute for HTTP authentication tests. The test skips unless explicitly enabled.

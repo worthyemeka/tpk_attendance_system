@@ -106,7 +106,8 @@ async function run() {
   assert.ok(expired > 1, 'logout in another tab redirects'); stop2();
   const auth = fs.readFileSync(path.join(root, 'src/components/teacher-auth.tsx'), 'utf8');
   assert.match(auth, /if \(signup\) return;[\s\S]*validateTeacherSession\(\)/);
-  assert.match(auth, /session && !cancelled\) window.location.replace\("\/account\/overview"\)/);
+  assert.match(auth, /session && !cancelled\)[\s\S]*new URLSearchParams\(window.location.search\).get\("next"\)/);
+  assert.match(auth, /window.location.replace\(next && next.startsWith\("\/account\/"\) \? next : "\/account\/overview"\)/);
   console.log('Teacher session checks passed: redirect wiring, 48-hour boundary, clock drift, activity, polling, outages, logout and multiple tabs.');
 }
 run().catch(error => { console.error(error); process.exitCode = 1; });
