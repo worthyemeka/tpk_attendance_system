@@ -922,6 +922,7 @@ function ChildEditForm({
     ),
     [schoolGrade, setSchoolGrade] = useState(child.schoolGrade || ""),
     [careInformation, setCareInformation] = useState(""),
+    [careLoaded, setCareLoaded] = useState(false),
     [saving, setSaving] = useState(false),
     [error, setError] = useState("");
   useEffect(() => {
@@ -929,13 +930,13 @@ function ChildEditForm({
     fetch(apiBase + "/api/v1/children/" + child.id + "/care-profile", {
       headers: authHeaders(session),
     })
-      .then((response) => response.json())
-      .then((body) =>
-        setCareInformation(
-          body.success ? body.data?.other_relevant_care_information || "" : "",
-        ),
-      )
-      .catch(() => undefined);
+      .then(async response => {
+        const body = await response.json();
+        if (!response.ok || !body.success) throw new Error("Care information could not be loaded. Please close and reopen this record before editing.");
+        setCareInformation(body.data?.other_relevant_care_information || "");
+        setCareLoaded(true);
+      })
+      .catch(reason => setError(reason instanceof Error ? reason.message : "Care information could not be loaded."));
   }, [child.id, session]);
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -945,6 +946,7 @@ function ChildEditForm({
       !lastName.trim() ||
       !dateOfBirth ||
       !gender
+      || !careLoaded
     ) {
       setError(
         "Add the child’s name, date of birth, and gender before saving.",
@@ -971,6 +973,7 @@ function ChildEditForm({
             classId: classId ? Number(classId) : null,
             schoolGrade: schoolGrade.trim() || null,
             classAssignmentRequired: !classId,
+            careInformation: careInformation.trim() || null,
           }),
         },
       );
@@ -978,21 +981,6 @@ function ChildEditForm({
       if (!childResponse.ok || !childBody.success)
         throw new Error(
           childBody.error?.message || "The child’s details could not be saved.",
-        );
-      const careResponse = await fetch(
-        apiBase + "/api/v1/children/" + child.id + "/care-profile",
-        {
-          method: "PATCH",
-          headers,
-          body: JSON.stringify({
-            other_relevant_care_information: careInformation.trim() || null,
-          }),
-        },
-      );
-      const careBody = await careResponse.json();
-      if (!careResponse.ok || !careBody.success)
-        throw new Error(
-          careBody.error?.message || "The care information could not be saved.",
         );
       await saved();
     } catch (reason) {
@@ -1093,8 +1081,8 @@ function ChildEditForm({
         <button type="button" onClick={cancel}>
           Cancel
         </button>
-        <button className="save" disabled={saving} type="submit">
-          {saving ? "Saving…" : "Save Changes"}
+        <button className="save" disabled={saving || !careLoaded} type="submit">
+          {saving ? "Saving…" : !careLoaded ? "Loading care information…" : "Save Changes"}
         </button>
       </footer>
     </form>

@@ -1,0 +1,17 @@
+.guardian-editor-backdrop{position:fixed;inset:0;z-index:110;background:#13243c66;backdrop-filter:blur(4px);display:flex;justify-content:flex-end}
+.guardian-record-editor{width:min(720px,100%);height:100dvh;background:#fcf9f3;display:flex;flex-direction:column;min-width:0;color:#243650;font-family:var(--font-body)}
+.guardian-record-editor header{position:relative;padding:36px 30px 24px;border-bottom:1px solid #e8e3da}
+.guardian-record-editor header>small{color:#ff5634;text-transform:uppercase;letter-spacing:1.5px;font-weight:800;font-size:11px}
+.guardian-record-editor h2{margin:12px 48px 8px 0;font:700 30px/1.2 var(--font-display);overflow-wrap:anywhere}
+.guardian-record-editor header p{margin:0;color:#728099;font-size:12px;line-height:1.6}
+.guardian-record-editor header button{position:absolute;right:22px;top:22px;width:44px;height:44px;display:grid;place-items:center;border:1px solid #e5e0d8;border-radius:12px;background:white;color:#536780;font-size:22px}
+.guardian-record-editor section{flex:1;overflow:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-content:start;gap:20px;padding:28px 30px}
+.guardian-record-editor label{display:grid;align-content:start;gap:8px;min-width:0;font-size:12px;font-weight:800}
+.guardian-record-editor input,.guardian-record-editor textarea{width:100%;min-width:0;padding:13px;border:1px solid #d8e0ec;border-radius:10px;background:white;color:#243650;font:500 14px var(--font-body);box-sizing:border-box}
+.guardian-record-editor input{min-height:46px}.guardian-record-editor input:focus-visible,.guardian-record-editor textarea:focus-visible{outline:2px solid #ff5634;outline-offset:2px}
+.guardian-record-editor .wide{grid-column:1/-1}.guardian-record-editor label small{color:#728099;font-weight:500;font-size:11px;line-height:1.5}
+.guardian-editor-error{margin:0;padding:14px;border-radius:10px;background:#fff0eb;color:#bb442a;font-size:12px;line-height:1.6}
+.guardian-record-editor footer{display:flex;gap:12px;padding:20px 30px max(20px,env(safe-area-inset-bottom));border-top:1px solid #e8e3da;background:#fff}
+.guardian-record-editor footer button{flex:1;min-height:48px;border:1px solid #d8e0ec;border-radius:10px;background:#fff;color:#243650;font:800 12px var(--font-body)}
+.guardian-record-editor footer .guardian-editor-save{background:#ff5634;border-color:#ff5634;color:#fff}.guardian-record-editor button{cursor:pointer}.guardian-record-editor button:disabled{opacity:.55;cursor:wait}
+@media(max-width:520px){.guardian-record-editor header{padding:28px 20px 20px}.guardian-record-editor h2{font-size:25px}.guardian-record-editor section{grid-template-columns:1fr;padding:24px 20px;gap:18px}.guardian-record-editor footer{padding-inline:20px}}

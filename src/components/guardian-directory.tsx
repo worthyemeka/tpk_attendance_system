@@ -26,7 +26,8 @@ import {
 } from "react-icons/fi";
 import { FaWhatsapp } from "react-icons/fa";
 import "./guardian-profile-polish.css";
-import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
+import { apiBase, authHeaders, readTeacherSession, isSuperAdmin } from "@/lib/session";
+import { GuardianRecordEditor } from "./guardian-record-editor";
 import { GUARDIAN_RELATIONSHIPS } from "@/lib/guardian-relationships";
 import { StatCard, type StatCardTone } from "@/components/stat-card";
 
@@ -99,6 +100,7 @@ export function GuardianDirectory() {
   const [error, setError] = useState("");
   const [exportOpen, setExportOpen] = useState(false);
   const [selected, setSelected] = useState<Detail | null>(null);
+  const [editing, setEditing] = useState(false);
   const [tab, setTab] = useState<"overview" | "children" | "pickup">(
     "overview",
   );
@@ -405,12 +407,14 @@ export function GuardianDirectory() {
             <DirectoryPagination page={page} total={total} pageSize={perPage} noun="guardians" loading={loading} onPageChange={setPage} />       </>
         )}
       </section>
-      {selected && (
+      {selected && editing && <GuardianRecordEditor guardian={selected} cancel={() => setEditing(false)} saved={async () => { await open(selected.id); setEditing(false); await load(); }} />}
+      {selected && !editing && (
         <Drawer
           guardian={selected}
           tab={tab}
           setTab={setTab}
           close={() => setSelected(null)}
+          edit={isSuperAdmin(session) ? () => setEditing(true) : undefined}
         />
       )}
       <style jsx>{styles}</style>
@@ -439,11 +443,13 @@ function Drawer({
   tab,
   setTab,
   close,
+  edit,
 }: {
   guardian: Detail;
   tab: "overview" | "children" | "pickup";
   setTab: (x: "overview" | "children" | "pickup") => void;
   close: () => void;
+  edit?: () => void;
 }) {
   useProfileDialog(close, ".guardian-drawer");
   const date = guardian.joinedAt
@@ -594,7 +600,7 @@ function Drawer({
           </section>
         )}
         <footer>
-          <button className="drawer-edit">Edit Guardian</button>
+          {edit && <button className="drawer-edit" onClick={edit}>Edit Guardian</button>}
           <button className="drawer-more">
             More <FiMoreHorizontal />
           </button>
