@@ -1,5 +1,6 @@
 "use client";
 
+import "@/components/records-system.css";
 import { AppSelect } from "@/components/app-dropdown";
 import { DirectoryPagination } from "@/components/directory-pagination";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -26,6 +27,7 @@ import {
   FiX,
 } from "react-icons/fi";
 import { apiBase, authHeaders, mediaUrl, readTeacherSession } from "@/lib/session";
+import { downloadTablePdf } from "@/lib/table-pdf";
 import { printBrandedDocument } from "@/lib/branded-print";
 import { campusRosterDate, teacherRosterStatus } from "@/lib/teacher-roster-status";
 import { StatCard, type StatCardTone } from "@/components/stat-card";
@@ -273,6 +275,7 @@ export default function TeamPage() {
       Mobile: item.mobileNumber || "",
       Email: item.email || "",
       "Date of Birth": niceDate(item.birthDate),
+      Subunit: item.subUnits?.map(unit=>unit.name).join(", ") || "Not assigned",
       "Onboarding Status":
         item.onboardingStatus === "PROBATION"
           ? `Probation · Week ${item.probationWeek || 1}/${item.probationTargetWeeks}`
@@ -300,41 +303,14 @@ export default function TeamPage() {
       URL.revokeObjectURL(url);
       return;
     }
-    printBrandedDocument({
-      eyebrow: "Team directory",
-      title: "TPK Team",
-      subtitle: "Teachers serving with TribePetra Kids, Wuse Campus.",
-      stats: [
-        { label: "Team members", value: rows.length, note: "Directory total" },
-        { label: "Onboarded", value: counts.onboarded },
-        { label: "On probation", value: counts.probation },
-        {
-          label: "Active accounts",
-          value: rows.filter((row) => row["Account Status"] === "Active")
-            .length,
-        },
-      ],
-      columns: [
-        "Teacher",
-        "WhatsApp",
-        "Date of Birth",
-        "Status",
-        "Gender",
-        "Assignment",
-        "Account",
-        "Access",
-      ],
-      rows: rows.map((row) => [
-        row.Teacher,
-        row.WhatsApp,
-        row["Date of Birth"],
-        row["Onboarding Status"],
-        row.Gender,
-        row["Role this week"],
-        row["Account Status"],
-        row["Access Level"],
-      ]),
-    });
+    void downloadTablePdf("TPK-team-directory.pdf", {
+      title:"TPK Team",
+      subtitle:`Team directory | Wuse Campus | ${rows.length} teachers in the selected view`,
+      columns:["S/N","Teacher","Phone number","Email","Subunit","Role this week"],
+      widths:[.35,1.5,1,1.65,1.1,1.4],
+      rows:rows.map((row,index)=>[String(index+1),row.Teacher,row.WhatsApp||row.Mobile||"Not recorded",row.Email||"Not recorded",row.Subunit,row["Role this week"]]),
+    }).catch(caught=>setError(caught instanceof Error?caught.message:"The PDF could not be downloaded."));
+
   }
   return (
     <section className="team-page">
@@ -422,16 +398,6 @@ export default function TeamPage() {
               <option key={item}>{item}</option>
             ))}
           </AppSelect></label>
-          <label className="directory-select">
-            <span>Sort team</span>
-            <AppSelect value={sort} onChange={(event) => setSort(event.target.value)}>
-              <option value="NAME_ASC">Name: A–Z</option>
-              <option value="NAME_DESC">Name: Z–A</option>
-              <option value="GENDER">Gender</option>
-              {isSuper && <option value="DOB_ASC">Date of birth: oldest first</option>}
-              {isSuper && <option value="DOB_DESC">Date of birth: youngest first</option>}
-            </AppSelect>
-          </label>
           <div className="export-wrap">
               <button
                 className="filter-button"
@@ -443,7 +409,7 @@ export default function TeamPage() {
               {exportOpen && (
                 <div className="export-menu">
                   <button onClick={() => exportTeam("PDF")}>
-                    PDF · Print / share
+                    PDF · Download
                   </button>
                   <button onClick={() => exportTeam("CSV")}>
                     CSV · Spreadsheet
@@ -451,18 +417,27 @@ export default function TeamPage() {
                 </div>
                 )}
           </div>
-          <DataViewToggle compact value={display} onChange={setTeamDisplay} gridLabel="Teacher cards" listLabel="Teacher table" />
         </div>
-        <p className="directory-count">
+        <div className="records-summary"><div><p className="directory-count">
           {loading
             ? "Loading team…"
             : `${shown.length} team member${shown.length === 1 ? "" : "s"}`}
-        </p>
-        {display === "LIST" ? <div className="table-wrap">
+        </p><small>Open a profile to see contact details and ministry responsibilities.</small></div><div className="records-view-controls">          <label className="directory-select">
+            <span>Sort team</span>
+            <AppSelect value={sort} onChange={(event) => setSort(event.target.value)}>
+              <option value="NAME_ASC">Name: A–Z</option>
+              <option value="NAME_DESC">Name: Z–A</option>
+              <option value="GENDER">Gender</option>
+              {isSuper && <option value="DOB_ASC">Date of birth: oldest first</option>}
+              {isSuper && <option value="DOB_DESC">Date of birth: youngest first</option>}
+            </AppSelect>
+          </label>
+<DataViewToggle value={display} onChange={setTeamDisplay} gridLabel="Teacher cards" listLabel="Teacher table" /></div></div>
+        {display === "LIST" ? <div className="table-wrap records-table">
           <table>
             <thead>
               <tr>
-                <th>#</th>
+                <th>S/N</th>
                 <th>Teacher</th>
                 <th>Team Status</th>
                 <th>Role This Week</th>
@@ -474,8 +449,8 @@ export default function TeamPage() {
             <tbody>
               {pagedMembers.map((member, index) => (
                 <tr key={member.id} onClick={() => openMember(member)}>
-                  <td>{(page - 1) * perPage + index + 1}</td>
-                  <td>
+                  <td data-label="S/N">{(page - 1) * perPage + index + 1}</td>
+                  <td data-label="Teacher">
                     <div className="teacher">
                       <Avatar member={member} />
                       <span>
@@ -490,23 +465,21 @@ export default function TeamPage() {
                       </span>
                     </div>
                   </td>
-                  <td>
+                  <td data-label="Team status">
                     <OnboardingBadge member={member} />
                   </td>
-                  <td>
+                  <td data-label="Role this week">
                     {member.currentAssignment || "No upcoming assignment"}
                   </td>
-                  <td>{birthdayLabel(member.birthDayMonth || member.birthDate)}</td>
-                  <td>
+                  <td data-label="Date of birth">{birthdayLabel(member.birthDayMonth || member.birthDate)}</td>
+                  <td data-label="Gender">
                     <span
                       className={`gender-badge ${String(member.gender || "").toLowerCase()}`}
                     >
                       {genderLabel(member.gender)}
                     </span>
                   </td>
-                  <td>
-                    <FiChevronRight />
-                  </td>
+                  <td className="records-action-cell"><button type="button" className="records-view-action" onClick={event=>{event.stopPropagation();openMember(member);}} aria-label={`View ${personName(member)}`}>View <FiChevronRight /></button></td>
                 </tr>
               ))}
               {!shown.length && (
@@ -1049,7 +1022,7 @@ function TeacherRosterPanel({ member }: { member: Member }) {
   const exportRoster = (kind: "CSV" | "PDF") => {
     const rows = activities.map((item) => ({ Date: niceDate(item.assignmentDate), Service: item.serviceName, "Class / Duty": item.className || item.dutyName, Status: teacherRosterStatus(item, today) }));
     if (kind === "CSV") { const csv = [Object.keys(rows[0] || {}).join(","), ...rows.map((row) => Object.values(row).map((value) => `\"${String(value).replaceAll('"', '""')}\"`).join(","))].join("\n"); const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); const link = document.createElement("a"); link.href = url; link.download = `${personName(member).replaceAll(" ", "-").toLowerCase()}-${month.toISOString().slice(0, 7)}-roster.csv`; link.click(); URL.revokeObjectURL(url); return; }
-    printBrandedDocument({ eyebrow: "Teaching roster", title: `${personName(member)}’s Roster`, subtitle: `${monthLabel} · TribePetra Kids, Wuse Campus.`, stats: [{ label: "Activities", value: rows.length }, { label: "Served", value: rows.filter((row) => row.Status === "Served").length }, { label: "Upcoming", value: rows.filter((row) => row.Status === "Upcoming").length }], columns: ["Date", "Service", "Class / Duty", "Status"], rows: rows.map((row) => [row.Date, row.Service, row["Class / Duty"], row.Status]) });
+    printBrandedDocument({ eyebrow: "Teaching roster", title: `${personName(member)}’s Roster`, subtitle: `${monthLabel} · TribePetra Kids, Wuse Campus.`, stats: [{ label: "Activities", value: rows.length }, { label: "Served", value: rows.filter((row) => row.Status === "Served").length }, { label: "Upcoming", value: rows.filter((row) => row.Status === "Upcoming").length }], columns: ["Date", "Service", "Class / Duty", "Subunit"], rows: rows.map((row) => [row.Date, row.Service, row["Class / Duty"], member.subUnits?.map(unit=>unit.name).join(", ") || "Not assigned"]) });
   };
   const served = activities.filter((item) => teacherRosterStatus(item, today) === "Served").length;
   const upcoming = activities.filter((item) => teacherRosterStatus(item, today) === "Upcoming").length;

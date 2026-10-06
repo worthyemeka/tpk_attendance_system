@@ -54,10 +54,11 @@ export function ChildrenGrid({ rows, onOpen }: Props) {
   </div>;
 }
 
-export function ChildrenList({ rows, onOpen, sort, order, onSort }: Props & { sort: string; order: string; onSort: (field: string) => void }) {
+export function ChildrenList({ rows, onOpen, sort, order, onSort, rowOffset = 0 }: Props & { rowOffset?: number; sort: string; order: string; onSort: (field: string) => void }) {
   const heading = (label: string, field: string) => <th scope="col" aria-sort={sort === field ? order === "asc" ? "ascending" : "descending" : "none"}><button type="button" className={`record-sort ${sort === field ? "active" : ""}`} onClick={() => onSort(field)}>{label}<FiChevronDown className={sort === field && order === "desc" ? "descending" : ""} aria-hidden="true" /></button></th>;
-  return <div className="children-records-list"><table><caption className="record-sr-only">Children, their class, guardian contact and last attendance</caption><thead><tr>{heading("Child", "name")}{heading("Class", "class")}{heading("Age", "age")}{heading("Gender", "gender")}{heading("Parent or guardian", "guardian")}{heading("Last attended", "lastAttended")}<th scope="col"><span className="record-sr-only">Profile</span></th></tr></thead><tbody>
-    {rows.map((child) => <tr key={child.id}>
+  return <div className="children-records-list"><table><caption className="record-sr-only">Children, their class, guardian contact and last attendance</caption><thead><tr><th scope="col">S/N</th>{heading("Child", "name")}{heading("Class", "class")}{heading("Age", "age")}{heading("Gender", "gender")}{heading("Parent or guardian", "guardian")}{heading("Last attended", "lastAttended")}<th scope="col"><span className="record-sr-only">Profile</span></th></tr></thead><tbody>
+    {rows.map((child, index) => <tr key={child.id}>
+      <td className="record-list-serial" data-label="S/N">{rowOffset + index + 1}</td>
       <td className="record-list-child"><ChildName child={child} onOpen={onOpen} /></td>
       <td className="record-list-class" data-label="Class"><ClassBadge name={child.className} /></td>
       <td className="record-list-age" data-label="Age">{child.age == null ? "Not recorded" : child.age === 0 ? "Under 1" : child.age}</td>

@@ -1,7 +1,10 @@
 "use client";
 
+import { DataViewToggle, type DataView } from "./data-view-toggle";
+import { DirectoryPagination } from "./directory-pagination";
+import "./records-system.css";
 import { AppSelect } from "@/components/app-dropdown";
-import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FiAlertTriangle,
   FiCheckCircle,
@@ -103,6 +106,11 @@ export function ReportsWorkspace() {
   const [report, setReport] = useState<Report | null>(null);
   const [archive, setArchive] = useState<Archive[]>([]);
   const [archiveTotal, setArchiveTotal] = useState(0);
+  const [archiveLoading, setArchiveLoading] = useState(false);
+  const archiveRequest = useRef(0);
+  const [archiveDisplay, setArchiveDisplay] = useState<DataView>("LIST");
+  const [archivePage, setArchivePage] = useState(1);
+  const archivePageSize = archiveDisplay === "GRID" ? 12 : 25;
   const [archiveSearch, setArchiveSearch] = useState("");
   const [archiveYear, setArchiveYear] = useState("");
   const [archiveType, setArchiveType] = useState("");
@@ -138,8 +146,10 @@ export function ReportsWorkspace() {
   }, [month, session, year]);
   const loadArchive = useCallback(async () => {
     if (!session) return;
+    const requestId=++archiveRequest.current;
+    setArchiveLoading(true);
     try {
-      const params = new URLSearchParams({ limit: "25" });
+      const params = new URLSearchParams({ limit: String(archivePageSize), page: String(archivePage) });
       if (archiveSearch) params.set("search", archiveSearch);
       if (archiveYear) params.set("year", archiveYear);
       if (archiveType) params.set("type", archiveType);
@@ -148,6 +158,7 @@ export function ReportsWorkspace() {
         { headers: authHeaders(session) },
       );
       const body = await response.json();
+      if(requestId!==archiveRequest.current)return;
       if (!response.ok || !body.success)
         throw new Error(
           body.error?.message || "The archive is not available yet.",
@@ -156,13 +167,14 @@ export function ReportsWorkspace() {
       setArchiveTotal(body.meta?.total || 0);
       setError("");
     } catch (caught) {
+      if(requestId!==archiveRequest.current)return;
       setError(
         caught instanceof Error
           ? caught.message
           : "The archive is not available yet.",
       );
-    }
-  }, [archiveSearch, archiveType, archiveYear, session]);
+    } finally {if(requestId===archiveRequest.current)setArchiveLoading(false);}
+  }, [archiveSearch, archiveType, archiveYear, archivePage, archivePageSize, session]);
   useEffect(() => {
     void loadReports();
   }, [loadReports]);
@@ -335,14 +347,16 @@ export function ReportsWorkspace() {
         />
       ) : (
         <ArchiveView
+          loading={archiveLoading}
+          display={archiveDisplay} setDisplay={value=>{setArchiveDisplay(value);setArchivePage(1);}} page={archivePage} pageSize={archivePageSize} setPage={setArchivePage}
           records={archive}
           total={archiveTotal}
           search={archiveSearch}
-          setSearch={setArchiveSearch}
+          setSearch={value=>{setArchiveSearch(value);setArchivePage(1);}}
           year={archiveYear}
-          setYear={setArchiveYear}
+          setYear={value=>{setArchiveYear(value);setArchivePage(1);}}
           type={archiveType}
-          setType={setArchiveType}
+          setType={value=>{setArchiveType(value);setArchivePage(1);}}
           upload={() => setUploadOpen(true)}
           download={downloadArchive}
         />
@@ -687,6 +701,8 @@ function Mini({ value, label }: { value: number | string; label: string }) {
   );
 }
 function ArchiveView({
+  loading,
+  display, setDisplay, page, pageSize, setPage,
   records,
   total,
   search,
@@ -698,6 +714,8 @@ function ArchiveView({
   upload,
   download,
 }: {
+  loading:boolean;
+  display: DataView; setDisplay: (value:DataView)=>void; page:number; pageSize:number; setPage:(page:number)=>void;
   records: Archive[];
   total: number;
   search: string;
@@ -746,7 +764,7 @@ function ArchiveView({
             onChange={(event) => setYear(event.target.value)}
           >
             <option value="">All Years</option>
-            {[2026, 2025, 2024].map((value) => (
+            {Array.from({length:12},(_,index)=>new Date().getFullYear()-index).map((value) => (
               <option key={value}>{value}</option>
             ))}
           </AppSelect>
@@ -757,7 +775,7 @@ function ArchiveView({
             aria-label="Filter archive by record type"
             onChange={(event) => setType(event.target.value)}
           >
-            <option value="">All File Types</option>
+            <option value="">All record types</option>
             <option value="ATTENDANCE">Attendance</option>
             <option value="CHILDREN_RECORDS">Children Records</option>
             <option value="REGISTRATION_RECORDS">Registration Records</option>
@@ -767,10 +785,10 @@ function ArchiveView({
           </AppSelect>
         </span>
       </section>
-      <p className="archive-count">
+      <div className="records-summary"><div><p className="archive-count">
         {total} historical record{total === 1 ? "" : "s"}
-      </p>
-      <div className="archive-table">
+      </p><small>Browse by year and record type, then download the original file.</small></div><DataViewToggle value={display} onChange={setDisplay} /></div>
+      {display === "GRID" ? <div className="records-grid">{records.map(record=><article className="records-card archive-record-card" key={record.id}><header><span className="records-avatar"><FiFileText /></span><div><h3>{record.recordName}</h3><small>{typeLabel(record.recordType)}</small></div></header><dl><div><dt>Record period</dt><dd>{formatDate(record.periodStart)}{record.periodEnd && record.periodEnd!==record.periodStart ? ` – ${formatDate(record.periodEnd)}` : ""}</dd></div><div><dt>Uploaded by</dt><dd>{record.uploadedBy} · {formatDate(record.uploadedAt)}</dd></div><div><dt>Original file</dt><dd>{record.originalFilename} · {fileSize(record.fileSizeBytes)}</dd></div>{record.description&&<div><dt>About this record</dt><dd>{record.description}</dd></div>}</dl><footer><span>Reference only</span><button type="button" className="records-view-action" onClick={()=>download(record)}><FiDownload /> Download</button></footer></article>)}{!records.length&&<p className="records-empty">{loading ? "Loading historical records…" : "No historical records match your filters."}</p>}</div> : <div className="archive-table records-table">
         <table>
           <thead>
             <tr>
@@ -785,13 +803,13 @@ function ArchiveView({
           <tbody>
             {records.map((record) => (
               <tr key={record.id}>
-                <td>
+                <td data-label="Record">
                   <b>{record.recordName}</b>
                   <small>
                     {record.originalFilename} · {fileSize(record.fileSizeBytes)}
                   </small>
                 </td>
-                <td>
+                <td data-label="Period">
                   {record.periodStart
                     ? record.periodEnd &&
                       record.periodEnd !== record.periodStart
@@ -799,17 +817,17 @@ function ArchiveView({
                       : formatDate(record.periodStart)
                     : "—"}
                 </td>
-                <td>{typeLabel(record.recordType)}</td>
-                <td>{record.uploadedBy}</td>
-                <td>{formatDate(record.uploadedAt)}</td>
-                <td>
+                <td data-label="Type">{typeLabel(record.recordType)}</td>
+                <td data-label="Uploaded by">{record.uploadedBy}</td>
+                <td data-label="Uploaded">{formatDate(record.uploadedAt)}</td>
+                <td data-label="Download">
                   <button
-                    className="row-action archive-download"
+                    className="records-view-action archive-download"
                     onClick={() => download(record)}
                     title={`Download ${record.originalFilename}`}
                     type="button"
                   >
-                    <FiDownload />
+                    <FiDownload /> Download
                   </button>
                 </td>
               </tr>
@@ -817,7 +835,7 @@ function ArchiveView({
             {!records.length && (
               <tr>
                 <td colSpan={6} className="empty">
-                  No historical records found.
+                  {loading ? "Loading historical records…" : "No historical records found."}
                   <small>
                     Archive files will remain separate from current TPK
                     reporting.
@@ -827,7 +845,8 @@ function ArchiveView({
             )}
           </tbody>
         </table>
-      </div>
+      </div>}
+      <DirectoryPagination page={page} total={total} pageSize={pageSize} noun="historical records" loading={loading} onPageChange={setPage} />
     </>
   );
 }

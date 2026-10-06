@@ -1,3 +1,4 @@
+import "@/components/records-system.css";
 import { pageMetadata } from "@/lib/seo";
 
 export const metadata = pageMetadata("/account");

@@ -1,6 +1,9 @@
 "use client";
 
 import { AppSelect } from "@/components/app-dropdown";
+import { DataViewToggle, type DataView } from "./data-view-toggle";
+import { DirectoryPagination } from "./directory-pagination";
+import "./records-system.css";
 import Link from "next/link";
 import {useProfileDialog} from "@/components/use-profile-dialog";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -87,6 +90,8 @@ export function GuardianDirectory() {
   const [childCount, setChildCount] = useState("");
   const [hasPickup, setHasPickup] = useState("");
   const [order, setOrder] = useState("asc");
+  const [display, setDisplay] = useState<DataView>("LIST");
+  const perPage = display === "GRID" ? 12 : 25;
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -101,7 +106,7 @@ export function GuardianDirectory() {
     setLoading(true);
     setError("");
     try {
-      const p = new URLSearchParams({ page: String(page), limit: "25", order });
+      const p = new URLSearchParams({ page: String(page), limit: String(perPage), order });
       if (search) p.set("search", search);
       if (relationship) p.set("relationship", relationship);
       if (active) p.set("active", active);
@@ -126,6 +131,7 @@ export function GuardianDirectory() {
     hasPickup,
     order,
     page,
+    perPage,
     relationship,
     search,
     session,
@@ -274,7 +280,7 @@ export function GuardianDirectory() {
           <label className="directory-filter"><span>Status</span><AppSelect aria-label="Guardian status" value={active} onChange={e=>reset(()=>setActive(e.target.value))}><option value="">All statuses</option><option value="1">Active</option><option value="0">Inactive</option></AppSelect></label>
           <label className="directory-filter"><span>Linked children</span><AppSelect aria-label="Linked children" value={childCount} onChange={e=>reset(()=>setChildCount(e.target.value))}><option value="">Any number</option><option value="2">2 or more</option><option value="3">3 or more</option></AppSelect></label>
           <label className="directory-filter"><span>Pickup access</span><AppSelect aria-label="Additional pickup person" value={hasPickup} onChange={e=>reset(()=>setHasPickup(e.target.value))}><option value="">All guardians</option><option value="1">Additional pickup person</option></AppSelect></label>
-          <label className="directory-filter"><span>Sort by name</span><AppSelect aria-label="Sort guardians" value={order} onChange={e=>reset(()=>setOrder(e.target.value))}><option value="asc">Name A–Z</option><option value="desc">Name Z–A</option></AppSelect></label>
+
           <div className="guardian-export">
             <button onClick={() => setExportOpen((x) => !x)}>
               <FiDownload />
@@ -296,20 +302,20 @@ export function GuardianDirectory() {
             )}
           </div>
         </section>
-        <p className="guardian-count">
+        <div className="records-summary"><div><p className="guardian-count">
           {loading
             ? "Loading guardians…"
             : `${total} guardian${total === 1 ? "" : "s"}`}
-        </p>
+        </p><small>Open a profile to see linked children and pickup permissions.</small></div><div className="records-view-controls">          <label className="directory-filter"><span>Sort by name</span><AppSelect aria-label="Sort guardians" value={order} onChange={e=>reset(()=>setOrder(e.target.value))}><option value="asc">Name A–Z</option><option value="desc">Name Z–A</option></AppSelect></label><DataViewToggle value={display} onChange={value=>reset(()=>setDisplay(value))} /></div></div>
         {error ? (
           <p className="guardian-error">{error}</p>
         ) : (
           <>
-            <div className="guardian-table-wrap">
+            {display === "GRID" ? <div className="records-grid">{rows.map(r=><article className="records-card" key={r.id}><header><span className="records-avatar">{initials(r)}</span><div><h3>{name(r)}</h3><small>{r.relationship || "Relationship not recorded"}</small></div></header><dl><div><dt>Phone number</dt><dd>{r.primaryPhone || "Not recorded"}</dd></div><div><dt>Linked children</dt><dd>{children(r).join(", ") || "No children linked"}</dd></div></dl><footer><span>{r.primaryGuardian ? "Primary guardian" : "Authorised guardian"}</span><button type="button" className="records-view-action" onClick={()=>void open(r.id)} aria-label={`View ${name(r)}`}>View <FiChevronRight /></button></footer></article>)}{!loading && !rows.length && <p className="records-empty">No guardians match your filters.</p>}</div> : <div className="guardian-table-wrap records-table">
               <table className="guardian-table">
                 <thead>
                   <tr>
-                    <th>#</th>
+                    <th>S/N</th>
                     <th>Guardian</th>
                     <th>Relationship</th>
                     <th>Contact</th>
@@ -321,16 +327,16 @@ export function GuardianDirectory() {
                 <tbody>
                   {rows.map((r, i) => (
                     <tr key={r.id} onClick={() => void open(r.id)}>
-                      <td>{(page - 1) * 25 + i + 1}</td>
-                      <td>
+                      <td data-label="S/N">{(page - 1) * perPage + i + 1}</td>
+                      <td data-label="Guardian">
                         <span className="guardian-identity">
                           <i>{initials(r)}</i>
                           <b>{name(r)}</b>
                         </span>
                       </td>
-                      <td>{r.relationship || "—"}</td>
-                      <td>{r.primaryPhone || "—"}</td>
-                      <td>
+                      <td data-label="Relationship">{r.relationship || "—"}</td>
+                      <td data-label="Contact">{r.primaryPhone || "—"}</td>
+                      <td data-label="Children">
                         <span className="child-pills">
                           {children(r)
                             .slice(0, 2)
@@ -342,7 +348,7 @@ export function GuardianDirectory() {
                           )}
                         </span>
                       </td>
-                      <td>
+                      <td data-label="Pickup access">
                         <button
                           className={`pickup-chip ${r.primaryGuardian ? "guardian" : "authorised"}`}
                           onClick={(e) => {
@@ -356,16 +362,16 @@ export function GuardianDirectory() {
                             : ""}
                         </button>
                       </td>
-                      <td>
+                      <td data-label="Profile">
                         <button
-                          className="guardian-row-action"
+                          className="records-view-action guardian-row-action"
                           aria-label={`Open ${name(r)}`}
                           onClick={(e) => {
                             e.stopPropagation();
                             void open(r.id);
                           }}
                         >
-                          <FiChevronRight />
+                          View <FiChevronRight />
                         </button>
                       </td>
                     </tr>
@@ -394,40 +400,8 @@ export function GuardianDirectory() {
                   )}
                 </tbody>
               </table>
-            </div>
-            <footer className="guardian-pagination">
-              <p>
-                Showing {rows.length ? (page - 1) * 25 + 1 : 0}–
-                {(page - 1) * 25 + rows.length} of {total} guardians
-              </p>
-              <div>
-                <button
-                  disabled={page === 1}
-                  onClick={() => setPage((x) => x - 1)}
-                >
-                  ‹
-                </button>
-                {Array.from(
-                  { length: Math.min(pages, 5) },
-                  (_, i) => i + 1,
-                ).map((n) => (
-                  <button
-                    className={n === page ? "selected" : ""}
-                    key={n}
-                    onClick={() => setPage(n)}
-                  >
-                    {n}
-                  </button>
-                ))}
-                <button
-                  disabled={page === pages}
-                  onClick={() => setPage((x) => x + 1)}
-                >
-                  ›
-                </button>
-              </div>
-            </footer>
-          </>
+            </div>}
+            <DirectoryPagination page={page} total={total} pageSize={perPage} noun="guardians" loading={loading} onPageChange={setPage} />       </>
         )}
       </section>
       {selected && (

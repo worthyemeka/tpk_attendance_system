@@ -116,7 +116,7 @@
   border-radius: 14px;
   background: #fff5eb;
 }
-.cw-page .assembly-intro h2 { font: 400 28px var(--font-display), Georgia, serif; }
+.cw-page .assembly-intro h2 { font: 800 28px var(--font-body), sans-serif; }
 .cw-page .assembly-intro p { font-size: 13px; line-height: 1.6; }
 .cw-page .assembly-intro .eyebrow,
 .cw-page .assembly-panel .eyebrow { margin: 0 0 6px; color: #ff5938; font-size: 10px; font-weight: 800; letter-spacing: .12em; }
@@ -130,7 +130,7 @@
 .cw-page .cw-metrics .tpk-stat-card small { font-size: 11px; white-space: normal; }
 .cw-page .assembly-panel { min-width: 0; padding: 22px; border-radius: 14px; box-shadow: 0 3px 12px rgb(28 25 20 / 3%); }
 .cw-page .assembly-panel > header { margin-bottom: 18px; flex-wrap: wrap; }
-.cw-page .assembly-panel h3 { font: 400 23px var(--font-display), Georgia, serif; }
+.cw-page .assembly-panel h3 { font: 800 23px var(--font-body), sans-serif; }
 .cw-page .assembly-panel > header a { min-height: 42px; box-sizing: border-box; color: #425673; font-size: 11px; }
 .cw-page .assembly-team { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .cw-page .assembly-team article { padding: 15px; gap: 12px; border-radius: 11px; }
@@ -177,7 +177,7 @@
 }
 .cw-page .assembly-view .cw-modal { position: fixed; z-index: 99; inset: 0; display: grid; place-items: center; padding: 20px; background: #0a173a77; }
 .cw-page .assembly-view .cw-modal > section { position: relative; display: grid; gap: 16px; width: min(100%, 510px); max-height: calc(100dvh - 40px); overflow-y: auto; padding: 26px; border-radius: 14px; background: #fffdfa; box-sizing: border-box; box-shadow: 0 20px 60px #101c373d; }
-.cw-page .assembly-view .cw-modal h2 { margin: 0; font: 400 28px var(--font-display), Georgia, serif; color: #172a48; }
+.cw-page .assembly-view .cw-modal h2 { margin: 0; font: 800 28px var(--font-body), sans-serif; color: #172a48; }
 .cw-page .assembly-view .cw-modal label { display: grid; gap: 7px; color: #425673; font-size: 12px; font-weight: 800; }
 .cw-page .assembly-view .cw-modal input,
 .cw-page .assembly-view .cw-modal select,

@@ -547,7 +547,7 @@ export function ChildDirectory({needsClassAssignment=false}: {needsClassAssignme
         ) : (
           <>
             {rows.length > 0 && (display === "LIST" ?
-              <ChildrenList rows={rows} onOpen={(id) => void open(id)} sort={sort} order={order} onSort={toggleSort} /> :
+              <ChildrenList rowOffset={(page - 1) * perPage} rows={rows} onOpen={(id) => void open(id)} sort={sort} order={order} onSort={toggleSort} /> :
               <ChildrenGrid rows={rows} onOpen={(id) => void open(id)} />)}
             {!loading && !rows.length && <section className="directory-empty">
               <i><FiSearch /></i>
