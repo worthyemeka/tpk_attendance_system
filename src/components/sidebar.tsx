@@ -59,7 +59,7 @@ const adminSunday: readonly Item[] = [
   ["Overview", "/account/overview", FiHome],
   ["Check-In", "/account/check-in", FiCheckSquare],
   ["Pick-Up", "/account/pick-up", FiLogOut],
-  ["My Classrooms", "/account/classrooms", FiUsers],
+  ["Classrooms", "/account/classrooms", FiUsers],
 ];
 const adminPeople: readonly Item[] = [["Team", "/account/team", FiUsers]];
 const serviceLeadPeople: readonly Item[] = [

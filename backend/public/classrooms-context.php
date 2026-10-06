@@ -8,7 +8,6 @@ function api_classroom_context_sessions(PDO $db, array $actor): array {
         $s->execute([$requested, (int)$actor['campus_id']]);
         $row = $s->fetch();
         if (!$row) api_error('SERVICE_SESSION_NOT_FOUND', 'This service is not available for your campus.', 404);
-        if(!api_service_duty($db,$actor,$requested))api_error('FORBIDDEN','This service is outside your assigned roster.',403);
         return [$row];
     }
     $scope = strtoupper(trim((string)($_GET['serviceScope'] ?? 'SECOND_SERVICE')));
@@ -21,16 +20,13 @@ function api_classroom_context_sessions(PDO $db, array $actor): array {
     if ($scope !== 'ALL') { $where[] = 'service_type=?'; $params[] = $scope; }
     $s = $db->prepare('SELECT id,name,service_type AS serviceType,service_date AS serviceDate,starts_at AS startsAt FROM service_sessions WHERE '.implode(' AND ', $where).' ORDER BY starts_at');
     $s->execute($params);
-    return array_values(array_filter($s->fetchAll(),fn($row)=>api_service_duty($db,$actor,(int)$row['id'])));
+    return $s->fetchAll();
 }
 
 function api_classroom_context_snapshot(PDO $db, array $actor, ?array $service): array {
     $sessionId = (int)($service['id'] ?? 0);
     $allowed=null;
-    if($actor['access_level']!=='TPK_SUPER_ADMIN'&&!api_service_duty($db,$actor,$sessionId,null,['HEAD_OF_SERVICE','ATTENDANCE','ASSISTANT_HEAD_OF_SERVICE_1','ASSISTANT_HEAD_OF_SERVICE_2'])){
-        $q=$db->prepare('SELECT id FROM classes WHERE campus_id=? AND is_active=1');$q->execute([(int)$actor['campus_id']]);
-        $allowed=array_values(array_filter(array_map('intval',array_column($q->fetchAll(),'id')),fn($id)=>api_service_duty($db,$actor,$sessionId,$id)));
-    }
+    // Classroom browsing is shared across the campus, not roster membership.
     $where = ['c.campus_id=?', 'c.is_active=1'];
     $params = [(int)$actor['campus_id']];
     if ($allowed !== null) {

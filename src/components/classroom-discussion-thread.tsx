@@ -23,13 +23,15 @@ export function AssemblyNoteReactions({ noteId }: { noteId: number }) {
   return <NoteDiscussion id={noteId} assembly />;
 }
 
-function NoteDiscussion({ id: reviewId, assembly = false }: { id: number; assembly?: boolean }) {
+export function AssemblyActivityReactions({ activityId }: { activityId:number }) { return <NoteDiscussion id={activityId} assembly activity />; }
+
+function NoteDiscussion({ id: reviewId, assembly = false, activity = false }: { id: number; assembly?: boolean; activity?:boolean }) {
   const [thread, setThread] = useState<Thread | null>(null);
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
-  const endpoint = assembly ? `assembly/notes/${reviewId}` : `classroom-reviews/${reviewId}`;
+  const endpoint = assembly ? `assembly/${activity ? "activities" : "notes"}/${reviewId}` : `classroom-reviews/${reviewId}`;
   useEffect(() => {
     const controller = new AbortController();
     setThread(null);
@@ -61,7 +63,7 @@ function NoteDiscussion({ id: reviewId, assembly = false }: { id: number; assemb
   return <div className={`discussion-thread${assembly ? " assembly-note-reactions" : ""}`} aria-busy={busy}>
     {!thread && !error && <small>Loading {assembly ? "reactions" : "replies"}…</small>}
     {thread && <>
-      <div className="discussion-reactions" aria-label="React to this note">{choices.map(({ key, label, icon }) => <button key={key} type="button" aria-pressed={thread.myReaction === key} disabled={busy || !thread.canInteract} onClick={() => void save("reaction", key)}>{icon}{label}<span>{thread.reactions[key] || 0}</span></button>)}{!assembly && <small><FiMessageCircle /> {thread.replies.length} {thread.replies.length === 1 ? "reply" : "replies"}</small>}</div>
+      <div className="discussion-reactions" aria-label={activity ? "React to this assembly activity" : "React to this note"}>{choices.map(({ key, label, icon }) => <button key={key} type="button" aria-pressed={thread.myReaction === key} disabled={busy || !thread.canInteract} onClick={() => void save("reaction", key)}>{icon}{label}<span>{thread.reactions[key] || 0}</span></button>)}{!assembly && <small><FiMessageCircle /> {thread.replies.length} {thread.replies.length === 1 ? "reply" : "replies"}</small>}</div>
       {assembly && !thread.canInteract && <small>Reactions will be available after the system update.</small>}
       <div className="discussion-replies">{thread.replies.map((item) => <div className="discussion-reply" key={item.id}><TeacherAttribution name={item.author} staffId={item.authorId} photo={item.authorProfileImageUrl} createdAt={item.createdAt} /><p>{item.body}</p></div>)}</div>
       {!assembly && thread.canInteract && <form className="discussion-reply-form" onSubmit={(e) => { e.preventDefault(); if (reply.trim()) void save("reply"); }}><label htmlFor={`reply-${reviewId}`}>Encourage the team or leave a reply</label><textarea id={`reply-${reviewId}`} value={reply} maxLength={2000} rows={2} disabled={busy} onChange={(e) => setReply(e.target.value)} placeholder="Well done, team…" /><button type="submit" disabled={busy || !reply.trim()}>{busy ? "Saving…" : "Post reply"}</button></form>}

@@ -37,7 +37,6 @@ function api_assembly_media_download(PDO $db,int $id): never {
     if(!api_table_exists($db,'assembly_activity_media'))api_error('MEDIA_NOT_FOUND','This attachment was not found.',404);
     $q=$db->prepare('SELECT m.*,a.service_session_id FROM assembly_activity_media m JOIN assembly_activities a ON a.id=m.activity_id WHERE m.id=? AND a.campus_id=?');$q->execute([$id,(int)$actor['campus_id']]);$file=$q->fetch();
     if(!$file)api_error('MEDIA_NOT_FOUND','This attachment was not found.',404);
-    if(!api_service_duty($db,$actor,(int)$file['service_session_id']))api_error('FORBIDDEN','This attachment is outside your assigned service.',403);
     if(!preg_match('/^[a-f0-9]{40}\.(jpg|png|webp|mp4|mov|webm)$/',$file['stored_name']))api_error('MEDIA_NOT_FOUND','This attachment was not found.',404);
     $path=api_assembly_media_dir().'/'.$file['stored_name'];if(!is_file($path))api_error('MEDIA_NOT_FOUND','This attachment is unavailable.',404);
     header('Content-Type: '.$file['mime_type']);header('X-Content-Type-Options: nosniff');header('Cache-Control: private, no-store');header('Content-Length: '.filesize($path));header('Content-Disposition: inline');readfile($path);exit;

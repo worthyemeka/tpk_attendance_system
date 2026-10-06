@@ -1,5 +1,15 @@
 # TribePetra Kids backend setup
 
+## Classes, curriculum and assembly video reactions
+
+Apply `database/2026_curriculum_resources.sql` after the existing classroom/assembly migrations. It adds curriculum resources, class descriptions and activity reactions without changing attendance records. Until applied, class browsing still works and the UI disables uploads/reactions that need the new tables.
+
+Curriculum uploads are Super Admin-only. Downloads and discussions require an active verified staff session at the same campus; roster membership is not required for browsing or discussion replies. Publishing a classroom review and creating assembly notes/activities still require the existing service permissions.
+
+Allow the PHP service to create/write `backend/storage/curriculum` (private, not web-served). For 20 MB attachments, set `upload_max_filesize` to at least `20M` and `post_max_size` to at least `24M`. Serve documents through the authenticated `/api/v1/curriculum/resources/{id}/file` endpoint only. Back up this private directory alongside the database. PDF is preferred; DOCX/PPTX validation needs PHP ZipArchive.
+
+Isolated verification (no live database): `php scripts/test_curriculum.php`, `php scripts/test_shared_classroom_access.php`, and `php scripts/test_assembly_history_reactions.php`, run from this backend directory. Frontend calendar/automatic-placement checks: `node scripts/test-curriculum.cjs` from the repository root.
+
 The existing application uses PHP with PDO and MySQL. API v1 extends that setup; it does not introduce a second ORM or replace the parent check-in API.
 
 ## Apply the migration

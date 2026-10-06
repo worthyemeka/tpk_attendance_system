@@ -30,7 +30,7 @@ import "./classroom-children-table.css";
 import "./classroom-attendance.css";
 import "./classroom-refinements.css";
 import "./classrooms-overview.css";
-import { DiscussionThread, AssemblyAttachment, AssemblyNoteReactions, type AssemblyMedia } from "./classroom-discussion-thread";
+import { DiscussionThread, AssemblyAttachment, AssemblyNoteReactions, AssemblyActivityReactions, type AssemblyMedia } from "./classroom-discussion-thread";
 import { TeacherAttribution } from "./teacher-attribution";
 import { VideoTrimmer } from "./video-trimmer";
 import { TOTAL_UPLOAD_BYTES, VIDEO_UPLOAD_BYTES } from "@/lib/video-trim";
@@ -227,7 +227,8 @@ export function ClassroomsOverview() {
       if (version === requestVersion.current) setData(b.data);
       const a = await fetch(`${apiBase}/api/v1/assembly?${p.toString()}`, { headers: authHeaders(session) });
       const assemblyBody = await a.json();
-      if (version === requestVersion.current && a.ok && assemblyBody.success) setAssembly({ groups: assemblyBody.data?.groups || [] });
+      if (!a.ok || !assemblyBody.success) throw new Error(assemblyBody.error?.message || "We could not load assembly. Please retry.");
+      if (version === requestVersion.current) setAssembly({ groups: assemblyBody.data?.groups || [] });
     } catch (reason) {
       if (version === requestVersion.current) setError(reason instanceof Error ? reason.message : "We could not load this service.");
     } finally {
@@ -494,7 +495,8 @@ function AssemblyView({ groups, loading, isSuperAdmin, onRefresh }: { groups: As
   const sundays = [...new Set(historyGroups.map((item) => item.serviceSession?.serviceDate).filter((date): date is string => Boolean(date)))].sort();
   const sundayGroups = historyGroups.filter((item) => !historySunday || item.serviceSession?.serviceDate === historySunday);
   const visibleGroups = sundayGroups.filter((item) => !historyService || String(item.serviceSession?.id) === historyService);
-  const programmeGroup = visibleGroups.length === 1 ? visibleGroups[0] : null;
+  const programmeGroup = visibleGroups.length === 1 ? visibleGroups[0] : group;
+  // History browsing does not remove the selected-service composer. Permissions stay server-controlled.
   const activityCount = visibleGroups.reduce((sum, item) => sum + item.activities.length, 0);
   const noteCount = visibleGroups.reduce((sum, item) => sum + item.notes.length, 0);
   const refreshHistory = async () => { setHistoryRetry((v) => v + 1); await onRefresh(); };
@@ -552,7 +554,7 @@ function AssemblyView({ groups, loading, isSuperAdmin, onRefresh }: { groups: As
         <label>Sunday<AppSelect value={historySunday} disabled={historyLoading || saving || showActivity} onChange={(e) => { setHistorySunday(e.target.value); setHistoryService(""); setNote(""); setMessage(""); }}><option value="">All Sundays</option>{sundays.map((date) => <option key={date} value={date}>Sun, {formatDate(date)}</option>)}</AppSelect></label>
         <label>Service<AppSelect value={historyService} disabled={historyLoading || saving || showActivity} onChange={(e) => { setHistoryService(e.target.value); setNote(""); setMessage(""); }}><option value="">All services</option>{sundayGroups.map((item) => <option key={item.serviceSession?.id} value={item.serviceSession?.id}>{item.serviceSession?.name || "Service"}{!historySunday ? ` · ${formatDate(item.serviceSession?.serviceDate)}` : ""}</option>)}</AppSelect></label>
       </fieldset>
-      {!historyLoading && !historyError && !programmeGroup && <small>Select one Sunday and service to add an activity or note.</small>}
+      {!historyLoading && !historyError && !programmeGroup && <small>Choose a Sunday and service to view its records.</small>}
       {historyLoading && <p role="status">Loading assembly history…</p>}
       {historyError && <div className="interaction-error" role="alert">{historyError}<button type="button" onClick={() => setHistoryRetry((v) => v + 1)}>Retry</button></div>}
     </section>
@@ -561,7 +563,7 @@ function AssemblyView({ groups, loading, isSuperAdmin, onRefresh }: { groups: As
       <div className="assembly-activity-list">{visibleGroups.flatMap((item) => item.activities.map((activity) => <article key={activity.id}>
         <div className="assembly-record-service"><FiCalendar aria-hidden="true" /><b>{formatDate(item.serviceSession?.serviceDate)}</b><span>{item.serviceSession?.name || "Sunday service"}</span></div>
         <div className="assembly-activity-copy"><b>{activity.activityName}</b><TeacherAttribution name={activity.ledBy || "Leader not specified"} namePrefix={activity.ledBy ? "Led by" : undefined} staffId={activity.ledByStaffUserId} photo={activity.ledByProfileImageUrl} createdAt={activity.createdAt} label="Activity added" />{activity.notes && <p>{activity.notes}</p>}</div>
-        {!!activity.media?.length && <div className="assembly-media-grid">{activity.media.map((item) => <AssemblyAttachment key={item.id} item={item} />)}</div>}
+        {!!activity.media?.length && <div className="assembly-media-grid">{activity.media.map((item) => <AssemblyAttachment key={item.id} item={item} />)}</div>}<AssemblyActivityReactions activityId={activity.id} />
       </article>))}{!historyLoading && !historyError && !activityCount && <p className="cw-empty">No assembly activities for this selection. Try another Sunday or month.</p>}</div>
     </section>
     <section className="assembly-panel"><header><div><p className="eyebrow">Service reflections</p><h3>Assembly Notes</h3></div></header><div className="assembly-notes">{visibleGroups.flatMap((entry) => entry.notes.map((item) => <article key={item.id}><div className="assembly-record-service"><FiCalendar aria-hidden="true" /><b>{formatDate(entry.serviceSession?.serviceDate)}</b><span>{entry.serviceSession?.name || "Sunday service"}</span></div><TeacherAttribution name={item.author} staffId={item.authorId} photo={item.authorProfileImageUrl} createdAt={item.createdAt} /><p>{item.note}</p><AssemblyNoteReactions noteId={item.id} /></article>))}{!historyLoading && !historyError && !noteCount && <p className="cw-empty">No assembly notes for this selection. Try another Sunday or month.</p>}</div>{canManage && <div className="assembly-note-form"><label htmlFor="assembly-note">Add a note · {formatDate(programmeGroup?.serviceSession?.serviceDate)} · {programmeGroup?.serviceSession?.name}</label><textarea id="assembly-note" disabled={saving} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a short note about this service…" /><button className="primary" onClick={() => void addNote()} disabled={saving || !note.trim()}>{saving ? "Saving…" : "Save note"}</button></div>}</section>

@@ -1,0 +1,21 @@
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),ts=require('typescript');
+function load(file){const module={exports:{}};const source=fs.readFileSync(path.resolve(__dirname,'../src/lib',file+'.ts'),'utf8');const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;new Function('require','module','exports',code)(name=>load(name.replace('./','')),module,module.exports);return module.exports;}
+const {sundayWeeks,visibleResources}=load('curriculum'),{classForBirthDate}=load('automatic-class');
+assert.deepEqual(sundayWeeks('2026-10'),['2026-10-04','2026-10-11','2026-10-18','2026-10-25']);
+assert.deepEqual(sundayWeeks('2026-11'),['2026-11-01','2026-11-08','2026-11-15','2026-11-22','2026-11-29']);
+assert.equal(sundayWeeks('2028-02').length,4);
+const items=[{id:1,type:'LESSON',title:'Love',classId:2,weekDate:'2026-10-04'},{id:2,type:'GAME',title:'Kindness Circle',classId:2,weekDate:null},{id:3,type:'VIDEO',title:'Love',classId:3,weekDate:'2026-10-11'}];
+assert.deepEqual(visibleResources(items,'','','2026-10-11','').map(x=>x.id),[2,3]);
+assert.deepEqual(visibleResources(items,' kindness ','GAME','','2').map(x=>x.id),[2]);
+assert.deepEqual(visibleResources(items,'Love','','','3').map(x=>x.id),[3]);
+const classes=[{id:3,minAge:3,maxAge:4},{id:2,minAge:5,maxAge:8},{id:1,minAge:9,maxAge:12},{id:4,minAge:13,maxAge:19}];
+assert.equal(classForBirthDate(classes,'2023-10-06','2026-10-06').id,3);
+assert.equal(classForBirthDate(classes,'2023-10-07','2026-10-06'),undefined);
+assert.equal(classForBirthDate(classes,'2021-10-06','2026-10-06').id,2);
+assert.equal(classForBirthDate(classes,'2021-10-07','2026-10-06').id,3);
+assert.equal(classForBirthDate(classes,'2017-10-06','2026-10-06').id,1);
+assert.equal(classForBirthDate(classes,'2013-10-06','2026-10-06').id,4);
+assert.equal(classForBirthDate(classes,'2026-02-30','2026-10-06'),undefined);
+assert.equal(classForBirthDate(classes,'2030-10-06','2026-10-06'),undefined);
+assert.equal(classForBirthDate(classes,'2000-10-06','2026-10-06'),undefined);
+console.log('PASS: curriculum Sunday calendars, combined filters, reusable bank and birthday-boundary class placement (15 cases).');

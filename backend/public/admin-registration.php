@@ -39,18 +39,14 @@ function api_register_children(PDO $db): never {
         $key = strtolower($first.'|'.$last.'|'.$dob);
         if (isset($seen[$key])) api_error('DUPLICATE_CHILD', "$first $last appears more than once in this registration.", 409);
         $seen[$key] = true;
-        $classId = (int)($child['classId'] ?? 0);
-        if ($classId) {
-            $class = $db->prepare('SELECT id FROM classes WHERE id=? AND campus_id=? AND is_active=1');
-            $class->execute([$classId, $actor['campus_id']]);
-            if (!$class->fetchColumn()) api_error('CLASS_NOT_AVAILABLE', 'Choose an active class at this campus.', 422);
-        } else {
+        // Birth date is authoritative; registration never accepts a manual override.
+        {
             $zone = new DateTimeZone('Africa/Lagos');
             $age = (new DateTimeImmutable($dob, $zone))->diff(new DateTimeImmutable('today', $zone))->y;
             $class = $db->prepare('SELECT id FROM classes WHERE campus_id=? AND is_active=1 AND ? BETWEEN min_age AND max_age ORDER BY display_order,id LIMIT 1');
             $class->execute([$actor['campus_id'], $age]);
             $classId = (int)$class->fetchColumn();
-            if (!$classId) api_error('CLASS_NOT_AVAILABLE', 'Choose an active class for this child; no age-based class was found.', 422);
+            if (!$classId) api_error('CLASS_NOT_AVAILABLE', 'No active class matches this child’s age. Ask a Super Admin to check the class age ranges.', 422);
         }
         $drafts[] = [$first, $last, $dob, $gender, $classId, $care];
     }

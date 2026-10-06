@@ -20,7 +20,7 @@ class RegistrationStatement extends PDOStatement {
         $this->db->executed[]=[$this->sql,$params];
         if(str_starts_with($this->sql,'INSERT INTO')){$this->db->lastId++;$this->db->writes[]=[$this->sql,$params];}
         $this->rows=match(true){
-            str_contains($this->sql,'FROM classes')=>$params[0]===999?[]:[['id'=>2]],
+            str_contains($this->sql,'FROM classes')=>$this->db->noClass?[]:[['id'=>2]],
             str_contains($this->sql,'g.first_name AS firstName')=>[['guardianId'=>8,'familyId'=>7,'firstName'=>'Sample','lastName'=>'Guardian','familyName'=>'Household','phone'=>'+2348000000001','secondary_phone'=>null]],
             str_contains($this->sql,'SELECT g.id FROM guardians')=>$params[0]===8&&$params[1]===7?[['id'=>8]]:[],
             str_contains($this->sql,'SELECT g.phone')=>$this->db->knownPhone?[['phone'=>'08000000001','secondary_phone'=>null]]:[],
@@ -34,7 +34,7 @@ class RegistrationStatement extends PDOStatement {
     public function fetchColumn(int $column=0): mixed {return $this->rows?array_values($this->rows[0])[$column]:false;}
 }
 class RegistrationDatabase extends PDO {
-    public array $executed=[],$writes=[],$audit=[];public int $lastId=100;public bool $knownPhone=false,$committed=false,$rolledBack=false;public string $duplicateName='';private bool $transaction=false;
+    public array $executed=[],$writes=[],$audit=[];public int $lastId=100;public bool $noClass=false,$knownPhone=false,$committed=false,$rolledBack=false;public string $duplicateName='';private bool $transaction=false;
     public function __construct(){}
     public function prepare(string $query,array $options=[]): PDOStatement|false {return new RegistrationStatement($this,$query);}
     public function lastInsertId(?string $name=null): string|false {return (string)$this->lastId;}
@@ -64,7 +64,8 @@ rejectsRegistration(array_replace($existing,['guardianId'=>999]),'FAMILY_NOT_AVA
 rejectsRegistration(['guardian'=>$guardian,'children'=>[array_replace($child,['dateOfBirth'=>date('Y-m-d')])]],'CHILD_TOO_YOUNG');
 rejectsRegistration(['guardian'=>$guardian,'children'=>[array_replace($child,['dateOfBirth'=>'2999-01-01'])]],'VALIDATION_ERROR');
 rejectsRegistration(['guardian'=>$guardian,'children'=>[array_replace($child,['gender'=>'UNKNOWN'])]],'VALIDATION_ERROR');
-rejectsRegistration(['guardian'=>$guardian,'children'=>[array_replace($child,['classId'=>999])]],'CLASS_NOT_AVAILABLE');
+[$automatic,$placed]=registerFixture(['guardian'=>$guardian,'children'=>[array_replace($child,['classId'=>999])]]);verifyRegistration($placed['children'][0]['classId']===2,'Manual class ignored; birth date determines class');
+$unmatched=new RegistrationDatabase();$unmatched->noClass=true;rejectsRegistration($new,'CLASS_NOT_AVAILABLE',$unmatched);verifyRegistration(!$unmatched->writes,'No matching active class does not create profiles');
 rejectsRegistration(['guardian'=>$guardian,'children'=>[$child,$child]],'DUPLICATE_CHILD');
 $duplicate=new RegistrationDatabase();$duplicate->duplicateName='Leo';$input=$existing;$input['children']=$new['children'];rejectsRegistration($input,'DUPLICATE_CHILD',$duplicate);verifyRegistration($duplicate->rolledBack&&!$duplicate->writes,'Later duplicate rolls back entire batch');
 $known=new RegistrationDatabase();$known->knownPhone=true;rejectsRegistration($new,'REGISTERED_FAMILY_FOUND',$known);verifyRegistration(!$known->writes,'Known phone does not create duplicate household');

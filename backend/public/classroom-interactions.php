@@ -27,9 +27,8 @@ function api_review_allowed(PDO $db,array $actor,int $classId,int $sid): bool {
 function api_discussion_payload(PDO $db,array $actor,int $id): array {
     $q=$db->prepare('SELECT id,class_id,service_session_id FROM classroom_weekly_reviews WHERE id=? AND campus_id=?');$q->execute([$id,(int)$actor['campus_id']]);$review=$q->fetch();
     if(!$review)api_error('REVIEW_NOT_FOUND','This discussion was not found.',404);
-    // Staff participating in that service can encourage the class team.
-    $allowed=api_service_duty($db,$actor,(int)$review['service_session_id']);
-    if(!$allowed)api_error('FORBIDDEN','This discussion is outside your assigned service.',403);
+    // Any authenticated campus staff member may encourage the class team.
+    // Review ownership and publishing still use api_review_allowed separately.
     $replies=[];$counts=['LIKE'=>0,'APPLAUSE'=>0,'HEART'=>0];$mine=null;
     $ready=api_table_exists($db,'classroom_review_replies')&&api_table_exists($db,'classroom_review_reactions');
     if($ready){

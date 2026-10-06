@@ -24,6 +24,9 @@ assert.match(assembly, /Well done<span>3<\/span>/);
 assert.match(assembly, /aria-pressed="true"/);
 assert.equal((assembly.match(/<svg/g) || []).length, 3, 'Each reaction uses an icon.');
 assert.doesNotMatch(assembly, /👏|<form|reply-1/, 'Assembly notes have reactions without adding a reply form.');
+const activity = render(loaded.exports.AssemblyActivityReactions, { activityId: 1 }, [thread]);
+assert.match(activity,/React to this assembly activity/);
+assert.match(activity,/Well done<span>3<\/span>/);
 const classroom = render(loaded.exports.DiscussionThread, { reviewId: 1 }, [thread]);
 assert.match(classroom, /reply-1/);
 assert.match(classroom, /Thank you!/);
@@ -44,4 +47,4 @@ const choose = new Function('choices', 'select', 'setValue', 'setOpen', 'trigger
 choose([{ value: 'new' }], { current: field }, v => result = v, () => {}, { current: { focus() {} } }, 0);
 assert.equal(result, 'new');
 assert.deepEqual(events, ['change', 'input'], 'Notify change before React restores the select.');
-console.log('Assembly interaction rendering and dropdown checks passed (13 cases).');
+console.log('Assembly interaction rendering and dropdown checks passed (15 cases).');
