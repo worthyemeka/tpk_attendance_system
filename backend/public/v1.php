@@ -12,6 +12,7 @@ require_once __DIR__ . '/sunday-schedule.php';
 require_once __DIR__ . '/admin-registration.php';
 require_once __DIR__ . '/curriculum.php';
 require_once __DIR__ . '/teacher-attendance.php';
+require_once __DIR__ . '/events.php';
 
 function api_ok(mixed $data, int $status = 200, ?array $meta = null): never {
     http_response_code($status); header('Content-Type: application/json; charset=utf-8');
@@ -626,9 +627,9 @@ function api_checkin_requests(PDO $db): never {
     $actor=api_actor($db);api_reconcile_stale_checkin_requests($db,(int)$actor['campus_id']);$sessionId=(int)($_GET['serviceSessionId']??0);
     if(!$sessionId){$session=api_current_service($db,(int)$actor['campus_id']);$sessionId=(int)($session['id']??0);}
     if(!$sessionId) api_ok(['serviceSessionId'=>null,'canApprove'=>false,'items'=>[]]);
-    if(!api_can_view_checkin($db,$actor,$sessionId)) api_error('FORBIDDEN','Check-in is available only to the TPK Super Admin, Head of Service, and Assistant Heads assigned to this service.',403);
+    if(!api_can_view_checkin($db,$actor,$sessionId)) api_error('FORBIDDEN','This service is not available for your campus.',403);
     $canApprove=api_can_operate_checkin($db,$actor,$sessionId);
-    if(!$canApprove) api_error('FORBIDDEN','Only the assigned service lead or a Super Admin can approve requests for this service.',403);
+    if(!$canApprove) api_ok(['serviceSessionId'=>$sessionId,'canApprove'=>false,'items'=>[]]);
     api_ok(['serviceSessionId'=>$sessionId,'canApprove'=>$canApprove,'items'=>api_checkin_request_rows($db,$sessionId)]);
 }
 function api_approve_checkin_request(PDO $db, int $requestId): never {
@@ -666,7 +667,7 @@ function api_checkins(PDO $db): never {
     /* All campus teachers see arrivals. Mutations remain service-lead-only;
        pickup bearer tokens must never be exposed through the read-only table. */
     $allowed=null;
-    $where=['a.service_session_id=?'];$params=[$sessionId];
+    $where=['a.service_session_id=?','a.checked_in_at IS NOT NULL',"a.status IN ('CHECKED_IN','PICKUP_REQUESTED','PICKED_UP')", "(a.source='ASSISTED' OR cir.status='APPROVED' OR a.check_in_request_id IS NULL)"];$params=[$sessionId];
     if($allowed!==null){if(!$allowed)api_ok(['serviceSessionId'=>$sessionId,'canViewCheckin'=>true,'canOperate'=>$canOperate,'canAssistedCheckin'=>$canAssistedCheckin,'items'=>[]]);$where[]='a.class_id IN ('.implode(',',array_fill(0,count($allowed),'?')).')';$params=array_merge($params,$allowed);}
     if(($q=trim((string)($_GET['search']??'')))!==''){$where[]='(c.first_name LIKE ? OR c.last_name LIKE ? OR g.first_name LIKE ? OR g.last_name LIKE ?)';$params=array_merge($params,["%$q%","%$q%","%$q%","%$q%"]);}
     $sql="SELECT a.id,c.id AS childId,c.first_name AS firstName,c.last_name AS lastName,c.gender,cl.name AS className,a.status,a.source,a.checked_in_at AS checkedInAt,a.is_first_visit AS firstVisit,g.first_name AS guardianFirstName,g.last_name AS guardianLastName,cir.id AS checkInRequestId,pc.qr_token AS ticketToken FROM attendance a JOIN children c ON c.id=a.child_id LEFT JOIN classes cl ON cl.id=a.class_id LEFT JOIN child_guardians cg ON cg.child_id=c.id AND cg.is_primary=1 LEFT JOIN guardians g ON g.id=cg.guardian_id LEFT JOIN check_in_requests cir ON cir.id=a.check_in_request_id LEFT JOIN service_pickup_codes pc ON pc.service_session_id=a.service_session_id AND pc.family_id=c.family_id WHERE ".implode(' AND ',$where).' ORDER BY a.checked_in_at DESC';$s=$db->prepare($sql);$s->execute($params);$items=$s->fetchAll();foreach($items as &$item){$item['checkInFormUrl']=$canOperate&&!empty($item['ticketToken'])?tpk_pickup_ticket_url($item['ticketToken']):null;unset($item['ticketToken']);}unset($item);api_ok(['serviceSessionId'=>$sessionId,'canViewCheckin'=>true,'canOperate'=>$canOperate,'canAssistedCheckin'=>$canAssistedCheckin,'items'=>$items]);
@@ -1020,6 +1021,17 @@ function api_archive_upload(PDO $db): never {
 
 if(api_method()==='OPTIONS') api_ok(null,204);
 try { $db=api_db();$path=api_path();$method=api_method();
+    if(preg_match('#^/api/v1/public/events/([a-f0-9]{48})$#',$path,$m)&&in_array($method,['GET','POST'],true))api_public_event($db,$m[1],$method==='POST');
+    if($method==='GET'&&$path==='/api/v1/events')api_events($db);
+    if($method==='POST'&&$path==='/api/v1/events')api_event_save($db);
+    if(preg_match('#^/api/v1/events/(\d+)$#',$path,$m)) { if($method==='GET')api_events($db,(int)$m[1]);if($method==='PATCH')api_event_save($db,(int)$m[1]); }
+    if($method==='GET'&&preg_match('#^/api/v1/events/(\d+)/family$#',$path,$m))api_event_family($db,(int)$m[1]);
+    if($method==='POST'&&preg_match('#^/api/v1/events/(\d+)/(sessions|groups|volunteers)$#',$path,$m))api_event_setup($db,(int)$m[1],$m[2]);
+    if($method==='POST'&&preg_match('#^/api/v1/events/(\d+)/registrations$#',$path,$m))api_event_registration($db,(int)$m[1]);
+    if($method==='POST'&&preg_match('#^/api/v1/events/(\d+)/check-in$#',$path,$m))api_event_arrival($db,(int)$m[1]);
+    if($method==='POST'&&preg_match('#^/api/v1/events/(\d+)/pickup$#',$path,$m))api_event_arrival($db,(int)$m[1],true);
+    if($method==='POST'&&preg_match('#^/api/v1/events/(\d+)/group-assignment$#',$path,$m))api_event_group_assignment($db,(int)$m[1]);
+    if($method==='POST'&&preg_match('#^/api/v1/events/(\d+)/duplicate$#',$path,$m))api_event_duplicate($db,(int)$m[1]);
     if($method==='GET'&&$path==='/api/v1/teacher-attendance')api_teacher_attendance($db);
     if($method==='POST'&&$path==='/api/v1/teacher-attendance/services')api_teacher_create_service($db);
     if($method==='POST'&&preg_match('#^/api/v1/teacher-attendance/services/(\d+)/qr$#',$path,$m))api_teacher_qr($db,(int)$m[1]);

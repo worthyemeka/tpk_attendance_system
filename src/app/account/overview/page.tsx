@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { AttentionPanel } from "@/components/attention-panel";
+import { EventHighlights } from "@/components/events-workspace";
 import { TeacherQuickView, type TeacherQuickTarget } from "@/components/dashboard-quick-views";
 import { useEffect, useState } from "react";
 import {
@@ -162,6 +163,7 @@ export default function AccountOverview() {
           {sundayContext.selectedSundayDate && sundayContext.selectedService && <p className="context-indicator">Viewing Sunday, {new Intl.DateTimeFormat("en-NG", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${sundayContext.selectedSundayDate}T12:00:00Z`))} · {sundayContext.selectedService.name}</p>}
         </div>
       </header>
+      <EventHighlights />
       {personalAssignments.length > 0 && (
         <section className="panel assignment-card">
           <div>

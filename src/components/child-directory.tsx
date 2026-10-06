@@ -1,7 +1,7 @@
 "use client";
 
 import { AppSelect } from "@/components/app-dropdown";
-import { printIdentityHeader } from "@/lib/branded-print";
+import { printDownloaderFooter } from "@/lib/branded-print";
 import { DirectoryPagination } from "./directory-pagination";
 import Link from "next/link";
 import {useProfileDialog} from "@/components/use-profile-dialog";
@@ -174,7 +174,7 @@ function openChildrenAttendanceReport(report: AttendanceReport, target?: Window 
   brandHeader.style.cssText="display:flex;align-items:center;gap:14px;margin-bottom:18px;padding-bottom:12px;border-bottom:1px solid #dfe4eb";
   brandHeader.innerHTML=`<img alt="Petra Christian Centre" src="${reportValue(window.location.origin)}/brand/petra-logo.jpg" width="48" height="48" style="object-fit:contain"/><img alt="TribePetra Kids" src="${reportValue(window.location.origin)}/brand/tpk-logo.png" width="54" height="54" style="object-fit:contain"/><strong style="font-size:11px;letter-spacing:.04em">TRIBEPETRA KIDS - WUSE CAMPUS</strong>`;
   reportWindow.document.body.prepend(brandHeader);
-  brandHeader.insertAdjacentHTML("afterend",printIdentityHeader());
+  reportWindow.document.body.insertAdjacentHTML("beforeend",printDownloaderFooter());
   reportWindow.focus();
   void Promise.all(Array.from(reportWindow.document.querySelectorAll("img"),image=>image.decode().catch(()=>{if(image.parentElement?.tagName==="SPAN")image.remove();}))).then(()=>{if(!reportWindow.closed)reportWindow.print();});
   return true;

@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
   FiBarChart2,
+  FiCalendar,
   FiBookOpen,
   FiCheckSquare,
   FiChevronRight,
@@ -50,6 +51,7 @@ const superPeople: readonly Item[] = [
   ["Team", "/account/team", FiUsers],
 ];
 const superMinistry: readonly Item[] = [
+  ["Events & Conferences", "/account/events", FiCalendar],
   ["Teacher Check-In", "/account/teacher-check-in", FiCheckSquare],
   ["Team & Roster", "/account/roster", FiClock],
   ["Relations & Follow-Up", "/account/relations", FiUserCheck],
@@ -70,12 +72,14 @@ const serviceLeadPeople: readonly Item[] = [
   ["Team", "/account/team", FiUsers],
 ];
 const adminMinistry: readonly Item[] = [
+  ["Events & Conferences", "/account/events", FiCalendar],
   ["Teacher Check-In", "/account/teacher-check-in", FiCheckSquare],
   ["My Roster", "/account/roster", FiClock],
   ["My Follow-Ups", "/account/relations", FiUserCheck],
   ["Classes & Curriculum", "/account/classes", FiBookOpen],
 ];
 const followUpLeadMinistry: readonly Item[] = [
+  ["Events & Conferences", "/account/events", FiCalendar],
   ["Teacher Check-In", "/account/teacher-check-in", FiCheckSquare],
   ["My Roster", "/account/roster", FiClock],
   ["Relations & Follow-Up", "/account/relations", FiUserCheck],

@@ -141,3 +141,11 @@ php backend/scripts/test_checkin_visibility.php
 ```
 
 For an explicit real-MySQL smoke check after deploying the tables, run `TPK_MYSQL_SMOKE=1 php backend/scripts/test_teacher_attendance_mysql.php`. It reads curriculum/classes and verifies Sunday/MDWK expectation, QR answers, repeat sign-in, absence and welfare SQL using connection-local temporary attendance tables. It does not create staff sessions or persistent attendance/welfare records; it is not a substitute for HTTP authentication tests. The test skips unless explicitly enabled.
+
+### Events & Conferences and current age groups
+
+Apply `2026_events.sql` before releasing the events router. Event guests, session selections, groups, volunteers, arrivals and pickups are separate records and never create permanent host-campus child profiles or Sunday attendance. Only a Super Admin creates, publishes or duplicates events. Public registration links expose programme details, not existing family records. Returning-family lookup is staff-assisted; assigned leads/check-in/pickup operators can access event care/contact records, while ordinary teachers see the programme and counts.
+
+`TPK_MYSQL_SMOKE=1 php backend/scripts/test_events_mysql.php` uses temporary tables to check event registration, age groups, duplicate protection, operator permissions, safe pickup, duplication and the real assembly-history service schema. It makes no persistent diagnostic event or attendance records.
+
+Apply `2026_class_age_ranges.sql` with a private backup. Current ranges are Tribe C 3–5, Tribe B 6–8, Tribe A 9–11 and TribePetra Teens 12–19. Current active child placement should be recalculated from birthdays in Africa/Lagos, not historical attendance.class_id. Preserve a placement snapshot for rollback and leave missing/invalid/out-of-range birthdays for manual review.

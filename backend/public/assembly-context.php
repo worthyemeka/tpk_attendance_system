@@ -7,7 +7,7 @@ function api_assembly_sessions(PDO $db, array $actor): array {
         if(!preg_match('/^\d{4}-(0[1-9]|1[0-2])$/',$month))api_error('VALIDATION_ERROR','Choose a valid assembly month.',422);
         $start=$month.'-01';
         $end=(new DateTimeImmutable($start))->modify('+1 month')->format('Y-m-d');
-        $q=$db->prepare('SELECT id,name,service_date AS serviceDate,service_type AS serviceType,starts_at AS startsAt,ends_at AS endsAt,status FROM service_sessions WHERE campus_id=? AND service_date>=? AND service_date<? AND service_type IS NOT NULL ORDER BY service_date DESC,starts_at,id');
+        $q=$db->prepare('SELECT id,name,service_date AS serviceDate,service_type AS serviceType,starts_at AS startsAt,ends_at AS endsAt,is_open AS isOpen FROM service_sessions WHERE campus_id=? AND service_date>=? AND service_date<? AND service_type IS NOT NULL ORDER BY service_date DESC,starts_at,id');
         $q->execute([(int)$actor['campus_id'],$start,$end]);
         return $q->fetchAll();
     }

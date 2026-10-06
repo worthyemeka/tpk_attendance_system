@@ -33,6 +33,7 @@ export async function downloadMonthlyRosterPdf(items:WeeklyAssignment[],month:st
   const monthLabel=new Intl.DateTimeFormat("en-NG",{month:"long",year:"numeric",timeZone:"UTC"}).format(new Date(`${month}-01T12:00:00Z`));
   const name=personal?groups[0].item.teacherName.replace(/[^a-z0-9]+/gi,"-")+"-":"";
   await downloadTablePdf(`TPK-${name}${month}-roster.pdf`,{
+    identity:personal?{name:groups[0].item.teacherName,photo:photos[0],label:"Teacher roster"}:undefined,
     title:personal?"My Teaching Roster":"Monthly Team Roster",subtitle:`${monthLabel} | All dates in the selected view`,
     columns:["Photo","Teacher","Date","Service","Assigned roles"],widths:[.45,1.6,.8,1.6,2.1],photos,avatarNames:groups.map(({item})=>item.teacherName),
     rows:groups.map(({item,roles})=>["",item.teacherName,label(item.assignmentDate),item.serviceName||"Ministry activity",[...roles].join("; ")]),

@@ -484,7 +484,7 @@ function AssemblyView({ groups, loading, isSuperAdmin, onRefresh }: { groups: As
   useEffect(() => {
     const controller = new AbortController();
     setHistoryLoading(true); setHistoryError("");
-    fetch(`${apiBase}/api/v1/assembly?month=${encodeURIComponent(historyMonth)}`, { headers: authHeaders(session), signal: controller.signal })
+    fetch(`${apiBase}/api/v1/assembly?month=${encodeURIComponent(historyMonth)}`, { headers: authHeaders(session), signal: controller.signal, cache: "no-store" })
       .then(async (r) => { const b = await r.json(); if (!r.ok || !b?.success) throw new Error(b?.error?.message || "We couldn't load assembly history."); return b.data.groups as AssemblyGroup[]; })
       .then((items) => { if (!controller.signal.aborted) setHistory({ month: historyMonth, groups: items }); })
       .catch((e) => { if (!controller.signal.aborted) setHistoryError(e instanceof Error ? e.message : "We couldn't load assembly history."); })
@@ -499,7 +499,17 @@ function AssemblyView({ groups, loading, isSuperAdmin, onRefresh }: { groups: As
   // History browsing does not remove the selected-service composer. Permissions stay server-controlled.
   const activityCount = visibleGroups.reduce((sum, item) => sum + item.activities.length, 0);
   const noteCount = visibleGroups.reduce((sum, item) => sum + item.notes.length, 0);
-  const refreshHistory = async () => { setHistoryRetry((v) => v + 1); await onRefresh(); };
+  const refreshHistory = async () => {
+    // Keep this view mounted: a parent reload unmounted the composer and reset
+    // its month/service filters immediately after a successful save.
+    const savedService = programmeGroup?.serviceSession;
+    if (savedService) {
+      setHistoryMonth(savedService.serviceDate.slice(0, 7));
+      setHistorySunday(savedService.serviceDate);
+      setHistoryService(String(savedService.id));
+    }
+    setHistoryRetry((v) => v + 1);
+  };
   const changeMonth = (value: Date) => {
     const nextMonth = value.toISOString().slice(0, 7);
     if (nextMonth === historyMonth) return;

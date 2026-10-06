@@ -2,7 +2,7 @@
 import { mediaUrl, readTeacherSession } from "./session";
 export type PdfImage = {hex:string;width:number;height:number};
 export type PdfIdentity = {name:string;photo?:PdfImage|null;label?:string};
-export type TableReport = {title:string;subtitle?:string;columns:string[];rows:string[][];widths?:number[];photos?:(PdfImage|null)[];branding?:PdfImage[];identity?:PdfIdentity;avatarNames?:string[];photoColumn?:number};
+export type TableReport = {title:string;subtitle?:string;columns:string[];rows:string[][];widths?:number[];photos?:(PdfImage|null)[];branding?:PdfImage[];identity?:PdfIdentity;downloadedBy?:string;avatarNames?:string[];photoColumn?:number};
 export const pdfInitials=(name:string)=>name.trim().replace(/^(Auntie|Uncle)\s+/i,"").split(/\s+/).filter(Boolean).map(word=>word[0]).filter((_,index,words)=>index===0||index===words.length-1).join("").toUpperCase();
 const ascii=(value:string)=>value.normalize("NFKD").replace(/[\u0300-\u036f]/g,"").replace(/[\u2018\u2019]/g,"'").replace(/[\u2013\u2014]/g,"-").replace(/[^\x20-\x7e]/g," ");
 const escape=(value:string)=>ascii(value).replace(/([\\()])/g,"\\$1");
@@ -15,7 +15,7 @@ function wrap(value:string,width:number):string[] {
   }
   if(line)lines.push(line);return lines.length?lines:["-"];
 }
-export function createTablePdf({title,subtitle="",columns,rows,widths,photos,branding=[],identity,avatarNames,photoColumn=0}:TableReport):Blob {
+export function createTablePdf({title,subtitle="",columns,rows,widths,photos,branding=[],identity,downloadedBy,avatarNames,photoColumn=0}:TableReport):Blob {
   const w=842,h=595,margin=30,available=w-margin*2;
   const weights=widths||columns.map(()=>1),total=weights.reduce((a,b)=>a+b,0);
   const sizes=weights.map(value=>available*value/total);const pages:string[]=[];
@@ -36,13 +36,13 @@ export function createTablePdf({title,subtitle="",columns,rows,widths,photos,bra
     branding.slice(0,2).forEach((logo,index)=>{const scale=Math.min(52/logo.width,58/logo.height);const width=logo.width*scale,height=logo.height*scale;commands.push(`q ${width.toFixed(2)} 0 0 ${height.toFixed(2)} ${margin+index*62} ${(h-23-height).toFixed(2)} cm /B${index} Do Q`);});
     text("TRIBEPETRA KIDS - WUSE CAMPUS",headingX,30,9,true);text(title,headingX,54,17,true);
     wrap(subtitle,w-margin-headingX).slice(0,2).forEach((line,index)=>text(line,headingX,71+index*11,9));
-    if(identity){avatar(identity.name,identity.photo,"H",margin,91,36);text(identity.label||"Downloaded by",margin+46,101,8);wrap(identity.name,available-46).slice(0,2).forEach((line,index)=>text(line,margin+46,116+index*11,11,true));}
-    const header=identity?154:105;
+    if(identity && !pages.length){avatar(identity.name,identity.photo,"H",margin,91,36);text(identity.label||"Teacher roster",margin+46,101,8);wrap(identity.name,available-46).slice(0,2).forEach((line,index)=>text(line,margin+46,116+index*11,11,true));}
+    const header=identity&&!pages.length?154:105;
     text("Confidential - share only with authorised TPK leaders.",margin,header-8,8);
     commands.push(`1 0.95 0.91 rg ${margin} ${h-header-25} ${available} 25 re f`,"0.10 0.17 0.29 rg");
     let x=margin;columns.forEach((name,i)=>{text(name,x+7,header+15,9,true);x+=sizes[i];});y=header+25;
   };
-  const finish=()=>{rule(h-32);text(`TPK Service Report | Page ${pages.length+1}`,margin,h-18,8);pages.push(commands.join("\n"));};
+  const finish=(last=false)=>{rule(h-32);text(`TPK Service Report | Page ${pages.length+1}`,margin,h-18,8);if(last&&downloadedBy)text(`Downloaded by ${ascii(downloadedBy).slice(0,90)}`,w-430,h-18,8);pages.push(commands.join("\n"));};
   start();
   for(const [rowIndex,row] of rows.entries()){
     const photo=photos?.[rowIndex];
@@ -53,7 +53,7 @@ export function createTablePdf({title,subtitle="",columns,rows,widths,photos,bra
     rule(y);if(hasAvatar){const size=Math.min(34,sizes[photoColumn]-14);avatar(avatarNames?.[rowIndex]||row[photoColumn],photo,`I${rowIndex}`,margin+sizes.slice(0,photoColumn).reduce((sum,size)=>sum+size,0)+7,y+7,size);}let x=margin;cells.forEach((lines,i)=>{lines.forEach((line,j)=>text(line,x+7,y+16+j*12));x+=sizes[i];});y+=height;
   }
   if(!rows.length)text("No records in this view.",margin+7,y+21);
-  rule(y);finish();
+  rule(y);finish(true);
   const objects:string[]=["<< /Type /Catalog /Pages 2 0 R >>", "", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>"];
   const imageRefs:string[]=[];
   if(identity?.photo){const photo=identity.photo,id=objects.length+1,encoded=photo.hex+">";objects.push(`<< /Type /XObject /Subtype /Image /Width ${photo.width} /Height ${photo.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter [/ASCIIHexDecode /DCTDecode] /Length ${encoded.length} >>\nstream\n${encoded}\nendstream`);imageRefs.push(`/H ${id} 0 R`);}
@@ -78,8 +78,8 @@ export function loadReportBranding():Promise<PdfImage[]> {
 export async function downloadTablePdf(filename:string,report:TableReport):Promise<void> {
   const branding=report.branding??await loadReportBranding();
   const session=readTeacherSession();
-  const identity=report.identity??(session?{name:session.name||`${session.firstName} ${session.lastName}`,photo:await loadPdfAvatar(session.profileImageUrl)}:undefined);
-  const url=URL.createObjectURL(createTablePdf({...report,branding,identity}));const a=document.createElement("a");a.href=url;a.download=filename.endsWith(".pdf")?filename:filename+".pdf";document.body.appendChild(a);a.click();a.remove();window.setTimeout(()=>URL.revokeObjectURL(url),30_000);
+  const downloadedBy=report.downloadedBy??(session?session.name||`${session.firstName} ${session.lastName}`:undefined);
+  const url=URL.createObjectURL(createTablePdf({...report,branding,downloadedBy}));const a=document.createElement("a");a.href=url;a.download=filename.endsWith(".pdf")?filename:filename+".pdf";document.body.appendChild(a);a.click();a.remove();window.setTimeout(()=>URL.revokeObjectURL(url),30_000);
 }
 export function loadPdfAvatar(source?:string|null):Promise<PdfImage|null>{
   const url=mediaUrl(source);if(!url)return Promise.resolve(null);
