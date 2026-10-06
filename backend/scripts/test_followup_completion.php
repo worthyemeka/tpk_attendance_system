@@ -4,7 +4,9 @@ declare(strict_types=1);
 final class FollowupCapture extends RuntimeException { public function __construct(public array $data){parent::__construct('Response captured');} }
 function api_actor(PDO $db): array {return $GLOBALS['actor'];}
 function api_is_followup_lead(array $actor): bool {return in_array($actor['access_level'],['TPK_SUPER_ADMIN','TPK_FOLLOW_UP_ADMIN'],true);}
-function api_method(): string {return 'GET';}
+function api_method(): string {return $GLOBALS['method']??'GET';}
+function api_input(): array {return ['outcome'=>$GLOBALS['outcome']??'CONTACTED'];}
+function api_audit(PDO $db,array $actor,string $action,string $entity,int $id,array $details): void {}
 function api_ok(array $data,int $status=200): never {throw new FollowupCapture($data);}
 function api_error(string $code,string $message,int $status=400): never {throw new RuntimeException($code);}
 class CompletionStatement extends PDOStatement {
@@ -16,6 +18,10 @@ class CompletionStatement extends PDOStatement {
 class CompletionDatabase extends PDO {
     public array $queries=[];
     public function __construct(){}
+    public function beginTransaction(): bool {return true;}
+    public function commit(): bool {return true;}
+    public function inTransaction(): bool {return true;}
+    public function rollBack(): bool {return true;}
     public function prepare(string $query,array $options=[]): PDOStatement|false {
         $this->queries[]=$query;
         $rows=match(true){
@@ -42,4 +48,11 @@ foreach(['TPK_SUPER_ADMIN','TPK_FOLLOW_UP_ADMIN','TPK_ADMIN'] as $role){
 $GLOBALS['actor']=['id'=>99,'campus_id'=>1,'access_level'=>'TPK_ADMIN'];
 try{api_followup(new CompletionDatabase(),1);throw new RuntimeException('Unexpected access');}catch(RuntimeException $e){if($e->getMessage()!=='FORBIDDEN')throw $e;}
 if(!str_contains($source,"(status='CONTACTED' AND DATE(last_contacted_at)>=?))"))throw new RuntimeException('A completed earlier week must not absorb a new absence.');
-echo "Follow-up completion API checks passed (5 cases).\n";
+$GLOBALS['actor']=['id'=>42,'campus_id'=>1,'access_level'=>'TPK_ADMIN'];$GLOBALS['method']='PATCH';
+foreach(['CONTACTED','RESOLVED','NO_ANSWER','TRY_AGAIN'] as $outcome){
+    $GLOBALS['outcome']=$outcome;$db=new CompletionDatabase();
+    try{api_followup($db,1);}catch(FollowupCapture $result){}
+    $closedTasks=str_contains(implode("\n",$db->queries),"SET t.status='RESOLVED'");
+    if($closedTasks!==in_array($outcome,['CONTACTED','RESOLVED'],true))throw new RuntimeException('Incorrect absence-task completion for '.$outcome);
+}
+echo "Follow-up completion API checks passed (9 cases).\n";

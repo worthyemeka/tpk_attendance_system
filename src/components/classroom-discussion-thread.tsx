@@ -97,7 +97,7 @@ export function AssemblyAttachment({ item }: { item: AssemblyMedia }) {
   };
   return <figure className="assembly-attachment">
     {item.mimeType.startsWith("video/") ? <div className="assembly-video-cover">
-      {url && <video ref={video} controls={playing} playsInline preload="auto" src={url} poster={poster || undefined} aria-label={item.name} onLoadedData={captureCover} onLoadedMetadata={() => { if (video.current) video.current.currentTime = Math.min(.1, video.current.duration / 2 || 0); }} onSeeked={captureCover} onPlay={() => setPlaying(true)} onEnded={() => setPlaying(false)} onError={() => setError(true)} />}
+      {url && <video ref={video} controls={playing} playsInline preload="auto" src={url} poster={poster || undefined} aria-label={item.name} onLoadedData={captureCover} onLoadedMetadata={() => { setReady(true); if (video.current) video.current.currentTime = Math.min(.1, video.current.duration / 2 || 0); }} onSeeked={captureCover} onPlay={() => setPlaying(true)} onEnded={() => setPlaying(false)} onError={() => setError(true)} />}
       {!playing && <button type="button" className="assembly-video-play" disabled={!ready && !error} aria-label={error ? `Retry ${item.name}` : `Play ${item.name}`} onClick={() => error ? setRetry(v => v + 1) : void play()}>
         <span className="assembly-play-icon"><FiPlay /></span>
         <b>{error ? "Retry video" : ready ? "Play video" : "Preparing video…"}</b>
