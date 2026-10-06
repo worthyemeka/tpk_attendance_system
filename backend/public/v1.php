@@ -1028,6 +1028,8 @@ try { $db=api_db();$path=api_path();$method=api_method();
     if($method==='POST'&&$path==='/api/v1/assembly/activities')api_assembly_activity($db);
     if($method==='PATCH'&&preg_match('#^/api/v1/assembly/activities/(\d+)$#',$path,$m))api_assembly_activity($db,(int)$m[1]);
     if($method==='POST'&&$path==='/api/v1/assembly/notes')api_assembly_note($db);
+    if($method==='GET'&&preg_match('#^/api/v1/assembly/notes/(\d+)/reactions$#',$path,$m))api_assembly_note_reaction($db,(int)$m[1]);
+    if($method==='PUT'&&preg_match('#^/api/v1/assembly/notes/(\d+)/reaction$#',$path,$m))api_assembly_note_reaction($db,(int)$m[1],true);
     if($method==='GET'&&preg_match('#^/api/v1/classrooms/(\d+)$#',$path,$m))api_classroom_detail($db,(int)$m[1]);
     if($method==='POST'&&preg_match('#^/api/v1/classrooms/(\d+)/assignments$#',$path,$m))api_create_classroom_assignment($db,(int)$m[1]);
     if($method==='POST'&&preg_match('#^/api/v1/classrooms/(\d+)/notes$#',$path,$m))api_create_classroom_note($db,(int)$m[1]);

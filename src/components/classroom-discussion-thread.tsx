@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { FiHeart, FiMessageCircle, FiPlay, FiThumbsUp } from "react-icons/fi";
+import { PiHandsClapping } from "react-icons/pi";
 import { apiBase, authHeaders } from "@/lib/session";
 import "./classroom-interactions.css";
 import { TeacherAttribution, PostedTime } from "./teacher-attribution";
@@ -15,25 +16,35 @@ type Thread = {
 };
 
 export function DiscussionThread({ reviewId }: { reviewId: number }) {
+  return <NoteDiscussion id={reviewId} />;
+}
+
+export function AssemblyNoteReactions({ noteId }: { noteId: number }) {
+  return <NoteDiscussion id={noteId} assembly />;
+}
+
+function NoteDiscussion({ id: reviewId, assembly = false }: { id: number; assembly?: boolean }) {
   const [thread, setThread] = useState<Thread | null>(null);
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
+  const endpoint = assembly ? `assembly/notes/${reviewId}` : `classroom-reviews/${reviewId}`;
   useEffect(() => {
     const controller = new AbortController();
     setThread(null);
-    fetch(`${apiBase}/api/v1/classroom-reviews/${reviewId}/discussion`, { headers: authHeaders(), signal: controller.signal })
-      .then(async (r) => { const b = await r.json(); if (!r.ok || !b.success) throw new Error(b.error?.message || "We couldn't load the replies."); return b.data as Thread; })
+    setError("");
+    fetch(`${apiBase}/api/v1/${endpoint}/${assembly ? "reactions" : "discussion"}`, { headers: authHeaders(), signal: controller.signal })
+      .then(async (r) => { const b = await r.json(); if (!r.ok || !b.success) throw new Error(b.error?.message || "We couldn't load the reactions."); return b.data as Thread; })
       .then((data) => { setThread(data); setError(""); })
       .catch((e) => { if (!controller.signal.aborted) setError(e instanceof Error ? e.message : "We couldn't load the replies."); });
     return () => controller.abort();
-  }, [reviewId, retry]);
+  }, [endpoint, assembly, retry]);
   async function save(action: "reply" | "reaction", reaction?: Reaction) {
     if (busy || !thread?.canInteract) return;
     setBusy(true); setError("");
     try {
-      const r = await fetch(`${apiBase}/api/v1/classroom-reviews/${reviewId}/${action === "reply" ? "replies" : "reaction"}`, {
+      const r = await fetch(`${apiBase}/api/v1/${endpoint}/${action === "reply" ? "replies" : "reaction"}`, {
         method: action === "reply" ? "POST" : "PUT", headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify(action === "reply" ? { body: reply.trim() } : { reaction: thread.myReaction === reaction ? null : reaction }),
       });
@@ -44,15 +55,16 @@ export function DiscussionThread({ reviewId }: { reviewId: number }) {
   }
   const choices = [
     { key: "LIKE" as const, label: "Like", icon: <FiThumbsUp /> },
-    { key: "APPLAUSE" as const, label: "Well done", icon: <span aria-hidden="true">👏</span> },
+    { key: "APPLAUSE" as const, label: "Well done", icon: <PiHandsClapping aria-hidden="true" /> },
     { key: "HEART" as const, label: "Love", icon: <FiHeart /> },
   ];
-  return <div className="discussion-thread" aria-busy={busy}>
-    {!thread && !error && <small>Loading replies…</small>}
+  return <div className={`discussion-thread${assembly ? " assembly-note-reactions" : ""}`} aria-busy={busy}>
+    {!thread && !error && <small>Loading {assembly ? "reactions" : "replies"}…</small>}
     {thread && <>
-      <div className="discussion-reactions">{choices.map(({ key, label, icon }) => <button key={key} type="button" aria-pressed={thread.myReaction === key} disabled={busy || !thread.canInteract} onClick={() => void save("reaction", key)}>{icon}{label}<span>{thread.reactions[key] || 0}</span></button>)}<small><FiMessageCircle /> {thread.replies.length} {thread.replies.length === 1 ? "reply" : "replies"}</small></div>
+      <div className="discussion-reactions" aria-label="React to this note">{choices.map(({ key, label, icon }) => <button key={key} type="button" aria-pressed={thread.myReaction === key} disabled={busy || !thread.canInteract} onClick={() => void save("reaction", key)}>{icon}{label}<span>{thread.reactions[key] || 0}</span></button>)}{!assembly && <small><FiMessageCircle /> {thread.replies.length} {thread.replies.length === 1 ? "reply" : "replies"}</small>}</div>
+      {assembly && !thread.canInteract && <small>Reactions will be available after the system update.</small>}
       <div className="discussion-replies">{thread.replies.map((item) => <div className="discussion-reply" key={item.id}><TeacherAttribution name={item.author} staffId={item.authorId} photo={item.authorProfileImageUrl} createdAt={item.createdAt} /><p>{item.body}</p></div>)}</div>
-      {thread.canInteract && <form className="discussion-reply-form" onSubmit={(e) => { e.preventDefault(); if (reply.trim()) void save("reply"); }}><label htmlFor={`reply-${reviewId}`}>Encourage the team or leave a reply</label><textarea id={`reply-${reviewId}`} value={reply} maxLength={2000} rows={2} disabled={busy} onChange={(e) => setReply(e.target.value)} placeholder="Well done, team…" /><button type="submit" disabled={busy || !reply.trim()}>{busy ? "Saving…" : "Post reply"}</button></form>}
+      {!assembly && thread.canInteract && <form className="discussion-reply-form" onSubmit={(e) => { e.preventDefault(); if (reply.trim()) void save("reply"); }}><label htmlFor={`reply-${reviewId}`}>Encourage the team or leave a reply</label><textarea id={`reply-${reviewId}`} value={reply} maxLength={2000} rows={2} disabled={busy} onChange={(e) => setReply(e.target.value)} placeholder="Well done, team…" /><button type="submit" disabled={busy || !reply.trim()}>{busy ? "Saving…" : "Post reply"}</button></form>}
     </>}
     {error && <div className="interaction-error" role="alert">{error}{!thread && <button type="button" onClick={() => setRetry((v) => v + 1)}>Retry</button>}</div>}
   </div>;
@@ -96,7 +108,7 @@ export function AssemblyAttachment({ item }: { item: AssemblyMedia }) {
     catch { setPlaying(false); }
   };
   return <figure className="assembly-attachment">
-    {item.mimeType.startsWith("video/") ? <div className="assembly-video-cover">
+    {item.mimeType.startsWith("video/") ? <div className={`assembly-video-cover${playing ? " is-playing" : ""}`}>
       {url && <video ref={video} controls={playing} playsInline preload="auto" src={url} poster={poster || undefined} aria-label={item.name} onLoadedData={captureCover} onLoadedMetadata={() => { setReady(true); if (video.current) video.current.currentTime = Math.min(.1, video.current.duration / 2 || 0); }} onSeeked={captureCover} onPlay={() => setPlaying(true)} onEnded={() => setPlaying(false)} onError={() => setError(true)} />}
       {!playing && <button type="button" className="assembly-video-play" disabled={!ready && !error} aria-label={error ? `Retry ${item.name}` : `Play ${item.name}`} onClick={() => error ? setRetry(v => v + 1) : void play()}>
         <span className="assembly-play-icon"><FiPlay /></span>

@@ -30,7 +30,7 @@ import "./classroom-children-table.css";
 import "./classroom-attendance.css";
 import "./classroom-refinements.css";
 import "./classrooms-overview.css";
-import { DiscussionThread, AssemblyAttachment, type AssemblyMedia } from "./classroom-discussion-thread";
+import { DiscussionThread, AssemblyAttachment, AssemblyNoteReactions, type AssemblyMedia } from "./classroom-discussion-thread";
 import { TeacherAttribution } from "./teacher-attribution";
 import { VideoTrimmer } from "./video-trimmer";
 import { TOTAL_UPLOAD_BYTES, VIDEO_UPLOAD_BYTES } from "@/lib/video-trim";
@@ -466,34 +466,69 @@ function AssemblyView({ groups, loading, isSuperAdmin, onRefresh }: { groups: As
   const [note, setNote] = useState("");
   const [message, setMessage] = useState("");
   const group = groups[selectedGroup] || groups[0];
+  const sourceDate = group?.serviceSession?.serviceDate || "";
+  const sourceId = group?.serviceSession?.id || 0;
+  const [historyMonth, setHistoryMonth] = useState(sourceDate.slice(0, 7) || new Date().toISOString().slice(0, 7));
+  const [historySunday, setHistorySunday] = useState(sourceDate);
+  const [historyService, setHistoryService] = useState(String(sourceId || ""));
+  const [history, setHistory] = useState<{ month: string; groups: AssemblyGroup[] } | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState("");
+  const [historyRetry, setHistoryRetry] = useState(0);
+  useEffect(() => {
+    if (!sourceDate) return;
+    setHistoryMonth(sourceDate.slice(0, 7)); setHistorySunday(sourceDate); setHistoryService(String(sourceId));
+    setNote(""); setMessage("");
+  }, [sourceDate, sourceId]);
+  useEffect(() => {
+    const controller = new AbortController();
+    setHistoryLoading(true); setHistoryError("");
+    fetch(`${apiBase}/api/v1/assembly?month=${encodeURIComponent(historyMonth)}`, { headers: authHeaders(session), signal: controller.signal })
+      .then(async (r) => { const b = await r.json(); if (!r.ok || !b?.success) throw new Error(b?.error?.message || "We couldn't load assembly history."); return b.data.groups as AssemblyGroup[]; })
+      .then((items) => { if (!controller.signal.aborted) setHistory({ month: historyMonth, groups: items }); })
+      .catch((e) => { if (!controller.signal.aborted) setHistoryError(e instanceof Error ? e.message : "We couldn't load assembly history."); })
+      .finally(() => { if (!controller.signal.aborted) setHistoryLoading(false); });
+    return () => controller.abort();
+  }, [historyMonth, historyRetry, session, sourceId]);
+  const historyGroups = !historyLoading && !historyError && history?.month === historyMonth ? history.groups : [];
+  const sundays = [...new Set(historyGroups.map((item) => item.serviceSession?.serviceDate).filter((date): date is string => Boolean(date)))].sort();
+  const sundayGroups = historyGroups.filter((item) => !historySunday || item.serviceSession?.serviceDate === historySunday);
+  const visibleGroups = sundayGroups.filter((item) => !historyService || String(item.serviceSession?.id) === historyService);
+  const programmeGroup = visibleGroups.length === 1 ? visibleGroups[0] : null;
+  const activityCount = visibleGroups.reduce((sum, item) => sum + item.activities.length, 0);
+  const noteCount = visibleGroups.reduce((sum, item) => sum + item.notes.length, 0);
+  const refreshHistory = async () => { setHistoryRetry((v) => v + 1); await onRefresh(); };
+  const changeMonth = (value: Date) => {
+    setHistoryMonth(value.toISOString().slice(0, 7)); setHistorySunday(""); setHistoryService(""); setNote(""); setMessage("");
+  };
   useEffect(() => { if (selectedGroup >= groups.length) setSelectedGroup(0); }, [groups.length, selectedGroup]);
-  const canManage = Boolean(group?.canManage);
+  const canManage = Boolean(programmeGroup?.canManage);
   const submitActivity = async () => {
-    if (saving || trimming || !session || !group?.serviceSession?.id || !activityName.trim()) return;
+    if (saving || trimming || !session || !programmeGroup?.serviceSession?.id || !activityName.trim()) return;
     if (attachments.length > 6 || attachments.reduce((sum, f) => sum + f.size, 0) > 25 * 1024 * 1024 || attachments.some((f) => f.size > (f.type.startsWith("image/") ? 5 : 20) * 1024 * 1024)) {
       setMessage("Attach up to six files: pictures up to 5 MB, videos up to 20 MB, 25 MB total."); return;
     }
     setSaving(true); setMessage("");
     try {
       const form = new FormData();
-      form.set("serviceSessionId", String(group.serviceSession.id)); form.set("activityName", activityName.trim());
+      form.set("serviceSessionId", String(programmeGroup.serviceSession.id)); form.set("activityName", activityName.trim());
       form.set("ledByStaffUserId", leaderId); form.set("notes", activityNotes.trim());
       attachments.forEach((file) => form.append("media[]", file));
       const r = await fetch(`${apiBase}/api/v1/assembly/activities`, { method: "POST", headers: authHeaders(session), body: form });
       const b = await r.json().catch(() => null);
       if (!r.ok || !b?.success) throw new Error(b?.error?.message || (r.status === 413 ? "These attachments are too large. Please try smaller files." : "We could not save this activity."));
-      setActivityName(""); setActivityNotes(""); setLeaderId(""); setAttachments([]); setShowActivity(false); setMessage("Activity added."); await onRefresh();
+      setActivityName(""); setActivityNotes(""); setLeaderId(""); setAttachments([]); setShowActivity(false); setMessage("Activity added."); await refreshHistory();
     } catch (e) { setMessage(e instanceof Error ? e.message : "We could not save this activity."); }
     finally { setSaving(false); }
   };
   const addNote = async () => {
-    if (saving || !session || !group?.serviceSession?.id || !note.trim()) return;
+    if (saving || !session || !programmeGroup?.serviceSession?.id || !note.trim()) return;
     setSaving(true); setMessage("");
     try {
-      const r = await fetch(`${apiBase}/api/v1/assembly/notes`, { method: "POST", headers: { ...authHeaders(session), "Content-Type": "application/json" }, body: JSON.stringify({ serviceSessionId: group.serviceSession.id, note: note.trim() }) });
+      const r = await fetch(`${apiBase}/api/v1/assembly/notes`, { method: "POST", headers: { ...authHeaders(session), "Content-Type": "application/json" }, body: JSON.stringify({ serviceSessionId: programmeGroup.serviceSession.id, note: note.trim() }) });
       const b = await r.json().catch(() => null);
       if (!r.ok || !b?.success) throw new Error(b?.error?.message || "We could not save this note.");
-      setNote(""); setMessage("Note added."); await onRefresh();
+      setNote(""); setMessage("Note added."); await refreshHistory();
     } catch (e) { setMessage(e instanceof Error ? e.message : "We could not save this note."); }
     finally { setSaving(false); }
   };
@@ -502,26 +537,38 @@ function AssemblyView({ groups, loading, isSuperAdmin, onRefresh }: { groups: As
   const activities = groups.reduce((sum, item) => sum + item.activities.length, 0);
   const attention = groups.reduce((sum, item) => sum + item.needAttention, 0);
   if (loading) return <p className="cw-empty">Loading Assembly…</p>;
-  if (!groups.length) return <section className="assembly-empty"><FiUsers /><h2>No Assembly data configured</h2><p>There is no Assembly team or programme recorded for this Sunday and service.</p></section>;
   return <section className="assembly-view">
     <div className="assembly-intro"><div><p className="eyebrow">Service ministry</p><h2>Assembly</h2><p>View the team, activities and notes for assembly during the selected service.</p></div>{groups.length > 1 && <AppSelect value={selectedGroup} onChange={(e) => setSelectedGroup(Number(e.target.value))}>{groups.map((item, index) => <option key={item.serviceSession?.id || index} value={index}>{item.serviceSession?.name || "Service"} · {formatDate(item.serviceSession?.serviceDate)}</option>)}</AppSelect>}</div>
     <section className="assembly-metrics"><Metric icon={<FiUsers />} value={children} title="Children in Service" text="Existing service attendance" tone="green" /><Metric icon={<FiUsers />} value={team} title="Assembly Team" text="Assigned for this service" tone="purple" /><Metric icon={<FiClipboard />} value={activities} title="Activities" text="Programme records" /><Metric icon={<FiAlertTriangle />} value={attention} title="Need Attention" text="Items needing review" tone="red" /></section>
     {groups.length > 1 && <div className="assembly-groups">{groups.map((item, index) => <button key={item.serviceSession?.id || index} className={index === selectedGroup ? "selected" : ""} onClick={() => setSelectedGroup(index)}>{item.serviceSession?.name || "Service"}<small>{formatDate(item.serviceSession?.serviceDate)}</small></button>)}</div>}
-    <section className="assembly-panel"><header><div><p className="eyebrow">Assigned teachers</p><h3>Assembly Team</h3></div>{isSuperAdmin && <Link href="/account/roster">Manage in Team &amp; Roster <FiChevronRight /></Link>}</header><div className="assembly-team">{group.team.map((teacher) => <article key={teacher.userId}><Avatar teacher={teacher} /><div><b>{teacher.name}</b><small>{teacher.dutyName || "Assembly"}</small></div></article>)}{!group.team.length && <p className="cw-empty">No Assembly team assigned.</p>}</div></section>
+    <section className="assembly-panel"><header><div><p className="eyebrow">Assigned teachers</p><h3>Assembly Team</h3></div>{isSuperAdmin && <Link href="/account/roster">Manage in Team &amp; Roster <FiChevronRight /></Link>}</header><div className="assembly-team">{group?.team.map((teacher) => <article key={teacher.userId}><Avatar teacher={teacher} /><div><b>{teacher.name}</b><small>{teacher.dutyName || "Assembly"}</small></div></article>)}{!group?.team.length && <p className="cw-empty">No Assembly team assigned.</p>}</div></section>
+    <section className="assembly-history-controls" aria-label="Filter assembly activities and notes">
+      <header><div><p className="eyebrow">Assembly history</p><h3>Activities &amp; notes</h3><p>Browse by Sunday. Posted and attached dates stay with each record.</p></div><span>{activityCount} {activityCount === 1 ? "activity" : "activities"} · {noteCount} {noteCount === 1 ? "note" : "notes"}</span></header>
+      <fieldset className="assembly-history-filters" disabled={saving || showActivity}>
+        <div><span>Review month</span><MonthPicker value={new Date(`${historyMonth}-01T00:00:00Z`)} onChange={changeMonth} ariaLabel="Choose assembly month" /></div>
+        <label>Sunday<AppSelect value={historySunday} disabled={historyLoading || saving || showActivity} onChange={(e) => { setHistorySunday(e.target.value); setHistoryService(""); setNote(""); setMessage(""); }}><option value="">All Sundays</option>{sundays.map((date) => <option key={date} value={date}>Sun, {formatDate(date)}</option>)}</AppSelect></label>
+        <label>Service<AppSelect value={historyService} disabled={historyLoading || saving || showActivity} onChange={(e) => { setHistoryService(e.target.value); setNote(""); setMessage(""); }}><option value="">All services</option>{sundayGroups.map((item) => <option key={item.serviceSession?.id} value={item.serviceSession?.id}>{item.serviceSession?.name || "Service"}{!historySunday ? ` · ${formatDate(item.serviceSession?.serviceDate)}` : ""}</option>)}</AppSelect></label>
+      </fieldset>
+      {!historyLoading && !historyError && !programmeGroup && <small>Select one Sunday and service to add an activity or note.</small>}
+      {historyLoading && <p role="status">Loading assembly history…</p>}
+      {historyError && <div className="interaction-error" role="alert">{historyError}<button type="button" onClick={() => setHistoryRetry((v) => v + 1)}>Retry</button></div>}
+    </section>
     <section className="assembly-panel">
       <header><div><p className="eyebrow">Service programme</p><h3>Assembly Programme</h3></div>{canManage && <button className="primary" onClick={() => { setMessage(""); setShowActivity(true); }}><FiPlus /> Add Activity</button>}</header>
-      <div className="assembly-activity-list">{group.activities.map((activity) => <article key={activity.id}>
+      <div className="assembly-activity-list">{visibleGroups.flatMap((item) => item.activities.map((activity) => <article key={activity.id}>
+        <div className="assembly-record-service"><FiCalendar aria-hidden="true" /><b>{formatDate(item.serviceSession?.serviceDate)}</b><span>{item.serviceSession?.name || "Sunday service"}</span></div>
         <div className="assembly-activity-copy"><b>{activity.activityName}</b><TeacherAttribution name={activity.ledBy || "Leader not specified"} namePrefix={activity.ledBy ? "Led by" : undefined} staffId={activity.ledByStaffUserId} photo={activity.ledByProfileImageUrl} createdAt={activity.createdAt} label="Activity added" />{activity.notes && <p>{activity.notes}</p>}</div>
         {!!activity.media?.length && <div className="assembly-media-grid">{activity.media.map((item) => <AssemblyAttachment key={item.id} item={item} />)}</div>}
-      </article>)}{!group.activities.length && <p className="cw-empty">No Assembly activities recorded for this service.</p>}</div>
+      </article>))}{!historyLoading && !historyError && !activityCount && <p className="cw-empty">No assembly activities for this selection. Try another Sunday or month.</p>}</div>
     </section>
-    <section className="assembly-panel"><header><div><p className="eyebrow">Service history</p><h3>Assembly Notes</h3></div></header><div className="assembly-notes">{group.notes.map((item) => <article key={item.id}><TeacherAttribution name={item.author} staffId={item.authorId} photo={item.authorProfileImageUrl} createdAt={item.createdAt} /><p>{item.note}</p></article>)}{!group.notes.length && <p className="cw-empty">No Assembly notes yet.</p>}</div>{canManage && <div className="assembly-note-form"><label htmlFor="assembly-note">Add a service note</label><textarea id="assembly-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a short note about this service…" /><button className="primary" onClick={() => void addNote()} disabled={saving || !note.trim()}>{saving ? "Saving…" : "Save note"}</button></div>}</section>
+    <section className="assembly-panel"><header><div><p className="eyebrow">Service reflections</p><h3>Assembly Notes</h3></div></header><div className="assembly-notes">{visibleGroups.flatMap((entry) => entry.notes.map((item) => <article key={item.id}><div className="assembly-record-service"><FiCalendar aria-hidden="true" /><b>{formatDate(entry.serviceSession?.serviceDate)}</b><span>{entry.serviceSession?.name || "Sunday service"}</span></div><TeacherAttribution name={item.author} staffId={item.authorId} photo={item.authorProfileImageUrl} createdAt={item.createdAt} /><p>{item.note}</p><AssemblyNoteReactions noteId={item.id} /></article>))}{!historyLoading && !historyError && !noteCount && <p className="cw-empty">No assembly notes for this selection. Try another Sunday or month.</p>}</div>{canManage && <div className="assembly-note-form"><label htmlFor="assembly-note">Add a note · {formatDate(programmeGroup?.serviceSession?.serviceDate)} · {programmeGroup?.serviceSession?.name}</label><textarea id="assembly-note" disabled={saving} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a short note about this service…" /><button className="primary" onClick={() => void addNote()} disabled={saving || !note.trim()}>{saving ? "Saving…" : "Save note"}</button></div>}</section>
     {message && <p className="cw-save-message">{message}</p>}
     {showActivity && <div className="cw-modal"><section role="dialog" aria-modal="true" aria-labelledby="assembly-activity-title" aria-busy={saving}>
       <button className="modal-close" disabled={saving} onClick={() => setShowActivity(false)} aria-label="Close activity form"><FiX /></button>
       <p className="eyebrow">Assembly Programme</p><h2 id="assembly-activity-title">Add Activity</h2>
       <label>Activity Name<input disabled={saving} maxLength={180} value={activityName} onChange={(e) => setActivityName(e.target.value)} placeholder="e.g. Opening prayer" /></label>
-      <label>Led By<AppSelect disabled={saving} value={leaderId} onChange={(e) => setLeaderId(e.target.value)}><option value="">Choose a teacher (optional)</option>{(group.leaders || group.team).map((teacher) => <option key={teacher.userId} value={teacher.userId}>{teacher.name}</option>)}</AppSelect></label>
+      <p className="assembly-form-context">{formatDate(programmeGroup?.serviceSession?.serviceDate)} · {programmeGroup?.serviceSession?.name}</p>
+      <label>Led By<AppSelect disabled={saving} value={leaderId} onChange={(e) => setLeaderId(e.target.value)}><option value="">Choose a teacher (optional)</option>{(programmeGroup?.leaders || programmeGroup?.team || []).map((teacher) => <option key={teacher.userId} value={teacher.userId}>{teacher.name}</option>)}</AppSelect></label>
       <label>Notes <small>(optional)</small><textarea disabled={saving} value={activityNotes} onChange={(e) => setActivityNotes(e.target.value)} placeholder="Add context for the team…" /></label>
       <div className="media-picker"><label htmlFor="assembly-activity-media">Attach pictures or videos</label><small>Optional · up to 6 files. Pictures: 5 MB each. Videos: 20 MB each. Maximum 25 MB total. Use Trim video for a shorter clip before uploading. Only share media suitable for the authorised team.</small><input id="assembly-activity-media" disabled={saving || Boolean(trimming)} type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" multiple onChange={(e) => { setAttachments(Array.from(e.target.files || [])); setMessage(""); e.target.value = ""; }} />{attachments.length > 0 && <><ul className="media-selected">{attachments.map((file, index) => <li key={`${file.name}-${index}`}><span>{file.name} · {(file.size / 1024 / 1024).toFixed(1)} MB</span><div className="media-file-actions">{(file.type.startsWith("video/") || /\.(mp4|mov|webm)$/i.test(file.name)) && <button type="button" disabled={saving || Boolean(trimming)} onClick={() => setTrimming(file)}>Trim video<span className="sr-only">: {file.name}</span></button>}<button type="button" disabled={saving || Boolean(trimming)} aria-label={`Remove ${file.name}`} onClick={() => setAttachments((files) => files.filter((_, i) => i !== index))}>Remove</button></div></li>)}</ul><p className={`media-total ${attachments.reduce((sum, file) => sum + file.size, 0) > TOTAL_UPLOAD_BYTES ? "over-limit" : ""}`}>{(attachments.reduce((sum, file) => sum + file.size, 0) / 1024 / 1024).toFixed(1)} MB of 25 MB total{attachments.reduce((sum, file) => sum + file.size, 0) > TOTAL_UPLOAD_BYTES ? " · Trim a video or remove an attachment before saving." : ""}</p></>}</div>
       {message && <p role="alert" className="interaction-error">{message}</p>}

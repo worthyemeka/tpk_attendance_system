@@ -2,7 +2,44 @@
 declare(strict_types=1);
 
 function api_assembly_sessions(PDO $db, array $actor): array {
+    if(isset($_GET['month'])) {
+        $month=(string)$_GET['month'];
+        if(!preg_match('/^\d{4}-(0[1-9]|1[0-2])$/',$month))api_error('VALIDATION_ERROR','Choose a valid assembly month.',422);
+        $start=$month.'-01';
+        $end=(new DateTimeImmutable($start))->modify('+1 month')->format('Y-m-d');
+        $q=$db->prepare('SELECT id,name,service_date AS serviceDate,service_type AS serviceType,starts_at AS startsAt,ends_at AS endsAt,status FROM service_sessions WHERE campus_id=? AND service_date>=? AND service_date<? AND service_type IS NOT NULL ORDER BY service_date DESC,starts_at,id');
+        $q->execute([(int)$actor['campus_id'],$start,$end]);
+        // History has exactly the same service/date permissions as current records.
+        return array_values(array_filter($q->fetchAll(),fn($s)=>api_service_duty($db,$actor,(int)$s['id'])));
+    }
     return api_classroom_context_sessions($db, $actor);
+}
+
+function api_assembly_reaction_payload(PDO $db,array $actor,int $id): array {
+    $q=$db->prepare('SELECT id,service_session_id FROM assembly_notes WHERE id=? AND campus_id=?');
+    $q->execute([$id,(int)$actor['campus_id']]);$note=$q->fetch();
+    if(!$note)api_error('NOTE_NOT_FOUND','This assembly note was not found.',404);
+    if(!api_service_duty($db,$actor,(int)$note['service_session_id']))api_error('FORBIDDEN','This note is outside your assigned service.',403);
+    $counts=['LIKE'=>0,'APPLAUSE'=>0,'HEART'=>0];$mine=null;
+    $ready=api_table_exists($db,'assembly_note_reactions');
+    if($ready){
+        $q=$db->prepare('SELECT reaction,COUNT(*) AS total FROM assembly_note_reactions WHERE note_id=? GROUP BY reaction');
+        $q->execute([$id]);foreach($q->fetchAll() as $row)$counts[$row['reaction']]=(int)$row['total'];
+        $q=$db->prepare('SELECT reaction FROM assembly_note_reactions WHERE note_id=? AND staff_user_id=?');
+        $q->execute([$id,(int)$actor['id']]);$mine=$q->fetchColumn()?:null;
+    }
+    return ['replies'=>[],'reactions'=>$counts,'myReaction'=>$mine,'canInteract'=>$ready];
+}
+
+function api_assembly_note_reaction(PDO $db,int $id,bool $save=false): never {
+    $actor=api_actor($db);$payload=api_assembly_reaction_payload($db,$actor,$id);
+    if(!$save)api_ok($payload);
+    if(!$payload['canInteract'])api_error('FEATURE_NOT_READY','Assembly reactions are not available yet.',503);
+    $v=api_input();$reaction=$v['reaction']??null;
+    if($reaction!==null&&!in_array($reaction,['LIKE','APPLAUSE','HEART'],true))api_error('VALIDATION_ERROR','Choose a supported reaction.',422);
+    if($reaction===null){$q=$db->prepare('DELETE FROM assembly_note_reactions WHERE note_id=? AND staff_user_id=?');$q->execute([$id,(int)$actor['id']]);}
+    else{$q=$db->prepare('INSERT INTO assembly_note_reactions(note_id,staff_user_id,reaction) VALUES(?,?,?) ON DUPLICATE KEY UPDATE reaction=VALUES(reaction)');$q->execute([$id,(int)$actor['id'],$reaction]);}
+    api_ok(api_assembly_reaction_payload($db,$actor,$id));
 }
 
 function api_assembly(PDO $db): never {

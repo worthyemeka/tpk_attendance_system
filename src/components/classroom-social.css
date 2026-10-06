@@ -21,7 +21,8 @@ body .cw-page .assembly-attachment :is(video,img){display:block;border-radius:0;
 body .cw-page .assembly-attachment figcaption{display:grid;gap:6px;padding:12px 14px;margin:0}
 body .cw-page .assembly-attachment figcaption>b{font-size:12px;font-weight:700;color:#334962;overflow-wrap:anywhere}
 body .assembly-video-cover{position:relative;aspect-ratio:16/9;overflow:hidden;background:linear-gradient(135deg,#243650,#465a74);isolation:isolate}
-body .assembly-video-cover video{width:100%;height:100%;object-fit:contain}
+body .cw-page .assembly-attachment .assembly-video-cover video{position:absolute;inset:0;width:100%;height:100%;max-height:none;aspect-ratio:auto;object-fit:cover}
+body .cw-page .assembly-attachment .assembly-video-cover.is-playing video{object-fit:contain}
 body .assembly-video-play{position:absolute;inset:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;border:0;border-radius:0;background:linear-gradient(0deg,#14213cc2,#14213c22);color:#fff;cursor:pointer;font-family:var(--font-body);padding:16px}
 body .assembly-video-play:disabled{opacity:1;cursor:progress}
 body .assembly-video-play b{color:#fff;font-size:15px}
@@ -36,4 +37,24 @@ body .cw-page .assembly-note-form{display:grid;grid-template-columns:1fr;gap:10p
 body .cw-page .assembly-note-form label{font:700 12px var(--font-body);color:#334962}
 body .cw-page .assembly-note-form textarea{width:100%;min-width:0;min-height:100px;resize:vertical;font:500 14px/1.6 var(--font-body);border:1px solid #dce3ed;border-radius:10px;padding:14px;background:#fff}
 body .cw-page .assembly-note-form button{justify-self:end;min-height:44px}
+body .cw-page .assembly-history-controls{padding:22px;border:1px solid #e3e8ef;border-radius:14px;background:#fff;margin:0 0 20px;font-family:var(--font-body)}
+body .assembly-history-controls>header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}
+body .assembly-history-controls h3{margin:0;font:800 20px/1.4 var(--font-body);color:#233650;letter-spacing:-.02em}
+body .assembly-history-controls header p:not(.eyebrow){margin:6px 0 0;color:#738199;font-size:12px;line-height:1.6}
+body .assembly-history-controls header>span{flex-shrink:0;padding:7px 10px;border-radius:20px;background:#f5f7fa;color:#52617a;font-size:11px;font-weight:700}
+body .assembly-history-filters{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) minmax(0,1.5fr);gap:16px;border:0;padding:0;margin:0;min-width:0}
+body .assembly-history-filters>div,body .assembly-history-filters>label{display:grid;align-content:start;gap:8px;min-width:0;font:700 12px var(--font-body);color:#52617a}
+body .assembly-history-filters .tpk-month-picker{width:100%;min-width:0}
+body .assembly-history-filters .tpk-month-picker-trigger{flex:1;min-width:0}
+body .assembly-history-filters .app-select{width:100%;min-width:0}
+body .assembly-history-controls>small,body .assembly-history-controls>p{display:block;margin:14px 0 0;font:500 12px/1.6 var(--font-body);color:#738199}
+body .cw-page .assembly-record-service{display:flex!important;align-items:center;flex-wrap:wrap;gap:8px!important;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #edf0f4;font:500 12px/1.6 var(--font-body);color:#738199}
+body .assembly-record-service>b{font:700 13px var(--font-body);color:#334962}
+body .assembly-record-service svg{flex-shrink:0}
+body .cw-page .assembly-note-reactions{border-top:1px solid #edf0f4;padding-top:14px}
+body .assembly-note-reactions .discussion-reactions button{box-shadow:none;min-height:42px;font:700 12px var(--font-body)}
+body .discussion-reactions button>svg{flex-shrink:0;width:18px;height:18px}
+body .assembly-note-reactions>small{display:block;color:#738199;font-size:11px;line-height:1.6;margin-top:8px}
+@media(max-width:900px){body .assembly-history-filters{grid-template-columns:repeat(2,minmax(0,1fr))}body .assembly-history-filters>label:last-child{grid-column:1/-1}}
+@media(max-width:600px){body .cw-page .assembly-history-controls{padding:16px}body .assembly-history-controls>header{align-items:flex-start;flex-direction:column}body .assembly-history-filters{grid-template-columns:1fr;gap:14px}body .assembly-history-filters>label:last-child{grid-column:auto}}
 @media(max-width:600px){body .cw-page .assembly-activity-list>article{padding:16px}body .class-detail .review-list>article>header .teacher-attribution{flex-basis:100%}body .class-detail .discussion-reply>p{margin-left:0}body .cw-page .assembly-note-form button{width:100%;justify-content:center}}
