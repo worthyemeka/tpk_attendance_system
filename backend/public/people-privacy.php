@@ -14,6 +14,7 @@ function api_safe_children(PDO $db,array $actor,?int $id=null):array{
     $filter=' WHERE '.implode(' AND ',$where);
     $count=$db->prepare('SELECT COUNT(*) FROM children c JOIN families f ON f.id=c.family_id'.$filter);$count->execute($params);$total=(int)$count->fetchColumn();
     [$page,$limit,$offset]=$id===null?api_page():[1,1,0];
-    $s=$db->prepare("SELECT c.id,TRIM(CONCAT(c.first_name,' ',c.last_name)) AS name,cp.id AS homeCampusId,cp.name AS homeCampus,COALESCE((SELECT GROUP_CONCAT(DISTINCT TRIM(CONCAT(g.first_name,' ',g.last_name)) ORDER BY cg.is_primary DESC,g.first_name SEPARATOR ' · ') FROM child_guardians cg JOIN guardians g ON g.id=cg.guardian_id WHERE cg.child_id=c.id),'') AS guardianName FROM children c JOIN families f ON f.id=c.family_id JOIN campuses cp ON cp.id=f.campus_id$filter ORDER BY c.first_name,c.last_name,c.id LIMIT $limit OFFSET $offset");$s->execute($params);
+    $order=strtolower((string)($_GET['order']??'asc'))==='desc'?'DESC':'ASC';
+    $s=$db->prepare("SELECT c.id,TRIM(CONCAT(c.first_name,' ',c.last_name)) AS name,cp.id AS homeCampusId,cp.name AS homeCampus,COALESCE((SELECT GROUP_CONCAT(DISTINCT TRIM(CONCAT(g.first_name,' ',g.last_name)) ORDER BY cg.is_primary DESC,g.first_name SEPARATOR ' · ') FROM child_guardians cg JOIN guardians g ON g.id=cg.guardian_id WHERE cg.child_id=c.id),'') AS guardianName FROM children c JOIN families f ON f.id=c.family_id JOIN campuses cp ON cp.id=f.campus_id$filter ORDER BY c.first_name $order,c.last_name $order,c.id $order LIMIT $limit OFFSET $offset");$s->execute($params);
     return ['rows'=>$s->fetchAll(),'meta'=>['page'=>$page,'limit'=>$limit,'total'=>$total,'totalPages'=>max(1,(int)ceil($total/$limit))]];
 }

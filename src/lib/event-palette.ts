@@ -22,3 +22,11 @@ export async function scanEventImage(file:File):Promise<EventPalette>{
  const url=URL.createObjectURL(file);try{const image=new Image();image.src=url;await image.decode();if(image.naturalWidth*image.naturalHeight>16000000)throw Error("Use artwork under 16 megapixels.");const canvas=document.createElement("canvas");canvas.width=canvas.height=96;const ctx=canvas.getContext("2d");if(!ctx)throw Error("Colour scanning is unavailable in this browser.");ctx.drawImage(image,0,0,96,96);return paletteFromPixels(ctx.getImageData(0,0,96,96).data);}finally{URL.revokeObjectURL(url);}
 }
 export function paletteStyle(palette?:EventPalette|null):Record<string,string>{const p=palette||junglePalette;return Object.fromEntries(Object.entries(p).map(([k,v])=>[`--event-${k.replace(/[A-Z]/g,m=>"-"+m.toLowerCase())}`,v]));}
+
+// Dashboard roles are distinct from the original artwork/PDF palette.
+// Orange on yellow is deliberately dark enough for small button labels.
+export function dashboardPaletteStyle(palette?:EventPalette|null,jungle=false):Record<string,string>{
+ const p=palette||junglePalette,bg=darken(p.secondary),yellow=jungle?"#ffd34e":p.accent;
+ const orange=contrast(yellow,"#963b0b")>=4.5?"#963b0b":contrast(yellow,"#ffffff")>=4.5?"#ffffff":"#000000";
+ return {...paletteStyle(p),"--theme-sidebar":jungle?"#173f2b":darken(p.primary),"--theme-body":bg,"--theme-panel":darken(hex(rgb(bg).map(v=>v*.9+255*.1))),"--theme-button":yellow,"--theme-button-ink":orange};
+}

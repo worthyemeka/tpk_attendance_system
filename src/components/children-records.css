@@ -42,7 +42,7 @@
 .children-records-grid :is(button,a):focus-visible,.children-records-list :is(button,a):focus-visible{outline:3px solid #7098c9;outline-offset:4px;border-radius:5px}
 @media(max-width:1180px){.children-records-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.children-records-list th,.children-records-list td{padding:14px 12px}}
 @media(max-width:900px){
- .children-records-list{overflow:visible}.children-records-list table,.children-records-list tbody{display:block}.children-records-list thead{display:none}
+ .children-records-list{overflow:visible}body .children-records-list table,body .children-records-list tbody{display:block;width:100%;min-width:0;max-width:100%}.children-records-list thead{display:none}
  .children-records-list tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:14px;padding:18px;border-bottom:1px solid #e0e5eb}
  .children-records-list tr:last-child{border-bottom:0}.children-records-list td{display:block;min-width:0;padding:0;border:0}.children-records-list td[data-label]:before{display:block;content:attr(data-label);margin-bottom:5px;color:#75839a;font-size:10px;line-height:1.4;font-weight:600}
  .children-records-list .record-list-child{grid-column:1/3;grid-row:1}.children-records-list .record-list-action{grid-column:3;grid-row:1;align-self:center}

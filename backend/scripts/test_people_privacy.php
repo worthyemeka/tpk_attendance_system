@@ -16,6 +16,11 @@ if(getenv('TPK_MYSQL_SMOKE')==='1'){
  $result=api_safe_children($db,['campus_id'=>$campus]);
  foreach($result['rows'] as $row)assertPrivacy(array_keys($row)===['id','name','homeCampusId','homeCampus','guardianName'],'Child allowlist leaked extra fields');
  assertPrivacy($result['meta']['total']>=count($result['rows']),'Pagination total invalid');
+ $_GET=['order'=>'desc'];$descending=api_safe_children($db,['campus_id'=>$campus]);
+ $expected=$db->prepare('SELECT c.id FROM children c JOIN families f ON f.id=c.family_id WHERE f.campus_id=? AND c.is_active=1 ORDER BY c.first_name DESC,c.last_name DESC,c.id DESC LIMIT 12');$expected->execute([$campus]);
+ assertPrivacy(array_map('intval',array_column($descending['rows'],'id'))===array_map('intval',$expected->fetchAll(PDO::FETCH_COLUMN)),'Descending name sorting is inconsistent');
+ $_GET=['order'=>'desc; DROP TABLE children'];$invalid=api_safe_children($db,['campus_id'=>$campus]);
+ assertPrivacy(array_column($invalid['rows'],'id')===array_column($result['rows'],'id'),'Invalid sorting direction must safely fall back to ascending');
  echo "PASS: read-only child directory SQL allowlist and pagination.\n";
 }
 echo "PASS: teacher directory policy and nested address redaction.\n";
