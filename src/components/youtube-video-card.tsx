@@ -14,7 +14,7 @@ export function YouTubeVideoCard({ url, label = "Video" }: { url: string; label?
     setMetadata(null);
     if (!id) return;
     const controller = new AbortController();
-    fetch(`/api/youtube-video?id=${id}`, { signal: controller.signal })
+    fetch(`/api/youtube-video?id=${id}&v=3`, { signal: controller.signal })
       .then(async response => response.ok ? await response.json() : null)
       .then(value => { if (!controller.signal.aborted) setMetadata(value); })
       .catch(() => {});
