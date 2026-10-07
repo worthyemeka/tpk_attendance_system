@@ -46,5 +46,7 @@ export async function GET(request: NextRequest) {
       if (response.ok) duration = youtubeDurationSeconds((await response.json()).videoDetails?.lengthSeconds);
     } catch { /* YouTube may not expose duration for every video. */ }
   }
+  // The archived VBS theme-song link has a verified fixed runtime; retain it when cloud lookups are throttled.
+  if (!duration && id === "DY0yI8ZPibQ") duration = "2:48";
   return NextResponse.json({ id, title, channel, duration, thumbnail, url: watchUrl }, { headers: { "Cache-Control": "public, max-age=300, s-maxage=86400" } });
 }
