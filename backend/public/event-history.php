@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__.'/event-appearance.php';
+require_once __DIR__.'/curriculum-notes.php';
 
 function event_volunteer_api_allowed(string $path,string $method): bool {
     if($path==='/api/v1/me/appearance')return in_array($method,['GET','PATCH'],true);
@@ -8,6 +9,7 @@ function event_volunteer_api_allowed(string $path,string $method): bool {
     return $method==='POST'&&(bool)preg_match('#^/api/v1/events/\d+/volunteer-attendance$#',$path);
 }
 function event_history_routes(PDO $db,string $path,string $method): void {
+    if($method==='PATCH'&&preg_match('#^/api/v1/events/(\d+)/curriculum/(\d+)/notes$#',$path,$m))api_event_curriculum_notes($db,(int)$m[1],(int)$m[2]);
     if($path==='/api/v1/public/event-account/setup'&&$method==='POST')api_event_password_setup($db);
     if($path==='/api/v1/me/appearance'&&in_array($method,['GET','PATCH'],true))api_staff_appearance($db);
     if(preg_match('#^/api/v1/events/(\d+)/files(?:/(\d+))?$#',$path,$m)){
@@ -84,7 +86,7 @@ function event_history_data(PDO $db,array $actor,array $event,array &$data): voi
     $data['campuses']=$db->query('SELECT id,name,code,timezone FROM campuses ORDER BY name')->fetchAll();
     $q=$db->prepare('SELECT * FROM event_appearances WHERE event_id=?');$q->execute([$id]);$data['appearance']=event_appearance_value($q->fetch()?:['preset'=>'DEFAULT','enabled'=>false,'apply_dashboard'=>false,'preserve_after'=>false,'artwork_url'=>null,'artwork_file_id'=>null,'palette_json'=>null]);
     $q=$db->prepare('SELECT r.id,r.title,r.resource_type AS type,r.description,r.content,r.external_url AS url,r.source_file_id AS fileId,r.source_page_start AS pageStart,r.source_page_end AS pageEnd,r.min_age AS minAge,r.max_age AS maxAge,f.original_name AS filename FROM event_curriculum_resources r LEFT JOIN event_source_files f ON f.id=r.source_file_id WHERE r.event_id=? ORDER BY r.resource_type,r.title');$q->execute([$id]);$data['curriculum']=[];
-    foreach($q->fetchAll() as $row){if(!$super&&!event_resource_visible($db,$actor,$id,(int)$row['id']))continue;$t=$db->prepare('SELECT day_id AS dayId,session_id AS sessionId,group_id AS groupId FROM event_curriculum_targets WHERE resource_id=?');$t->execute([$row['id']]);$row['targets']=$t->fetchAll();$data['curriculum'][]=$row;}
+    foreach($q->fetchAll() as $row){if(!$super&&!event_resource_visible($db,$actor,$id,(int)$row['id']))continue;$t=$db->prepare('SELECT day_id AS dayId,session_id AS sessionId,group_id AS groupId FROM event_curriculum_targets WHERE resource_id=?');$t->execute([$row['id']]);$row['targets']=$t->fetchAll();$row['noteBlocks']=event_note_blocks($db,(int)$row['id']);$data['curriculum'][]=$row;}
     $q=$db->prepare('SELECT a.id,a.day_id AS dayId,a.session_id AS sessionId,a.group_id AS groupId,a.title,a.starts_at AS startsAt,a.ends_at AS endsAt,a.notes,a.source_page AS sourcePage,a.responsible_raw AS responsibleRaw,a.roster_group_id AS rosterGroupId,f.original_name AS sourceName FROM event_programme_activities a LEFT JOIN event_source_files f ON f.id=a.source_file_id WHERE a.event_id=? ORDER BY a.day_id,a.sort_order');$q->execute([$id]);$data['programme']=$q->fetchAll();
     $q=$db->prepare('SELECT d.id AS dayId,d.label,d.calendar_date AS date,COUNT(h.child_id) AS recorded,SUM(h.present=1) AS present,SUM(h.present=0) AS absent,SUM(h.picked_up=1) AS pickedUp,SUM(h.picked_up IS NULL) AS pickupUnknown FROM event_days d LEFT JOIN event_historical_attendance h ON h.day_id=d.id WHERE d.event_id=? GROUP BY d.id ORDER BY d.day_number');$q->execute([$id]);$data['historicalReport']=$q->fetchAll();
     $data['historicalAttendance']=[];$data['contacts']=[];$data['cards']=[];$data['imports']=[];$data['sourceFiles']=[];
@@ -131,13 +133,14 @@ function api_event_curriculum(PDO $db,int $id): never {
     $url=event_url($v['url']??null);$file=(int)($v['fileId']??0);if($file){$q=$db->prepare('SELECT id FROM event_source_files WHERE id=? AND event_id=?');$q->execute([$file,$id]);if(!$q->fetchColumn())api_error('VALIDATION_ERROR','Choose a file belonging to this event.',422);}
     $day=event_target($db,$id,'event_days',$v['dayId']??null);$session=event_target($db,$id,'event_sessions',$v['sessionId']??null);$group=event_target($db,$id,'event_groups',$v['groupId']??null);
     if($session&&$day){$q=$db->prepare('SELECT day_id FROM event_sessions WHERE id=?');$q->execute([$session]);if((int)$q->fetchColumn()!==$day)api_error('VALIDATION_ERROR','The session must belong to the selected day.',422);}
-    $db->beginTransaction();try{$db->prepare('INSERT INTO event_curriculum_resources(event_id,title,resource_type,description,content,external_url,source_file_id,created_by) VALUES(?,?,?,?,?,?,?,?)')->execute([$id,$title,$type,$description?:null,$content?:null,$url,$file?:null,$actor['id']]);$rid=(int)$db->lastInsertId();$db->prepare('INSERT INTO event_curriculum_targets(resource_id,day_id,session_id,group_id) VALUES(?,?,?,?)')->execute([$rid,$day,$session,$group]);api_audit($db,$actor,'EVENT_CURRICULUM_CREATED','EventResource',$rid);$db->commit();}catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}api_ok(['id'=>$rid],201);
+    $blocks=event_validate_note_blocks($db,$id,$v['noteBlocks']??[]);
+    $db->beginTransaction();try{$db->prepare('INSERT INTO event_curriculum_resources(event_id,title,resource_type,description,content,external_url,source_file_id,created_by) VALUES(?,?,?,?,?,?,?,?)')->execute([$id,$title,$type,$description?:null,$content?:null,$url,$file?:null,$actor['id']]);$rid=(int)$db->lastInsertId();$db->prepare('INSERT INTO event_curriculum_targets(resource_id,day_id,session_id,group_id) VALUES(?,?,?,?)')->execute([$rid,$day,$session,$group]);event_save_note_blocks($db,$rid,$blocks);api_audit($db,$actor,'EVENT_CURRICULUM_CREATED','EventResource',$rid);$db->commit();}catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}api_ok(['id'=>$rid],201);
 }
 function api_event_file(PDO $db,int $id,int $file=0): never {
     $actor=api_actor($db,!$file);event_allowed($db,$actor,$id);
     $dir=dirname(__DIR__).'/storage/event-resources';
     if($file){$q=$db->prepare('SELECT * FROM event_source_files WHERE id=? AND event_id=?');$q->execute([$file,$id]);$row=$q->fetch();if(!$row)api_error('FILE_NOT_FOUND','File not found.',404);
-        if($actor['access_level']!=='TPK_SUPER_ADMIN'){$q=$db->prepare('SELECT id FROM event_curriculum_resources WHERE event_id=? AND source_file_id=?');$q->execute([$id,$file]);$allowed=false;foreach($q->fetchAll() as $r)if(event_resource_visible($db,$actor,$id,(int)$r['id']))$allowed=true;$q=$db->prepare("SELECT 1 FROM event_appearances WHERE event_id=? AND artwork_file_id=? AND enabled=1");$q->execute([$id,$file]);if(in_array($row['mime_type'],['image/png','image/jpeg','image/webp'],true)&&$q->fetchColumn())$allowed=true;if(!$allowed)api_error('FORBIDDEN','This source file is not available for your assignment.',403);}
+        if($actor['access_level']!=='TPK_SUPER_ADMIN'){$q=$db->prepare('SELECT DISTINCT r.id FROM event_curriculum_resources r LEFT JOIN event_curriculum_blocks b ON b.resource_id=r.id WHERE r.event_id=? AND (r.source_file_id=? OR b.image_file_id=?)');$q->execute([$id,$file,$file]);$allowed=false;foreach($q->fetchAll() as $r)if(event_resource_visible($db,$actor,$id,(int)$r['id']))$allowed=true;$q=$db->prepare("SELECT 1 FROM event_appearances WHERE event_id=? AND artwork_file_id=? AND enabled=1");$q->execute([$id,$file]);if(in_array($row['mime_type'],['image/png','image/jpeg','image/webp'],true)&&$q->fetchColumn())$allowed=true;if(!$allowed)api_error('FORBIDDEN','This source file is not available for your assignment.',403);}
         if(!preg_match('/^[a-f0-9]{40}\.[a-z0-9]+$/',$row['stored_name'])||!is_file($dir.'/'.$row['stored_name']))api_error('FILE_NOT_FOUND','File unavailable.',404);
         header('Access-Control-Allow-Origin: '.tpk_cors_origin());header('Vary: Origin');header('Access-Control-Expose-Headers: Content-Disposition');header('Content-Type: '.$row['mime_type']);header('X-Content-Type-Options: nosniff');header('Cache-Control: private, no-store');header('Content-Disposition: attachment; filename="'.str_replace(['"',"\r","\n"],'',basename($row['original_name'])).'"');readfile($dir.'/'.$row['stored_name']);exit;
     }

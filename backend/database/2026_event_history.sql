@@ -76,6 +76,14 @@ CREATE TABLE IF NOT EXISTS event_curriculum_targets (
  FOREIGN KEY(resource_id) REFERENCES event_curriculum_resources(id), FOREIGN KEY(day_id) REFERENCES event_days(id),
  FOREIGN KEY(session_id) REFERENCES event_sessions(id), FOREIGN KEY(group_id) REFERENCES event_groups(id)
 );
+CREATE TABLE IF NOT EXISTS event_curriculum_blocks (
+ id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, resource_id INT UNSIGNED NOT NULL,
+ position SMALLINT UNSIGNED NOT NULL, block_type VARCHAR(20) NOT NULL,
+ text_content MEDIUMTEXT NULL, image_file_id INT UNSIGNED NULL, caption VARCHAR(1000) NULL,
+ UNIQUE KEY resource_block_order(resource_id,position), INDEX note_picture(image_file_id),
+ FOREIGN KEY(resource_id) REFERENCES event_curriculum_resources(id),
+ FOREIGN KEY(image_file_id) REFERENCES event_source_files(id)
+);
 CREATE TABLE IF NOT EXISTS event_programme_activities (
  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, event_id INT UNSIGNED NOT NULL, day_id INT UNSIGNED NOT NULL,
  session_id INT UNSIGNED NULL, group_id INT UNSIGNED NULL, title VARCHAR(180) NOT NULL,

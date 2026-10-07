@@ -62,7 +62,8 @@ try{
  $input=['userId'=>$actor['id'],'duty'=>'CHECK_IN'];result(fn()=>api_event_setup($db,$id,'volunteers'));$actor['access_level']='TPK_TEACHER';check(event_operator($db,$actor,$id,'CHECK_IN')&&!event_operator($db,$actor,$id,'PICKUP'),'Duty-specific operator restrictions');$actor=$owner;
  $input=['childId'=>$cid,'sessionId'=>$sid];$arrival=result(fn()=>api_event_arrival($db,$id));$again=result(fn()=>api_event_arrival($db,$id));check($arrival['pickupCode']===$again['pickupCode'],'Idempotent arrival retains code');
  check((int)$db->query('SELECT COUNT(*) FROM event_attendance')->fetchColumn()===1,'No duplicate arrival');
- $actor['access_level']='TPK_TEACHER';$safeArrival=result(fn()=>api_events($db,$id));check(count($safeArrival['attendance'])===1&&array_keys($safeArrival['attendance'][0])===['childId','sessionId','checkedInAt'],'Teachers see check-in state without pickup credentials');$actor=$owner;
+ // An ordinary reader must not reuse the owner's CHECK_IN assignment above.
+ $actor['access_level']='TPK_TEACHER';$actor['id']=0;$safeArrival=result(fn()=>api_events($db,$id));check(count($safeArrival['attendance'])===1&&array_keys($safeArrival['attendance'][0])===['childId','sessionId','checkedInAt'],'Teachers see check-in state without pickup credentials');$actor=$owner;
  $input=['pickupCode'=>$arrival['pickupCode'],'collectorName'=>'Diagnostic Guardian','guardianVerified'=>false];reject(fn()=>api_event_arrival($db,$id,true),'VERIFICATION_REQUIRED');
  $input['guardianVerified']=true;$input['collectorName']='Someone else';reject(fn()=>api_event_arrival($db,$id,true),'COLLECTOR_NOT_AUTHORISED');
  $input['collectorName']='Diagnostic Guardian';$input['pickupCode']='WRONG';reject(fn()=>api_event_arrival($db,$id,true),'PICKUP_NOT_FOUND');
