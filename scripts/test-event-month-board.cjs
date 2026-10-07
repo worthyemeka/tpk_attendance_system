@@ -1,0 +1,10 @@
+const fs=require('node:fs'),assert=require('node:assert/strict'),ts=require('typescript');
+for(const ext of ['.ts','.tsx'])require.extensions[ext]=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{jsx:ts.JsxEmit.ReactJSX,module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,esModuleInterop:true}}).outputText,f);
+const React=require('react'),{renderToStaticMarkup}=require('react-dom/server'),{eventsInYear,eventYears,EventMonthBoard}=require('../src/components/event-month-board.tsx');
+const events=[{id:1,name:'August programme',startDate:'2026-08-24',endDate:'2026-08-29'},{id:2,name:'Previous year',startDate:'2025-06-01',endDate:'2025-06-03'},{id:3,name:'New Year conference',startDate:'2025-12-30',endDate:'2026-01-02'},{id:4,name:'October programme',startDate:'2026-10-10',endDate:'2026-10-12'}];
+assert.deepEqual(eventsInYear(events,2026).map(e=>e.id),[3,1,4]);assert.ok(eventYears(events,new Date('2026-10-07')).includes(2025));
+const markup=renderToStaticMarkup(React.createElement(EventMonthBoard,{year:2026,month:'2026-10',events:eventsInYear(events,2026),renderEvent:e=>React.createElement('article',{key:e.id},e.name)}));
+assert.equal((markup.match(/data-month=/g)||[]).length,12);assert.equal((markup.match(/New Year conference/g)||[]).length,1);assert.ok(markup.indexOf('January')<markup.indexOf('August'));assert.ok(markup.indexOf('August')<markup.indexOf('October'));assert.ok(!markup.includes('Previous year'));
+const directory=fs.readFileSync('src/components/child-directory.tsx','utf8');assert.ok(!directory.includes('TeacherChildDirectory'));assert.ok(directory.includes('summary.registeredChildren'));assert.match(directory,/TPK_SUPER_ADMIN[\s\S]*Edit Child/);
+const workspace=fs.readFileSync('src/components/events-workspace.tsx','utf8');assert.match(workspace,/"Volunteers","Roster"/);assert.match(workspace,/tab==="Roster"[\s\S]*EventHistoricalRoster/);
+console.log('PASS: year boundaries, chronological month board, separate volunteer/roster tabs and restored regular children page.');

@@ -29,8 +29,6 @@ import { ChildrenGrid, ChildrenList } from "@/components/children-records";
 import "./child-directory-refinement.css";
 import { ClassBadge, GenderBadge, RecordBadge } from "./record-badge";
 
-import { TeacherChildDirectory } from "./teacher-child-directory";
-
 type Session = ReturnType<typeof readTeacherSession>;
 type Child = {
   id: number;
@@ -183,10 +181,10 @@ function openChildrenAttendanceReport(report: AttendanceReport, target?: Window 
 }
 
 export function ChildDirectory(props: {needsClassAssignment?:boolean}={}) {
-  const [session,setSession]=useState<Session>(null);const[ready,setReady]=useState(false);
-  useEffect(()=>{setSession(readTeacherSession());setReady(true);},[]);
+  const[ready,setReady]=useState(false);
+  useEffect(()=>{setReady(true);},[]);
   if(!ready)return <p role="status">Loading children…</p>;
-  return session?.accessLevel==="TPK_ADMIN"?<TeacherChildDirectory/>:<FullChildDirectory {...props}/>;
+  return <FullChildDirectory {...props}/>;
 }
 function FullChildDirectory({needsClassAssignment=false}: {needsClassAssignment?:boolean}={}) {
   const session = useMemo<Session>(() => readTeacherSession(), []);
@@ -598,9 +596,9 @@ function FullChildDirectory({needsClassAssignment=false}: {needsClassAssignment?
 
 /** Mount the same child card without navigating away from its source page. */
 export function ChildProfileDialog(props: {childId:number;close:()=>void;onUpdated?:()=>void;initialMonth?:string}) {
-  const[session,setSession]=useState<Session>(null);const[ready,setReady]=useState(false);useEffect(()=>{setSession(readTeacherSession());setReady(true);},[]);
+  const[ready,setReady]=useState(false);useEffect(()=>{setReady(true);},[]);
   if(!ready)return <p role="status">Loading child…</p>;
-  return session?.accessLevel==="TPK_ADMIN"?<TeacherChildDirectory childId={props.childId} close={props.close}/>:<FullChildProfileDialog {...props}/>;
+  return <FullChildProfileDialog {...props}/>;
 }
 function FullChildProfileDialog({childId,close,onUpdated,initialMonth}: {childId:number;close:()=>void;onUpdated?:()=>void;initialMonth?:string}) {
   const session=useMemo(()=>readTeacherSession(),[]);
@@ -901,10 +899,10 @@ function Drawer({
               </section>
             )}
             <footer>
-              <button onClick={() => setEditing(true)}>
+              {readTeacherSession()?.accessLevel === "TPK_SUPER_ADMIN" && <button onClick={() => setEditing(true)}>
                 <FiEdit3 />
                 Edit Child
-              </button>
+              </button>}
             </footer>
           </>
         )}

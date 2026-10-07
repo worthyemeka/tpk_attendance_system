@@ -1,0 +1,10 @@
+"use client";
+import { useEffect,useRef,type ReactNode } from "react";
+import type { MinistryEvent } from "@/lib/events";
+export function eventsInYear(events:MinistryEvent[],year:number){return events.filter(e=>e.startDate<=year+"-12-31"&&e.endDate>=year+"-01-01").sort((a,b)=>a.startDate.localeCompare(b.startDate)||a.name.localeCompare(b.name));}
+export function eventYears(events:MinistryEvent[],now:Date){const current=Number(new Intl.DateTimeFormat("en",{year:"numeric",timeZone:"Africa/Lagos"}).format(now)),years=new Set(Array.from({length:9},(_,i)=>current-5+i));for(const event of events){const start=Number(event.startDate.slice(0,4)),end=Number(event.endDate.slice(0,4));for(let year=start;year<=end&&year<=start+100;year++)years.add(year);}return [...years].sort((a,b)=>b-a);}
+export function EventMonthBoard({events,year,month,renderEvent}:{events:MinistryEvent[];year:number;month:string;renderEvent:(event:MinistryEvent)=>ReactNode}){
+ const board=useRef<HTMLDivElement>(null);
+ useEffect(()=>{const node=board.current,target=node?.querySelector<HTMLElement>('[data-month="'+month+'"]');if(!node||!target)return;if(matchMedia("(max-width:640px)").matches){node.scrollTop=target.offsetTop-node.offsetTop;}else node.scrollLeft=target.offsetLeft-node.offsetLeft;},[month,year,events.length]);
+ return <div ref={board} className="event-month-board" aria-label={year+" events by month"} tabIndex={0}>{Array.from({length:12},(_,index)=>{const key=year+"-"+String(index+1).padStart(2,"0"),label=new Intl.DateTimeFormat("en-NG",{month:"long",timeZone:"UTC"}).format(new Date(Date.UTC(year,index,1))),rows=events.filter(e=>e.startDate.slice(0,4)<String(year)?index===0:Number(e.startDate.slice(5,7))===index+1);return <section className="event-month-column" key={key} data-month={key} aria-label={label+" "+year}><header><h2>{label}</h2><span>{rows.length}</span></header><div>{rows.map(renderEvent)}{!rows.length&&<p className="event-month-empty">No programmes scheduled</p>}</div></section>;})}</div>;
+}

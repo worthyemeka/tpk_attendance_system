@@ -2,7 +2,7 @@
 declare(strict_types=1);
 require __DIR__.'/../public/people-privacy.php';
 function assertPrivacy(bool $value,string $message):void{if(!$value)throw new RuntimeException($message);}
-assertPrivacy(api_basic_teacher(['access_level'=>'TPK_ADMIN']),'Teacher directory must be limited');
+assertPrivacy(api_basic_teacher(['access_level'=>'TPK_ADMIN']),'Basic teacher role must be identified');
 assertPrivacy(!api_basic_teacher(['access_level'=>'TPK_SUPER_ADMIN']),'Super Admin editing must remain available');
 assertPrivacy(!api_basic_teacher(['access_level'=>'TPK_FOLLOW_UP_ADMIN']),'Assigned follow-up contact workflows must remain available');
 $data=['name'=>'Sample Child','homeAddress'=>'private','guardian'=>['name'=>'Sample Parent','home_address'=>'private'],'contacts'=>[['houseAddress'=>'private','name'=>'Sample Contact']]];
@@ -23,4 +23,8 @@ if(getenv('TPK_MYSQL_SMOKE')==='1'){
  assertPrivacy(array_column($invalid['rows'],'id')===array_column($result['rows'],'id'),'Invalid sorting direction must safely fall back to ascending');
  echo "PASS: read-only child directory SQL allowlist and pagination.\n";
 }
-echo "PASS: teacher directory policy and nested address redaction.\n";
+$source=file_get_contents(__DIR__.'/../public/v1.php');
+assertPrivacy(str_contains($source,"api_ok(api_basic_teacher(\$actor)?api_without_household_addresses(\$rows):\$rows"),'Regular teacher directory must retain address redaction');
+assertPrivacy(str_contains($source,"api_ok(api_basic_teacher(\$actor)?api_without_household_addresses(\$child):\$child"),'Regular teacher profile must retain address redaction');
+assertPrivacy(str_contains($source,"api_actor(\$db,api_method()==='PATCH')"),'Child edits must remain Super Admin only');
+echo "PASS: shared read-only children directory and nested address redaction.\n";

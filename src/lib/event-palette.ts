@@ -24,9 +24,9 @@ export async function scanEventImage(file:File):Promise<EventPalette>{
 export function paletteStyle(palette?:EventPalette|null):Record<string,string>{const p=palette||junglePalette;return Object.fromEntries(Object.entries(p).map(([k,v])=>[`--event-${k.replace(/[A-Z]/g,m=>"-"+m.toLowerCase())}`,v]));}
 
 // Dashboard roles are distinct from the original artwork/PDF palette.
-// Orange on yellow is deliberately dark enough for small button labels.
+// White actions use burnt-orange ink; yellow is reserved for text accents.
 export function dashboardPaletteStyle(palette?:EventPalette|null,jungle=false):Record<string,string>{
  const p=palette||junglePalette,bg=darken(p.secondary),yellow=jungle?"#ffd34e":p.accent;
- const orange=contrast(yellow,"#963b0b")>=4.5?"#963b0b":contrast(yellow,"#ffffff")>=4.5?"#ffffff":"#000000";
- return {...paletteStyle(p),"--theme-sidebar":jungle?"#173f2b":darken(p.primary),"--theme-body":bg,"--theme-panel":darken(hex(rgb(bg).map(v=>v*.9+255*.1))),"--theme-button":yellow,"--theme-button-ink":orange};
+ const orange="#963b0b";
+ return {...paletteStyle(p),"--theme-sidebar":jungle?"#173f2b":darken(p.primary),"--theme-body":bg,"--theme-panel":darken(hex(rgb(bg).map(v=>v*.9+255*.1))),"--theme-button":"#ffffff","--theme-accent":yellow,"--theme-button-ink":orange};
 }

@@ -51,3 +51,15 @@
   .event-list-filters { grid-template-columns: minmax(0, 1fr); }
   .event-list-filters > .app-select { grid-column: auto; }
 }
+
+.event-list-filters{grid-template-columns:minmax(220px,1fr) 120px minmax(240px,300px) minmax(170px,200px)}
+.event-list-year{display:grid;gap:7px;font-size:12px;font-weight:700;min-width:0}
+.event-month-board{position:relative;display:flex;gap:20px;overflow-x:auto;align-items:flex-start;padding:8px 2px 24px;scroll-snap-type:x proximity}
+.event-month-column{flex:0 0 340px;min-width:0;scroll-snap-align:start}
+.event-month-column>header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line,#e0e5eb);padding:14px 2px;margin-bottom:16px}
+.event-month-column h2{font-size:20px;margin:0}.event-month-column>header>span{font-size:12px;color:var(--muted,#718096)}
+.event-month-column>div{display:grid;gap:16px}.event-month-column .event-card{min-width:0;padding:24px}.event-month-column .event-card h2{font-size:22px}
+.event-month-empty{padding:24px 16px;margin:0;border:1px dashed var(--line,#e0e5eb);border-radius:14px;color:var(--muted,#718096);font-size:13px}
+.event-year-count{font-size:13px;margin:14px 0}
+@media(max-width:1100px){.event-list-filters{grid-template-columns:minmax(0,1fr) 120px}.event-list-filters>.app-select{grid-column:auto}.event-list-month{grid-column:1}}
+@media(max-width:640px){.event-list-filters{grid-template-columns:minmax(0,1fr) 100px}.event-list-filters>.event-search{grid-column:1/-1}.event-list-month{grid-column:1/-1}.event-list-filters>.app-select{grid-column:1/-1}.event-month-board{display:block;max-height:75vh;overflow:auto;scroll-snap-type:y proximity}.event-month-column{margin-bottom:28px;width:100%}.event-month-column>header{position:sticky;top:0;background:var(--cream,#fcf9f3);z-index:1}.event-month-column .event-card{padding:22px}}
