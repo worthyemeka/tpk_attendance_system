@@ -16,4 +16,13 @@ for(const Component of [ChildrenGrid,ChildrenList]){
  for(const text of ['Petra Mabushi','Campus','PRIVATE_PHONE','PRIVATE_GENDER','77 years','No attendance','Phone not provided','Last attended'])assert.ok(!markup.includes(text),text);
 }
 const teacher=fs.readFileSync('src/components/teacher-child-directory.tsx','utf8');assert.ok(!teacher.includes('events-workspace'));assert.ok(!teacher.includes('EventDialog'));assert.ok(teacher.includes('DirectoryPagination'));assert.ok(teacher.includes('DataViewToggle'));
+const {StatCard}=require('../src/components/stat-card.tsx');
+const stat=renderToStaticMarkup(React.createElement(StatCard,{icon:'Sample',value:53,title:'Children',description:'All records',onClick:()=>{}}));
+assert.match(stat,/<button data-theme-control="surface"/,'Clickable statistics must remain card surfaces');
+for(const file of ['src/components/attention-panel.tsx','src/app/account/overview/page.tsx'])assert.ok(fs.readFileSync(file,'utf8').includes('data-theme-control="surface"'),file);
+const css=fs.readFileSync('src/components/event-appearance.css','utf8');
+assert.ok(css.includes('button:not(:where([data-theme-control="surface"]))'),'Exclude record surfaces from yellow actions');
+for(const selector of ['.upcoming-service-list>div','.relation-numbers>b','.overview-card','.code-card form:first-of-type>label',':focus-within','[aria-selected="true"]',':autofill','-webkit-text-fill-color:var(--theme-ink)'])assert.ok(css.includes(selector),selector);
+assert.match(css,/table tbody tr>td\{background:transparent!important\}/,'Legacy cell hover backgrounds must not leak white');
+assert.match(css,/tr:is\([^\n]+\)\{background:#21140d38!important/,'Focused and selected rows use translucent brown');
 console.log('PASS: dashboard colour contrast, shared child cards/table and teacher privacy-safe presentation.');

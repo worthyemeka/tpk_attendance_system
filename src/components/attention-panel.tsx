@@ -22,7 +22,7 @@ export function AttentionPanel({items}:{items:AttentionItem[]}){
   const [selected,setSelected]=useState<AttentionItem|null>(null);
   return <><section className="panel attention-panel attention-refined">
     <div className="panel-heading"><div><h2>Needs attention</h2><p>{notices.length?notices.length+" "+(notices.length===1?"item":"items")+" to review":"You’re up to date."}</p></div></div>
-    {notices.length?<div className="attention-list">{notices.map(item=><button type="button" aria-haspopup="dialog" key={item.type+item.actionDestination+item.title} className="attention-task" onClick={()=>setSelected(item)}>
+    {notices.length?<div className="attention-list">{notices.map(item=><button data-theme-control="surface" type="button" aria-haspopup="dialog" key={item.type+item.actionDestination+item.title} className="attention-task" onClick={()=>setSelected(item)}>
       <i className={item.severity.toLowerCase()}>{item.type==="ROSTER_ASSIGNMENT"?<FiCalendar/>:item.type==="UNPICKED_UP"?<FiClock/>:<FiUsers/>}</i>
       <span><small>{item.type==="ROSTER_ASSIGNMENT"?"Roster update":item.severity==="URGENT"?"Urgent":"Action needed"}</small><b>{item.title}</b>{item.detail&&<p>{item.detail}</p>}<em>{item.action}</em></span><FiChevronRight/>
     </button>)}</div>:<div className="attention-clear"><FiCheckCircle/><span><b>Nothing needs attention</b><small>Updates will appear here when there’s a next step.</small></span></div>}

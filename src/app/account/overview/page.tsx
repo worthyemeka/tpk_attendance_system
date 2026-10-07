@@ -289,6 +289,7 @@ export default function AccountOverview() {
                         key={item.assignmentId}
                         onClick={() => setQuickTeacher({ userId: item.userId, name: item.teacherName, image: item.profileImageUrl, date: sundayContext.selectedSundayDate || undefined, roles: dashboard.todayTeam.filter(assignment => Number(assignment.userId) === Number(item.userId)).map(assignment => `${assignment.dutyName} · ${assignment.serviceType.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, char => char.toUpperCase())}`) })}
                         className="team-person"
+                        data-theme-control="surface"
                       >
                         <TeacherPhoto
                           name={item.teacherName}

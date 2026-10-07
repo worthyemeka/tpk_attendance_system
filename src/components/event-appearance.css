@@ -46,7 +46,7 @@ html[data-event-appearance="event"] :is(.app-dropdown-menu,.service-menu-options
 html[data-event-appearance="event"] :is(.app-dropdown-menu,.service-menu-options,.tpk-month-picker-popover,.child-export>div) button:is(:hover,:focus-visible,.selected,[aria-selected=true]){background:var(--theme-button)!important;color:var(--theme-button-ink)!important}
 
 /* One yellow/orange pair for actions; text controls stay text-only. */
-html[data-event-appearance="event"] :is(.content,.volunteer-shell,[role="dialog"]) button,
+html[data-event-appearance="event"] :is(.content,.volunteer-shell,[role="dialog"]) button:not(:where([data-theme-control="surface"])),
 html[data-event-appearance="event"] :is(.solid-button,.outline-button,.quiet-button,.universal-qr,.universal-assist,.records-view-action,.record-profile-action,.class-settings-link,.guardian-contact-actions a,.add-child,.profile-panel>footer>a,.mobile-nav-toggle,.notification-button){background:var(--theme-button)!important;color:var(--theme-button-ink)!important;border-color:var(--theme-button)!important}
 html[data-event-appearance="event"] :is(.content,.volunteer-shell,[role="dialog"]) button:where(.app-dropdown-trigger,.service-menu-trigger){background:var(--theme-panel)!important;color:#fff!important;border-color:var(--theme-edge)!important}
 html[data-event-appearance="event"] :is(.content,.volunteer-shell,[role="dialog"]) :is(.record-child-name,.record-sort,.table-sort,.event-back,.tabs button,.event-tabs button,.cw-primary-tabs button,.profile-panel>nav button,.data-view-toggle button,.month-switcher button){background:transparent!important;color:#fff!important;border-color:var(--theme-edge)!important}
@@ -83,3 +83,32 @@ html[data-event-appearance="event"] .content .record-child-name{justify-content:
 html[data-event-appearance="event"] .content .record-child-name .record-child-avatar{color:var(--theme-button-ink)!important}
 html[data-event-appearance="event"] :is(.content,.volunteer-shell) .data-view-toggle button[aria-pressed=true]{background:var(--theme-button)!important;color:var(--theme-button-ink)!important}
 html[data-event-appearance="event"] .content :is(.children-records-list,.records-table) td[data-label]::before{color:#ffffffc9!important}
+
+/* Clickable records are surfaces, not action buttons. Never flood their copy
+   with the action colour; only the small action/badge receives yellow. */
+html[data-event-appearance="event"] :is(.content,.volunteer-shell,[role="dialog"]) :is([data-theme-control="surface"],.notification-item,.week-toggle,.action-list a){background:transparent!important;color:var(--theme-ink)!important;border-color:var(--theme-edge)!important}
+html[data-event-appearance="event"] :is(.content,.volunteer-shell,[role="dialog"]) :is([data-theme-control="surface"],.notification-item,.week-toggle,.action-list a):is(:hover,:focus-visible){background:#21140d38!important;box-shadow:inset 0 0 0 1px var(--theme-edge)}
+html[data-event-appearance="event"] :is(.content,.volunteer-shell,[role="dialog"]) [data-theme-control="surface"] :is(span,b,strong,small,p){color:var(--theme-ink)!important}
+html[data-event-appearance="event"] :is(.content,.volunteer-shell,[role="dialog"]) :is(.upcoming-service-list>div,.relation-numbers>b,.overview-card,.teacher-drawer,.drawer-content,.drawer-actions,.action-menu,.team-member-grid article,.followup-grid article,.followup .backdrop aside,.followup .contact,.followup .record,.followup .assignment-box){background:var(--theme-panel)!important;color:var(--theme-ink)!important;border-color:var(--theme-edge)!important}
+html[data-event-appearance="event"] :is(.content,.volunteer-shell,[role="dialog"]) .overview-card dl>div{background:transparent!important}
+html[data-event-appearance="event"] :is(.content,.volunteer-shell,[role="dialog"]) :is(.upcoming-service-list>div>i,.attention-task>i,.tpk-stat-card__icon,.metric-icon){background:#21140d38!important;color:var(--theme-button)!important;border-color:var(--theme-edge)!important}
+html[data-event-appearance="event"] .content .upcoming-service-list a{background:transparent!important;color:var(--theme-button)!important;border-color:var(--theme-edge)!important}
+
+/* Legacy pages paint individual cells on hover. Reset both cells and rows,
+   including selected/focused states, so white surfaces cannot leak through. */
+html[data-event-appearance="event"] body :is(.content,.volunteer-shell,[role="dialog"]) table tbody tr>td{background:transparent!important}
+html[data-event-appearance="event"] body :is(.content,.volunteer-shell,[role="dialog"]) table tbody tr:is(:hover,:focus-within,.selected,.active,[aria-selected="true"],[data-selected="true"]){background:#21140d38!important;box-shadow:inset 0 0 0 1px var(--theme-edge)}
+
+/* Search/pickup wrappers and their native controls must share one surface.
+   This also covers older page-local search classes and Safari autofill. */
+html[data-event-appearance="event"] body :is(.content,.volunteer-shell,[role="dialog"]) :is(.search,.search-box,.search-field,.child-search,.event-search,.quick-search,.curriculum-search,.code-card form:first-of-type>label,.queue-filters>label,.checkin-toolbar>label,.tools>label){background:var(--theme-panel)!important;color:var(--theme-ink)!important;border-color:var(--theme-edge)!important}
+html[data-event-appearance="event"] body :is(.content,.volunteer-shell,[role="dialog"]) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),textarea,select){background:var(--theme-panel)!important;color:var(--theme-ink)!important;-webkit-text-fill-color:var(--theme-ink)!important;caret-color:var(--theme-button)!important;border-color:var(--theme-edge)!important;color-scheme:dark}
+html[data-event-appearance="event"] body :is(.content,.volunteer-shell,[role="dialog"]) :is(.search,.search-box,.search-field,.child-search,.event-search,.quick-search,.curriculum-search,.code-card form:first-of-type>label,.queue-filters>label,.checkin-toolbar>label,.tools>label) input{background:transparent!important;border:0!important;box-shadow:none!important;min-width:0}
+html[data-event-appearance="event"] body :is(.content,.volunteer-shell,[role="dialog"]) :is(input,textarea):autofill{box-shadow:0 0 0 1000px var(--theme-panel) inset!important;-webkit-text-fill-color:var(--theme-ink)!important}
+html[data-event-appearance="event"] body :is(.content,.volunteer-shell,[role="dialog"]) :is(input,textarea)::placeholder{color:#ffffffb3!important;-webkit-text-fill-color:#ffffffb3!important;opacity:1}
+html[data-event-appearance="event"] .content :is(.queue-tabs,.team-tabs,.teacher-drawer>nav) button{background:transparent!important;color:var(--theme-ink)!important;border-color:transparent!important}
+html[data-event-appearance="event"] .content :is(.queue-tabs,.team-tabs,.teacher-drawer>nav) button.active{color:var(--theme-button)!important;border-bottom-color:var(--theme-button)!important}
+html[data-event-appearance="event"] .content .pickup-register-heading>b{background:var(--theme-button)!important;color:var(--theme-button-ink)!important}
+html[data-event-appearance="event"] .content .upcoming-service-list section>span{color:#ffffffc9!important}
+html[data-event-appearance="event"] .content .attention-task em{color:var(--theme-button)!important}
+html[data-event-appearance="event"] .content .team-person>em{background:var(--theme-button)!important;color:var(--theme-button-ink)!important;border-color:var(--theme-button)!important}
