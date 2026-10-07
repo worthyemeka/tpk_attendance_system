@@ -16,6 +16,7 @@ require_once __DIR__ . '/curriculum.php';
 require_once __DIR__ . '/teacher-attendance.php';
 require_once __DIR__ . '/events.php';
 require_once __DIR__ . '/people-privacy.php';
+require_once __DIR__ . '/people-access.php';
 
 function api_ok(mixed $data, int $status = 200, ?array $meta = null): never {
     http_response_code($status); header('Content-Type: application/json; charset=utf-8');
@@ -62,6 +63,7 @@ function api_actor(PDO $db, bool $super = false): array {
     if (!(bool)$user['is_active'] || $user['account_status'] !== 'VERIFIED' || $user['team_status'] === 'INACTIVE') api_error('UNAUTHENTICATED','Your account is not active. Please contact a TPK Super Admin.',401);
     if ($super && $user['access_level'] !== 'TPK_SUPER_ADMIN') api_error('FORBIDDEN','TPK Super Admin access is required.',403);
     if($user['access_level']==='EVENT_VOLUNTEER'&&!event_volunteer_api_allowed(api_path(),api_method()))api_error('FORBIDDEN','Your account has access only to assigned event responsibilities.',403);
+    if(api_people_record_route(api_path()))api_require_people_access($db,$user);
     /* There is no background worker on the PHP VM. On the first authenticated
        request after Sunday’s 2:00 PM cutoff, queue the idempotent absence tasks
        so Follow-Up Leads see them without needing a manual “close service” step. */
@@ -158,6 +160,7 @@ function api_sunday_presence(PDO $db,array $childIds,?string $serviceDate): arra
     return $present;
 }
 function api_child_allowed(PDO $db, array $actor, int $id, bool $sharedView = false): array {
+    api_require_people_access($db,$actor);
     $s=$db->prepare('SELECT '.api_child_select().' FROM children c JOIN families f ON f.id=c.family_id LEFT JOIN classes cl ON cl.id=c.class_id WHERE c.id=? AND f.campus_id=? LIMIT 1'); $s->execute([$id,$actor['campus_id']]); $child=$s->fetch();
     if (!$child) api_error('CHILD_NOT_FOUND','Child not found.',404);
     $allowed=$sharedView?null:api_permitted_class_ids($db,$actor); if ($allowed !== null && (!in_array((int)$child['classId'],$allowed,true))) api_error('FORBIDDEN','This child is outside your assigned classes.',403);
@@ -575,18 +578,11 @@ function api_is_head_of_service(PDO $db, array $actor, int $serviceSessionId): b
         LIMIT 1");
     $s->execute([$serviceSessionId,$actor['campus_id'],$actor['id'],$serviceSessionId]); return (bool)$s->fetchColumn();
 }
-function api_can_view_people_directory(PDO $db, array $actor): bool {
-    /* Follow-Up Leads need the household directory to contact families and
-       guardians. Each directory query still limits results to their campus. */
-    if(in_array($actor['access_level'],['TPK_SUPER_ADMIN','TPK_FOLLOW_UP_ADMIN'],true))return true;
-    $selected=(int)($_GET['serviceSessionId']??0);if($selected)return api_is_head_of_service($db,$actor,$selected);
-    $zone=new DateTimeZone('Africa/Lagos');$day=new DateTimeImmutable('today',$zone);$today=($day->format('w')==='0'?$day:$day->modify('last sunday'))->format('Y-m-d');
-    $sessions=$db->prepare("SELECT id FROM service_sessions WHERE campus_id=? AND service_date=? AND service_type IS NOT NULL");
-    $sessions->execute([(int)$actor['campus_id'],$today]);
-    foreach($sessions->fetchAll() as $session)if(api_is_head_of_service($db,$actor,(int)$session['id']))return true;
-    return false;
+function api_people_permissions(PDO $db): never {
+    $actor=api_actor($db);api_ok(['canViewPeople'=>api_can_view_people_directory($db,$actor),'canEditPeople'=>$actor['access_level']==='TPK_SUPER_ADMIN']);
 }
 function api_can_view_checkin(PDO $db, array $actor, int $serviceSessionId): bool {
+    if(!api_can_view_people_directory($db,$actor))return false;
     $s=$db->prepare('SELECT 1 FROM service_sessions WHERE id=? AND campus_id=?');
     $s->execute([$serviceSessionId,$actor['campus_id']]);return (bool)$s->fetchColumn();
 }
@@ -1119,6 +1115,7 @@ try { $db=api_db();$path=api_path();$method=api_method();
     if($method==='PATCH'&&preg_match('#^/api/v1/guardians/(\d+)$#',$path,$m))api_guardian($db,(int)$m[1]);
     if($method==='POST'&&$path==='/api/v1/public/check-in/lookup')api_public_lookup($db);
     if($method==='GET'&&$path==='/api/v1/system/status')api_system_status($db);
+    if($method==='GET'&&$path==='/api/v1/me/people-access')api_people_permissions($db);
     if($method==='GET'&&$path==='/api/v1/notifications')api_notifications($db);
     if($method==='GET'&&$path==='/api/v1/service-sessions/current')api_current_session($db);
     if($path==='/api/v1/service-sessions/sunday-schedule')api_sunday_schedule($db);

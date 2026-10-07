@@ -34,6 +34,7 @@ import { subscribeToActiveService, type ActiveService } from "@/lib/active-servi
 import { NotificationBell } from "@/components/notification-bell";
 import { useProfileDialog } from "@/components/use-profile-dialog";
 import "./sidebar-refinement.css";
+import { usePeopleAccess } from "@/lib/use-people-access";
 
 const campusFont = localFont({ src: "../../public/fonts/dm-serif-display.ttf", weight: "400", display: "swap", variable: "--font-campus" });
 
@@ -131,8 +132,8 @@ export function Sidebar() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [mobileNavScrolled, setMobileNavScrolled] = useState(false);
   const [activeService, setActiveService] = useState<ActiveService | null>(null);
-  const [checkinVisible, setCheckinVisible] = useState(false);
-  const [peopleDirectoryVisible, setPeopleDirectoryVisible] = useState(false);
+  const peopleDirectoryVisible = usePeopleAccess() === "allowed";
+  const checkinVisible = peopleDirectoryVisible;
   const [profileImageFailed, setProfileImageFailed] = useState(false);
   useProfileDialog(() => setMobileNavOpen(false), ".sidebar.mobile-open", mobileNavOpen);
   useEffect(() => {
@@ -147,36 +148,6 @@ export function Sidebar() {
     };
   }, []);
   useEffect(() => subscribeToActiveService(setActiveService), []);
-  useEffect(() => {
-    if (!session) return;
-    if (session.accessLevel === "TPK_SUPER_ADMIN") {
-      setCheckinVisible(true);
-      setPeopleDirectoryVisible(true);
-      return;
-    }
-    if (session.accessLevel === "TPK_FOLLOW_UP_ADMIN") {
-      setCheckinVisible(false);
-      setPeopleDirectoryVisible(true);
-      return;
-    }
-    let cancelled = false;
-    const headers = authHeaders(session);
-    Promise.all([
-      fetch(`${apiBase}/api/v1/check-ins`, { headers }),
-      fetch(`${apiBase}/api/v1/guardians/summary`, { headers }),
-    ])
-      .then(([checkinResponse, peopleResponse]) => {
-        if (cancelled) return;
-        setCheckinVisible(checkinResponse.ok);
-        setPeopleDirectoryVisible(peopleResponse.ok);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setCheckinVisible(false);
-        setPeopleDirectoryVisible(false);
-      });
-    return () => { cancelled = true; };
-  }, [activeService?.id, session]);
   useEffect(() => {
     const update = () => setMobileNavScrolled(window.scrollY > 8);
     update();
@@ -296,7 +267,7 @@ export function Sidebar() {
           <nav aria-label="Dashboard navigation">
             <Group
               title="Sunday"
-              items={superAdmin ? superSunday : adminSunday}
+              items={superAdmin ? superSunday : adminSunday.filter(([, href]) => checkinVisible || !["/account/check-in", "/account/pick-up"].includes(href))}
               onNavigate={closeMobileNav}
             />
             {superAdmin && (
@@ -322,7 +293,7 @@ export function Sidebar() {
                 />
                 <Group
                   title="My Ministry"
-                  items={followUpLead ? followUpLeadMinistry : adminMinistry}
+                  items={(followUpLead ? followUpLeadMinistry : adminMinistry).filter(([, href]) => peopleDirectoryVisible || href !== "/account/relations")}
                   onNavigate={closeMobileNav}
                 />
               </>

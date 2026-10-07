@@ -3,11 +3,12 @@ declare(strict_types=1);
 if(getenv('TPK_MYSQL_SMOKE')!=='1'){echo "Skipped: enable TPK_MYSQL_SMOKE for read-only MySQL checks.\n";exit;}
 require (getenv('TPK_CONFIG_ROOT')?:dirname(__DIR__)).'/config.php';
 require __DIR__.'/../public/people-privacy.php';
+require __DIR__.'/../public/people-access.php';
 class ChildResponse extends RuntimeException {public function __construct(public mixed $data,public ?array $meta=null){parent::__construct('Captured response');}}
 class ChildDenied extends RuntimeException {}
 function api_ok(mixed $data,int $status=200,?array $meta=null):never{throw new ChildResponse($data,$meta);}
 function api_error(string $code,string $message,int $status=400):never{throw new ChildDenied($code);}
-function api_actor(PDO $db,bool $super=false):array{if($super&&$GLOBALS['actor']['access_level']!=='TPK_SUPER_ADMIN')throw new ChildDenied('FORBIDDEN');return $GLOBALS['actor'];}
+function api_actor(PDO $db,bool $super=false):array{if($super&&$GLOBALS['actor']['access_level']!=='TPK_SUPER_ADMIN')throw new ChildDenied('FORBIDDEN');api_require_people_access($db,$GLOBALS['actor']);return $GLOBALS['actor'];}
 function api_method():string{return $GLOBALS['method']??'GET';}
 function api_page():array{return [1,12,0];}
 function api_permitted_class_ids(PDO $db,array $actor):?array{return [];}
@@ -20,12 +21,16 @@ function capture(callable $fn):ChildResponse{try{$fn();}catch(ChildResponse $r){
 function check(bool $value,string $message):void{if(!$value)throw new RuntimeException($message);$GLOBALS['checks']++;}
 $db=db();$db->exec('SET TRANSACTION READ ONLY');$db->beginTransaction();$checks=0;
 try{
- $actor=$db->query("SELECT id,campus_id,access_level FROM staff_users WHERE access_level='TPK_ADMIN' AND is_active=1 ORDER BY id LIMIT 1")->fetch();check((bool)$actor,'A regular teacher is needed for the read-only smoke test');$_GET=[];
+ $teachers=$db->query("SELECT id,campus_id,access_level FROM staff_users WHERE access_level='TPK_ADMIN' AND is_active=1")->fetchAll();check((bool)$teachers,'A regular teacher is needed for the read-only smoke test');$_GET=[];
+ $denied=0;$authorised=0;
+ foreach($teachers as $candidate){$actor=$candidate;$permitted=api_can_view_people_directory($db,$actor);if($permitted){$authorised++;continue;}$denied++;try{api_list_children($db);throw new RuntimeException('Off-duty teacher obtained records');}catch(ChildDenied $e){check($e->getMessage()==='PEOPLE_ACCESS_DENIED','Off-duty record guard failed');}}
+ check($denied>0,'Expected at least one off-duty teacher');
+ $actor=$teachers[0];$actor['access_level']='TPK_FOLLOW_UP_ADMIN';
  $count=$db->prepare('SELECT COUNT(*) FROM children c JOIN families f ON f.id=c.family_id WHERE f.campus_id=?');$count->execute([$actor['campus_id']]);$total=(int)$count->fetchColumn();
  $teacher=capture(fn()=>api_list_children($db));check($teacher->meta['total']===$total,'Teacher directory must include all regular campus children');check(count($teacher->data)===min(12,$total),'Teacher pagination mismatch');
  foreach($teacher->data as $row){check(isset($row['firstName'])&&array_key_exists('className',$row)&&array_key_exists('age',$row),'Regular child fields missing');check(!isset($row['homeCampus']),'VBS campus field leaked into regular directory');check($row===api_without_household_addresses($row),'Household address exposed');}
  $summary=capture(fn()=>api_children_summary($db));check($summary->data['registeredChildren']===$total,'Summary cards and full directory disagree');
  if($teacher->data){$id=(int)$teacher->data[0]['id'];$profile=capture(fn()=>api_child($db,$id));check(isset($profile->data['guardians'],$profile->data['attendanceHistory']),'Read-only profile details missing');check($profile->data===api_without_household_addresses($profile->data),'Profile address exposed');$method='PATCH';try{api_child($db,$id);throw new RuntimeException('Teacher edit unexpectedly permitted');}catch(ChildDenied $e){check($e->getMessage()==='FORBIDDEN','Teacher edit guard failed');}$method='GET';}
  $actor['access_level']='TPK_SUPER_ADMIN';$admin=capture(fn()=>api_list_children($db));check(array_column($admin->data,'id')===array_column($teacher->data,'id'),'Teacher and Super Admin regular directory rows differ');
- echo "PASS: $checks read-only production SQL checks; shared child cards/profile fields, no VBS campus columns, no household addresses, teacher edits denied.\n";
+ echo "PASS: $checks read-only SQL checks; $denied off-duty teachers denied, $authorised weekly leaders eligible, authorised cards/profile retained, addresses redacted and teacher edits denied.\n";
 }finally{$db->rollBack();}

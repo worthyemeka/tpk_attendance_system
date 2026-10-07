@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require __DIR__ . '/../config.php';
+require_once __DIR__.'/people-access.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') json_response([]);
 $db = db();
@@ -13,6 +14,13 @@ $campusId = (int)$campus['id'];
 // Event-only accounts cannot use the legacy Sunday/people endpoints either.
 // Anonymous parent routes retain their existing behaviour.
 $authorization=$_SERVER['HTTP_AUTHORIZATION']??'';
+if(preg_match('#^/api/(?:families|pickup|attendance)(?:/|$)#',$path)){
+    if(!preg_match('/^Bearer ([a-f0-9]{64})$/i',$authorization,$token))json_response(['error'=>'Staff sign-in is required.'],401);
+    $recordActor=$db->prepare("SELECT u.id,u.campus_id,u.access_level FROM staff_sessions ss JOIN staff_users u ON u.id=ss.staff_user_id WHERE ss.token_hash=? AND ss.revoked_at IS NULL AND ss.expires_at>NOW() AND u.is_active=1 AND u.account_status='VERIFIED' AND u.team_status<>'INACTIVE' LIMIT 1");
+    $recordActor->execute([hash('sha256',$token[1])]);$recordActor=$recordActor->fetch();
+    if(!$recordActor)json_response(['error'=>'Staff sign-in is required.'],401);
+    if(!api_can_view_people_directory($db,$recordActor))json_response(['error'=>'People records are restricted to this week’s service leadership, Follow-Up Leads and Super Admins.'],403);
+}
 if(preg_match('/^Bearer ([a-f0-9]{64})$/i',$authorization,$match)){
     $limited=$db->prepare("SELECT 1 FROM staff_sessions ss JOIN staff_users u ON u.id=ss.staff_user_id WHERE ss.token_hash=? AND ss.revoked_at IS NULL AND ss.expires_at>NOW() AND u.access_level='EVENT_VOLUNTEER'");
     $limited->execute([hash('sha256',$match[1])]);
