@@ -86,6 +86,11 @@ try {
     $_GET=['month'=>api_teacher_now()->format('Y-m')];$scheduled=smokeResult(fn()=>api_teacher_attendance($db));
     foreach($scheduled['services'] as $service)smokeCheck($service['kind']==='SUNDAY','MDWK exposed in current register');
     $linked=(int)$db->query('SELECT COUNT(*) FROM teacher_services WHERE service_session_id IS NOT NULL')->fetchColumn();smokeCheck($linked>0,'Sunday services not linked to configured sessions');
+    $clock=new DateTimeImmutable($nextSunday.' 06:00:00',new DateTimeZone('Africa/Lagos'));
+    $mySunday=smokeResult(fn()=>api_teacher_my_sunday($db,$clock));
+    smokeCheck(count($mySunday['services'])===2,'Both configured Sunday services should appear at 6am');
+    foreach($mySunday['services'] as $service)smokeCheck(array_key_exists('checkedInAt',$service)&&!isset($service['teacherName']),'Overview response contains only own attendance');
+    smokeCheck(smokeResult(fn()=>api_teacher_my_sunday($db,$clock->modify('-1 second')))['services']===[],'Overview visible before 6am');
     smokeCheck((int)$db->query("SELECT COUNT(*) FROM teacher_services WHERE kind='MDWK'")->fetchColumn()===1,'Sync created new MDWK services');
     if(api_teacher_now()->format('w')!=='0')smokeCheck(smokeResult(fn()=>api_teacher_my_sunday($db))['services']===[],'Overview shows sign-in on a weekday');
     echo "PASS: MySQL Sunday linking, all-active expectation, question-free confirmation, repeat sign-in and subunit-based welfare.\n";

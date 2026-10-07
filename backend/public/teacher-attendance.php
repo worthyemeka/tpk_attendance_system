@@ -78,7 +78,7 @@ function api_teacher_qr(PDO $db,int $id): never {
 }
 function api_teacher_signin_window(array $service,?DateTimeImmutable $clock=null): void {
     if($service['kind']!=='SUNDAY')api_error('MDWK_SIGNIN_REMOVED','Wednesday service no longer requires sign-in.',410);
-    $now=($clock??api_teacher_now())->format('Y-m-d H:i:s');
+    $now=($clock??api_teacher_now())->setTimezone(new DateTimeZone('Africa/Lagos'))->format('Y-m-d H:i:s');
     $opens=substr($service['starts_at'],0,10).' 06:00:00';
     if($now<$opens||$now>=$service['ends_at'])api_error('SIGNIN_CLOSED','Sunday sign-in opens at 6am Lagos time and closes when this service ends.',409);
 }
@@ -125,8 +125,8 @@ function api_teacher_my_mdwk(PDO $db): never { api_teacher_mdwk_removed($db); }
 function api_teacher_confirm_mdwk(PDO $db,int $id,?DateTimeImmutable $now=null): never { api_teacher_mdwk_removed($db); }
 function api_teacher_absence_reason(PDO $db,int $id): never { api_teacher_mdwk_removed($db); }
 
-function api_teacher_my_sunday(PDO $db): never {
-    $actor=api_actor($db);$now=api_teacher_now();$stamp=$now->format('Y-m-d H:i:s');
+function api_teacher_my_sunday(PDO $db,?DateTimeImmutable $clock=null): never {
+    $actor=api_actor($db);$now=($clock??api_teacher_now())->setTimezone(new DateTimeZone('Africa/Lagos'));$stamp=$now->format('Y-m-d H:i:s');
     if($now->format('w')!=='0'||$now->format('H:i:s')<'06:00:00')api_ok(['services'=>[],'serverTime'=>$stamp]);
     api_teacher_attendance_ready($db);
     $date=$now->format('Y-m-d');$end=$now->modify('+1 day')->format('Y-m-d');

@@ -115,7 +115,10 @@ export default function AccountOverview() {
     number | undefined
   >();
   useEffect(() => {
-    setToday(new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos" }).format(new Date()));
+    const refresh = () => setToday(new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos" }).format(new Date()));
+    refresh();
+    const timer = window.setInterval(refresh, 60_000);
+    return () => window.clearInterval(timer);
   }, []);
   useEffect(
     () =>
