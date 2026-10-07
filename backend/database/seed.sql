@@ -1,5 +1,5 @@
 USE tpk_attendance_system;
-INSERT INTO campuses(name,code) VALUES ('Petra Wuse Campus','PETRA-WUSE');
+INSERT INTO campuses(name,code) VALUES ('Petra Mabushi (Regional Campus)','PETRA-MABUSHI');
 SET @campus_id = LAST_INSERT_ID();
 INSERT INTO classes(campus_id,name,age_label,color) VALUES
 (@campus_id,'TribePetra Teens','Ages 12–19','#D6602B'),(@campus_id,'Tribe A','Ages 9–11','#F4A340'),(@campus_id,'Tribe B','Ages 6–8','#F9C74F'),(@campus_id,'Tribe C','Ages 3–5','#EB8E6C');

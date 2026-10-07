@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 // Raw JSON is staging/provenance only. Committed facts go into relational tables.
+function event_import_campus_code(string $code):string{return $code==='PETRA-WUSE'?'PETRA-MABUSHI':$code;}
 function event_import_issues(PDO $db,int $event,array $row,string $kind): array {
     $errors=[];
     if(!empty($row['requiresReview']))$errors[]='Source ambiguity needs review; correct the row and clear requiresReview, or skip it.';
@@ -24,14 +25,14 @@ function event_import_issues(PDO $db,int $event,array $row,string $kind): array 
         foreach($row['contacts']??[] as $contact)if(!is_array($contact)||!in_array($contact['type']??'',['GUARDIAN','EMERGENCY','DOCTOR','PICKUP'],true)||mb_strlen((string)($contact['name']??''))>180||strlen((string)($contact['phone']??''))>40||mb_strlen((string)($contact['sourceText']??''))>4000)$errors[]='Invalid contact details.';
     }
     if(!empty($row['homeCampusId'])){$q=$db->prepare('SELECT id FROM campuses WHERE id=?');$q->execute([(int)$row['homeCampusId']]);if(!$q->fetchColumn())$errors[]='Home campus does not exist.';}
-    elseif(!empty($row['homeCampusCode'])){$q=$db->prepare('SELECT id FROM campuses WHERE code=?');$q->execute([$row['homeCampusCode']]);if(!$q->fetchColumn())$errors[]='Map the homeCampusCode to a saved campus.';}
+    elseif(!empty($row['homeCampusCode'])){$q=$db->prepare('SELECT id FROM campuses WHERE code=?');$q->execute([event_import_campus_code($row['homeCampusCode'])]);if(!$q->fetchColumn())$errors[]='Map the homeCampusCode to a saved campus.';}
     foreach(['sessionId'=>'event_sessions','groupId'=>'event_groups'] as $key=>$table)if(!empty($row[$key])){$q=$db->prepare("SELECT id FROM $table WHERE id=? AND event_id=?");$q->execute([(int)$row[$key],$event]);if(!$q->fetchColumn())$errors[]="Invalid $key for this event.";}
     if(strlen(json_encode($row))>100000)$errors[]='Source row too large.';
     return array_values(array_unique($errors));
 }
 function event_import_child(PDO $db,array $actor,int $event,array $row): int {
     $q=$db->prepare('SELECT id FROM event_children WHERE event_id=? AND source_key=?');$q->execute([$event,$row['sourceKey']]);if($q->fetchColumn())api_error('SOURCE_ALREADY_IMPORTED','This source child already exists. Edit the record rather than importing it twice.',409);
-    $campus=isset($row['homeCampusId'])?(int)$row['homeCampusId']:null;if(!$campus&&!empty($row['homeCampusCode'])){$q=$db->prepare('SELECT id FROM campuses WHERE code=?');$q->execute([$row['homeCampusCode']]);$campus=(int)$q->fetchColumn();}
+    $campus=isset($row['homeCampusId'])?(int)$row['homeCampusId']:null;if(!$campus&&!empty($row['homeCampusCode'])){$q=$db->prepare('SELECT id FROM campuses WHERE code=?');$q->execute([event_import_campus_code($row['homeCampusCode'])]);$campus=(int)$q->fetchColumn();}
     $core=!empty($row['existingChildId'])?(int)$row['existingChildId']:null;$family=null;$guardian=null;
     if($core){$q=$db->prepare('SELECT c.family_id,g.id AS guardian_id FROM children c LEFT JOIN guardians g ON g.family_id=c.family_id AND g.is_primary=1 WHERE c.id=?');$q->execute([$core]);$linked=$q->fetch();$family=$linked['family_id'];$guardian=$linked['guardian_id'];}
     // Do not auto-link by name alone. Only an exact child + guardian phone match
@@ -59,7 +60,7 @@ if($action==='row'&&$method==='PATCH'){$db->beginTransaction();$q=$db->prepare('
     $db->beginTransaction();try{$q=$db->prepare('SELECT state FROM event_import_batches WHERE id=? FOR UPDATE');$q->execute([$batch]);if($q->fetchColumn()==='COMMITTED'){$db->commit();api_ok(['id'=>$batch,'alreadyCommitted'=>true]);}
       $q=$db->prepare('SELECT * FROM event_import_rows WHERE batch_id=? ORDER BY id FOR UPDATE');$q->execute([$batch]);$rows=$q->fetchAll();$count=0;
 foreach($rows as $r){if(in_array($r['resolution'],['SKIPPED','IMPORTED'],true))continue;$row=json_decode($r['payload'],true);$issues=event_import_issues($db,$event,$row,$b['import_kind']);if($issues&&($v['readyOnly']??false)===true){$db->prepare("UPDATE event_import_rows SET resolution='PENDING',issues=? WHERE id=?")->execute([json_encode($issues),$r['id']]);continue;}if($issues)api_error('IMPORT_REVIEW_REQUIRED','Correct or explicitly skip every flagged row before committing.',422);
-        $cid=null;$uid=null;if($b['import_kind']==='CHILDREN')$cid=event_import_child($db,$actor,$event,$row);else{$uid=event_volunteer_account($db,$actor,$row);$campus=event_campus($db,$row['homeCampusId']??null);if(!$campus&&!empty($row['homeCampusCode'])){$x=$db->prepare('SELECT id FROM campuses WHERE code=?');$x->execute([$row['homeCampusCode']]);$campus=(int)$x->fetchColumn();}$db->prepare('INSERT IGNORE INTO event_volunteers(event_id,staff_user_id,duty,home_campus_id,membership_status) VALUES(?,?,?,?,\'ACTIVE\')')->execute([$event,$uid,$row['duty']??'TEACHER',$campus]);$db->prepare('INSERT INTO event_volunteer_assignments(event_id,staff_user_id,session_id,group_id,responsibility) VALUES(?,?,?,?,?)')->execute([$event,$uid,$row['sessionId']??null,$row['groupId']??null,$row['responsibility']??'Volunteer']);}
+        $cid=null;$uid=null;if($b['import_kind']==='CHILDREN')$cid=event_import_child($db,$actor,$event,$row);else{$uid=event_volunteer_account($db,$actor,$row);$campus=event_campus($db,$row['homeCampusId']??null);if(!$campus&&!empty($row['homeCampusCode'])){$x=$db->prepare('SELECT id FROM campuses WHERE code=?');$x->execute([event_import_campus_code($row['homeCampusCode'])]);$campus=(int)$x->fetchColumn();}$db->prepare('INSERT IGNORE INTO event_volunteers(event_id,staff_user_id,duty,home_campus_id,membership_status) VALUES(?,?,?,?,\'ACTIVE\')')->execute([$event,$uid,$row['duty']??'TEACHER',$campus]);$db->prepare('INSERT INTO event_volunteer_assignments(event_id,staff_user_id,session_id,group_id,responsibility) VALUES(?,?,?,?,?)')->execute([$event,$uid,$row['sessionId']??null,$row['groupId']??null,$row['responsibility']??'Volunteer']);}
         $db->prepare("UPDATE event_import_rows SET resolution='IMPORTED',event_child_id=?,staff_user_id=? WHERE id=?")->execute([$cid,$uid,$r['id']]);$count++;}
       $pending=$db->prepare("SELECT COUNT(*) FROM event_import_rows WHERE batch_id=? AND resolution='PENDING'");$pending->execute([$batch]);$state=$pending->fetchColumn()?'PARTIAL':'COMMITTED';$db->prepare('UPDATE event_import_batches SET state=?,committed_at=NOW() WHERE id=?')->execute([$state,$batch]);api_audit($db,$actor,'EVENT_HISTORY_IMPORTED','Event',$event,['batchId'=>$batch,'count'=>$count,'kind'=>$b['import_kind']]);$db->commit();
     }catch(Throwable $err){if($db->inTransaction())$db->rollBack();throw $err;}api_ok(['id'=>$batch,'imported'=>$count,'state'=>$state]);

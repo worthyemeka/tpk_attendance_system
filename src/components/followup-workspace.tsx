@@ -272,7 +272,7 @@ export function FollowupWorkspace() {
     <>
       <section className="followup followup-refined">
         <header>
-          <p className="eyebrow">Petra Wuse</p>
+          <p className="eyebrow">Petra Mabushi (Regional)</p>
           <h1>Relations &amp; Follow-Up</h1>
           <p>
             Check in with families whose children have been away and keep

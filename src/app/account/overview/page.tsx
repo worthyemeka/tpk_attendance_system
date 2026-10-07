@@ -157,7 +157,7 @@ export default function AccountOverview() {
       <header className="overview-header">
         <div>
           <p className="eyebrow">
-            Petra Wuse {live && <span className="live-status">Live</span>}
+            Petra Mabushi (Regional) {live && <span className="live-status">Live</span>}
           </p>
           <UserGreeting />
           <p className="intro">

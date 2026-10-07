@@ -28,8 +28,7 @@
  body .children-records-safe tr{grid-template-columns:minmax(0,1fr) auto}
  body .children-records-safe .record-list-child{grid-column:1;grid-row:1}
  body .children-records-safe .record-list-action{grid-column:2;grid-row:1}
- .children-records-safe .record-list-campus{grid-column:1/-1;grid-row:2}
- .children-records-safe .record-list-guardian{grid-column:1/-1;grid-row:3}
+ .children-records-safe .record-list-guardian{grid-column:1/-1;grid-row:2}
  .teacher-children-directory .directory-view-controls{justify-content:space-between}
 }
 @media(max-width:600px){

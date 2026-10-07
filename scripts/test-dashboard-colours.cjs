@@ -9,11 +9,11 @@ for(const colours of [jungle,dashboardPaletteStyle(paletteFromPixels([95,120,20,
  assert.ok(contrast(colours['--theme-button'],colours['--theme-button-ink'])>=4.5);
 }
 const {renderToStaticMarkup}=require('react-dom/server'),React=require('react'),{ChildrenGrid,ChildrenList}=require('../src/components/children-records.tsx');
-const row={id:1,name:'Sample Child',firstName:'Sample',lastName:'Child',homeCampus:'Petra Wuse',guardianName:'Sample Guardian',guardianPhone:'PRIVATE_PHONE',age:77,gender:'PRIVATE_GENDER',lastAttended:'2026-10-04'};
+const row={id:1,name:'Sample Child',firstName:'Sample',lastName:'Child',homeCampus:'Petra Mabushi (Regional Campus)',guardianName:'Sample Guardian',guardianPhone:'PRIVATE_PHONE',age:77,gender:'PRIVATE_GENDER',lastAttended:'2026-10-04'};
 for(const Component of [ChildrenGrid,ChildrenList]){
  const markup=renderToStaticMarkup(React.createElement(Component,{rows:[row],onOpen:()=>{},restricted:true,sort:'name',order:'asc',onSort:()=>{}}));
- for(const text of ['Sample Child','Sample Guardian','Petra Wuse','record-child-avatar','record-profile-action'])assert.ok(markup.includes(text),text);
- for(const text of ['PRIVATE_PHONE','PRIVATE_GENDER','77 years','No attendance','Phone not provided','Last attended'])assert.ok(!markup.includes(text),text);
+ for(const text of ['Sample Child','Sample Guardian','record-child-avatar','record-profile-action'])assert.ok(markup.includes(text),text);
+ for(const text of ['Petra Mabushi','Campus','PRIVATE_PHONE','PRIVATE_GENDER','77 years','No attendance','Phone not provided','Last attended'])assert.ok(!markup.includes(text),text);
 }
 const teacher=fs.readFileSync('src/components/teacher-child-directory.tsx','utf8');assert.ok(!teacher.includes('events-workspace'));assert.ok(!teacher.includes('EventDialog'));assert.ok(teacher.includes('DirectoryPagination'));assert.ok(teacher.includes('DataViewToggle'));
 console.log('PASS: dashboard colour contrast, shared child cards/table and teacher privacy-safe presentation.');

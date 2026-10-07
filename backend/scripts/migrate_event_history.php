@@ -14,7 +14,7 @@ foreach(explode(';',$sql) as $statement){$statement=trim($statement);if(!$statem
  }
  $db->exec($statement);
 }
-$campuses=[['PETRA-WUSE','Petra Wuse'],['PETRA-PRIME-ABUJA','Petra Prime Abuja'],['PETRA-MABUSHI','Petra Mabushi (Regional Campus)'],['PETRA-KUBWA','Petra Kubwa'],['PETRA-LUGBE','Petra Lugbe'],['PETRA-APO','Petra Apo'],['PETRA-MARARABA','Petra Mararaba']];
+$campuses=[['PETRA-PRIME-ABUJA','Petra Prime Abuja'],['PETRA-MABUSHI','Petra Mabushi (Regional Campus)'],['PETRA-KUBWA','Petra Kubwa'],['PETRA-LUGBE','Petra Lugbe'],['PETRA-APO','Petra Apo'],['PETRA-MARARABA','Petra Mararaba']];
 foreach($campuses as [$code,$name])$db->prepare("INSERT INTO campuses(code,name,timezone) VALUES(?,?,'Africa/Lagos') ON DUPLICATE KEY UPDATE code=VALUES(code)")->execute([$code,$name]);
 $db->exec('UPDATE event_registrations r JOIN campuses c ON c.name COLLATE utf8mb4_unicode_ci=r.home_campus COLLATE utf8mb4_unicode_ci SET r.home_campus_id=c.id WHERE r.home_campus_id IS NULL');
 echo "Event history schema ready; existing people, attendance and campus names preserved.\n";

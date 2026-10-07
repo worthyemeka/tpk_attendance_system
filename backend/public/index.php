@@ -6,7 +6,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') json_response([]);
 $db = db();
 $method = $_SERVER['REQUEST_METHOD'];
 $path = rtrim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
-$campus = $db->query("SELECT id FROM campuses WHERE code = 'PETRA-WUSE' LIMIT 1")->fetch();
+$campus = tpk_regular_campus($db);
 if (!$campus) json_response(['error' => 'Run backend/database/seed.sql first.'], 503);
 $campusId = (int)$campus['id'];
 
@@ -58,8 +58,8 @@ if ($method === 'GET' && $path === '/api/families') json_response(family_rows($d
 
 if ($method === 'POST' && $path === '/api/families') {
     $v=body(); foreach(['surname','phone','guardianFirstName','guardianLastName','childFirstName','childLastName','classId'] as $field) if (empty($v[$field])) json_response(['error'=>'Please complete the required child and guardian details.'],422);
-    $class=$db->prepare('SELECT id FROM classes WHERE id=? AND campus_id=? AND is_active=1'); $class->execute([(int)$v['classId'],$campusId]); if(!$class->fetch()) json_response(['error'=>'Choose an active Petra Wuse class.'],422);
-    $code='PETRA-WUSE-'.strtoupper(substr(bin2hex(random_bytes(4)),0,6)); $token='fp_'.bin2hex(random_bytes(16)); $db->beginTransaction(); try {
+    $class=$db->prepare('SELECT id FROM classes WHERE id=? AND campus_id=? AND is_active=1'); $class->execute([(int)$v['classId'],$campusId]); if(!$class->fetch()) json_response(['error'=>'Choose an active headquarters class.'],422);
+    $code=$campus['code'].'-'.strtoupper(substr(bin2hex(random_bytes(4)),0,6)); $token='fp_'.bin2hex(random_bytes(16)); $db->beginTransaction(); try {
       $db->prepare('INSERT INTO families(campus_id,family_code,surname,phone,notes) VALUES(?,?,?,?,?)')->execute([$campusId,$code,trim($v['surname']),trim($v['phone']),$v['notes']??null]); $familyId=(int)$db->lastInsertId();
       $db->prepare("INSERT INTO guardians(family_id,first_name,last_name,phone,relationship,is_primary,is_authorized) VALUES(?,?,?,?, 'Parent',1,1)")->execute([$familyId,trim($v['guardianFirstName']),trim($v['guardianLastName']),trim($v['phone'])]);
       $db->prepare('INSERT INTO children(family_id,class_id,first_name,last_name,safeguarding_notes) VALUES(?,?,?,?,?)')->execute([$familyId,(int)$v['classId'],trim($v['childFirstName']),trim($v['childLastName']),$v['pickupNote']??null]); $childId=(int)$db->lastInsertId();
@@ -70,7 +70,7 @@ if ($method === 'POST' && $path === '/api/families') {
 
 if ($method === 'POST' && $path === '/api/attendance/check-in') {
     $v=body(); $childId=(int)($v['childId']??0); $session=active_session($db,$campusId); $sessionId=(int)($session['id']??0); if(!$sessionId) json_response(['error'=>'There is no open service session.'],409);
-    $child=$db->prepare('SELECT c.id,c.first_name,c.last_name,c.class_id,cl.name FROM children c JOIN classes cl ON cl.id=c.class_id JOIN families f ON f.id=c.family_id WHERE c.id=? AND f.campus_id=? AND c.is_active=1'); $child->execute([$childId,$campusId]); $child=$child->fetch(); if(!$child) json_response(['error'=>'Child not found at Petra Wuse or needs a class assignment.'],404);
+    $child=$db->prepare('SELECT c.id,c.first_name,c.last_name,c.class_id,cl.name FROM children c JOIN classes cl ON cl.id=c.class_id JOIN families f ON f.id=c.family_id WHERE c.id=? AND f.campus_id=? AND c.is_active=1'); $child->execute([$childId,$campusId]); $child=$child->fetch(); if(!$child) json_response(['error'=>'Child not found at the headquarters campus or needs a class assignment.'],404);
     try {$db->prepare("INSERT INTO attendance(service_session_id,child_id,class_id,status) VALUES(?,?,?,'CHECKED_IN')")->execute([$sessionId,$childId,$child['class_id']]);} catch(Throwable $e){json_response(['error'=>$child['first_name'].' is already checked in for this service.'],409);} audit($db,$campusId,'CHILD_CHECKED_IN','Attendance',(int)$db->lastInsertId()); json_response(['childName'=>$child['first_name'].' '.$child['last_name'],'className'=>$child['name']]);
 }
 

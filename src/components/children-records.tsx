@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FiChevronDown, FiChevronRight, FiPhone } from "react-icons/fi";
 import "./children-records.css";
-import { ClassBadge, GenderBadge, RecordBadge } from "./record-badge";
+import { ClassBadge, GenderBadge } from "./record-badge";
 
 export type ChildRecord = {
   id: number;
@@ -47,9 +47,7 @@ export function ChildrenGrid({ rows, onOpen,restricted=false }: Props) {
   return <div className="children-records-grid">
     {rows.map((child) => <article className="child-directory-card" key={child.id}>
       <header><ChildName child={child} onOpen={onOpen} restricted={restricted}/></header>
-      <dl className="record-child-facts">
-        {restricted?<div><dt>Campus</dt><dd><RecordBadge tone="green">{child.homeCampus||"Not recorded"}</RecordBadge></dd></div>:<><div><dt>Class</dt><dd><ClassBadge name={child.className} /></dd></div><div><dt>Gender</dt><dd><GenderBadge gender={child.gender} /></dd></div></>}
-      </dl>
+      {!restricted&&<dl className="record-child-facts"><div><dt>Class</dt><dd><ClassBadge name={child.className} /></dd></div><div><dt>Gender</dt><dd><GenderBadge gender={child.gender} /></dd></div></dl>}
       <section className="record-guardian"><h3>Parent or guardian</h3><GuardianContact child={child} restricted={restricted}/></section>
       <footer>{!restricted&&<div><span>Last attended</span><b>{lastSeen(child)}</b></div>}<button type="button" className="record-profile-action" onClick={() => onOpen(child.id)} aria-label={`Open ${nameOf(child)}’s profile`}>View profile <FiChevronRight aria-hidden="true" /></button></footer>
     </article>)}
@@ -58,11 +56,11 @@ export function ChildrenGrid({ rows, onOpen,restricted=false }: Props) {
 
 export function ChildrenList({ rows, onOpen, sort, order, onSort, rowOffset = 0,restricted=false }: Props & { rowOffset?: number; sort: string; order: string; onSort: (field: string) => void }) {
   const heading = (label: string, field: string) => <th scope="col" aria-sort={sort === field ? order === "asc" ? "ascending" : "descending" : "none"}><button type="button" className={`record-sort ${sort === field ? "active" : ""}`} onClick={() => onSort(field)}>{label}<FiChevronDown className={sort === field && order === "desc" ? "descending" : ""} aria-hidden="true" /></button></th>;
-  return <div className={`children-records-list ${restricted?"children-records-safe":""}`}><table><caption className="record-sr-only">{restricted?"Children, their campus and parent or guardian names":"Children, their class, guardian contact and last attendance"}</caption><thead><tr><th scope="col">S/N</th>{heading("Child", "name")}{restricted?<><th scope="col">Campus</th><th scope="col">Parent or guardian</th></>:<>{heading("Class", "class")}{heading("Age", "age")}{heading("Gender", "gender")}{heading("Parent or guardian", "guardian")}{heading("Last attended", "lastAttended")}</>}<th scope="col"><span className="record-sr-only">Profile</span></th></tr></thead><tbody>
+  return <div className={`children-records-list ${restricted?"children-records-safe":""}`}><table><caption className="record-sr-only">{restricted?"Children and their parent or guardian names":"Children, their class, guardian contact and last attendance"}</caption><thead><tr><th scope="col">S/N</th>{heading("Child", "name")}{restricted?<th scope="col">Parent or guardian</th>:<>{heading("Class", "class")}{heading("Age", "age")}{heading("Gender", "gender")}{heading("Parent or guardian", "guardian")}{heading("Last attended", "lastAttended")}</>}<th scope="col"><span className="record-sr-only">Profile</span></th></tr></thead><tbody>
     {rows.map((child, index) => <tr key={child.id}>
       <td className="record-list-serial" data-label="S/N">{rowOffset + index + 1}</td>
       <td className="record-list-child"><ChildName child={child} onOpen={onOpen} restricted={restricted}/></td>
-      {restricted?<><td className="record-list-campus" data-label="Campus"><RecordBadge tone="green">{child.homeCampus||"Not recorded"}</RecordBadge></td><td className="record-list-guardian" data-label="Parent or guardian"><GuardianContact child={child} restricted/></td></>:<><td className="record-list-class" data-label="Class"><ClassBadge name={child.className} /></td>
+      {restricted?<td className="record-list-guardian" data-label="Parent or guardian"><GuardianContact child={child} restricted/></td>:<><td className="record-list-class" data-label="Class"><ClassBadge name={child.className} /></td>
       <td className="record-list-age" data-label="Age">{child.age == null ? "Not recorded" : child.age === 0 ? "Under 1" : child.age}</td>
       <td className="record-list-gender" data-label="Gender"><GenderBadge gender={child.gender} /></td>
       <td className="record-list-guardian" data-label="Parent or guardian"><GuardianContact child={child} /></td>

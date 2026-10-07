@@ -295,7 +295,7 @@ export function GuardianDirectory() {
                 <button
                   onClick={() => {
                     setExportOpen(false);
-                    void downloadTablePdf("TPK-guardians.pdf",{title:"Guardians",subtitle:`${rows.length} guardians in the selected view | Wuse Campus`,columns:["S/N","Guardian","Relationship","Phone","Email","Children"],widths:[.3,1.4,.8,1,1.4,1.5],rows:rows.map((r,i)=>[String((page-1)*perPage+i+1),`${r.firstName} ${r.lastName}`,r.relationship,r.primaryPhone,r.email||"Not recorded",r.childrenNames||"No children linked"])}).catch(reason=>setError(reason instanceof Error?reason.message:"We could not export guardians."));
+                    void downloadTablePdf("TPK-guardians.pdf",{title:"Guardians",subtitle:`${rows.length} guardians in the selected view | Mabushi (Regional) Campus`,columns:["S/N","Guardian","Relationship","Phone","Email","Children"],widths:[.3,1.4,.8,1,1.4,1.5],rows:rows.map((r,i)=>[String((page-1)*perPage+i+1),`${r.firstName} ${r.lastName}`,r.relationship,r.primaryPhone,r.email||"Not recorded",r.childrenNames||"No children linked"])}).catch(reason=>setError(reason instanceof Error?reason.message:"We could not export guardians."));
                   }}
                 >
                   PDF

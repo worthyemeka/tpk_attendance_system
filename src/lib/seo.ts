@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
-export const SITE_NAME = "TribePetra Kids | Wuse";
+export const SITE_NAME = "TribePetra Kids | Mabushi";
 // Canonicals always use the public site, not a temporary deployment or query token.
 export const SITE_URL = new URL(process.env.SITE_URL || "https://tpk-checkin.vercel.app").origin;
-const brandKeywords = ["TribePetra Kids", "TPK", "Petra Church", "Wuse Campus", "children's ministry", "Abuja"];
+const brandKeywords = ["TribePetra Kids", "TPK", "Petra Church", "Mabushi Regional Campus", "children's ministry", "Abuja"];
 type PageSeo = { title: string; description: string; keywords: string[]; public?: boolean };
 export const PAGE_SEO: Record<string, PageSeo> = {
   "/account/children/register": { title: "Register Children", description: "Register children and their guardian details without recording a service check-in or generating a pickup ticket.", keywords: ["child registration", "guardian details", "age-based classes"] },
@@ -12,7 +12,7 @@ export const PAGE_SEO: Record<string, PageSeo> = {
   "/account/settings/sunday-schedule": { title: "Sunday Schedule", description: "Plan Sunday service dates, themes and times in the authorised TribePetra Kids schedule workspace.", keywords: ["Sunday schedule", "service planning", "service themes"] },
   "/account/events": { title: "Events & Conferences", description: "Plan conferences and VBS with event registration, temporary groups, volunteers, attendance, safe pickup and programme reports.", keywords: ["VBS registration", "children conferences", "event attendance"] },
   "/events/[key]": { title: "Event Registration", description: "Register children for an approved TribePetra Kids event and select their programme sessions with guardian and care information.", keywords: ["event registration", "programme sessions", "guest families"] },
-  "/": { title: "TribePetra Kids — Wuse Campus", description: "Welcome to TribePetra Kids at Petra Church, Wuse Campus. Register your family, check in your children and connect with our children's ministry team.", keywords: ["Petra Wuse", "kids church", "family registration", "children check-in", "safe child pickup"], public: true },
+  "/": { title: "TribePetra Kids — Mabushi Regional Campus", description: "Welcome to TribePetra Kids at Petra Church, Mabushi Regional Campus. Register your family, check in your children and connect with our children's ministry team.", keywords: ["Petra Mabushi", "kids church", "family registration", "children check-in", "safe child pickup"], public: true },
   "/account": { title: "Staff Dashboard", description: "Access the TribePetra Kids staff dashboard and your authorised ministry tools.", keywords: ["staff dashboard", "ministry operations"] },
   "/account/overview": { title: "Ministry Overview", description: "Review attendance, service assignments, classroom activity and follow-up for the selected Sunday and service.", keywords: ["Sunday overview", "service attendance", "ministry dashboard"] },
   "/account/check-in": { title: "Check-In Desk", description: "Review child arrivals and check-in approvals for the selected TribePetra Kids Sunday service.", keywords: ["child check-in", "arrival approvals", "check-in desk"] },
@@ -42,7 +42,7 @@ export const PAGE_SEO: Record<string, PageSeo> = {
 };
 
 export function pageMetadata(path: string): Metadata {
-  const page = PAGE_SEO[path] || { title: "Staff Portal", description: "Authorised TribePetra Kids ministry tools for Wuse Campus.", keywords: ["staff portal", "ministry tools"] };
+  const page = PAGE_SEO[path] || { title: "Staff Portal", description: "Authorised TribePetra Kids ministry tools for Mabushi Regional Campus.", keywords: ["staff portal", "ministry tools"] };
   const index = page.public === true && (!process.env.VERCEL_ENV || process.env.VERCEL_ENV === "production");
   const title = `${page.title} | ${SITE_NAME}`;
   // Never fetch names, contacts, medical details or pickup tokens for metadata.

@@ -174,7 +174,7 @@ function openChildrenAttendanceReport(report: AttendanceReport, target?: Window 
   reportWindow.document.close();
   const brandHeader=reportWindow.document.createElement("header");
   brandHeader.style.cssText="display:flex;align-items:center;gap:14px;margin-bottom:18px;padding-bottom:12px;border-bottom:1px solid #dfe4eb";
-  brandHeader.innerHTML=`<img alt="Petra Christian Centre" src="${reportValue(window.location.origin)}/brand/petra-logo.jpg" width="48" height="48" style="object-fit:contain"/><img alt="TribePetra Kids" src="${reportValue(window.location.origin)}/brand/tpk-logo.png" width="54" height="54" style="object-fit:contain"/><strong style="font-size:11px;letter-spacing:.04em">TRIBEPETRA KIDS - WUSE CAMPUS</strong>`;
+  brandHeader.innerHTML=`<img alt="Petra Christian Centre" src="${reportValue(window.location.origin)}/brand/petra-logo.jpg" width="48" height="48" style="object-fit:contain"/><img alt="TribePetra Kids" src="${reportValue(window.location.origin)}/brand/tpk-logo.png" width="54" height="54" style="object-fit:contain"/><strong style="font-size:11px;letter-spacing:.04em">TRIBEPETRA KIDS - MABUSHI (REGIONAL) CAMPUS</strong>`;
   reportWindow.document.body.prepend(brandHeader);
   reportWindow.document.body.insertAdjacentHTML("beforeend",printDownloaderFooter());
   reportWindow.focus();

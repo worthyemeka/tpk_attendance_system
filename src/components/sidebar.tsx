@@ -291,7 +291,7 @@ export function Sidebar() {
                 priority
               />
             </span>
-            <span className="brand-copy"><small>Wuse Campus</small></span>
+            <span className="brand-copy"><small>Mabushi (Regional) Campus</small></span>
           </Link>
           <nav aria-label="Dashboard navigation">
             <Group

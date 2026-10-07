@@ -7,8 +7,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') json_response([]);
 $db = db();
 $method = $_SERVER['REQUEST_METHOD'];
 $path = rtrim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
-$campus = $db->query("SELECT id FROM campuses WHERE code='PETRA-WUSE' LIMIT 1")->fetch();
-if (!$campus) json_response(['error' => 'The Petra Wuse campus has not been configured.'], 503);
+$campus = tpk_regular_campus($db);
+if (!$campus) json_response(['error' => 'The Petra Mabushi regional campus has not been configured.'], 503);
 $campusId = (int)$campus['id'];
 
 function teacher_input(): array { return $_POST ?: body(); }

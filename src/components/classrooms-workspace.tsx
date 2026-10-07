@@ -278,7 +278,7 @@ export function ClassroomsOverview() {
       `}</style>
       <header className="cw-heading">
         <div>
-          <p className="eyebrow">Petra Wuse</p>
+          <p className="eyebrow">Petra Mabushi (Regional)</p>
           <h1>Classrooms</h1>
           <p>See attendance, children and teachers across TPK classrooms.</p>
           {serviceDate && selectedService && <small className="cw-context-line">Viewing Sunday, {formatDate(serviceDate)} · {selectedService.name}</small>}

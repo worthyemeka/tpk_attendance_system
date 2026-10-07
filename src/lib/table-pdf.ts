@@ -34,7 +34,7 @@ export function createTablePdf({title,subtitle="",columns,rows,widths,photos,bra
     commands=["0.10 0.17 0.29 rg"];
     const headingX=branding.length?margin+128:margin;
     branding.slice(0,2).forEach((logo,index)=>{const scale=Math.min((branding.length===1?116:52)/logo.width,58/logo.height);const width=logo.width*scale,height=logo.height*scale;commands.push(`q ${width.toFixed(2)} 0 0 ${height.toFixed(2)} ${margin+index*62} ${(h-23-height).toFixed(2)} cm /B${index} Do Q`);});
-    text("TRIBEPETRA KIDS - WUSE CAMPUS",headingX,30,9,true);text(title,headingX,54,17,true);
+    text("TRIBEPETRA KIDS - MABUSHI (REGIONAL) CAMPUS",headingX,30,9,true);text(title,headingX,54,17,true);
     wrap(subtitle,w-margin-headingX).slice(0,2).forEach((line,index)=>text(line,headingX,71+index*11,9));
     if(identity && !pages.length){avatar(identity.name,identity.photo,"H",margin,91,36);text(identity.label||"Teacher roster",margin+46,101,8);wrap(identity.name,available-46).slice(0,2).forEach((line,index)=>text(line,margin+46,116+index*11,11,true));}
     const header=identity&&!pages.length?154:105;

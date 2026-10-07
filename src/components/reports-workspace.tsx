@@ -311,7 +311,7 @@ export function ReportsWorkspace() {
   return (
     <section className="reports-workspace">
       <header>
-        <p className="eyebrow">Petra Wuse</p>
+        <p className="eyebrow">Petra Mabushi (Regional)</p>
         <h1>Reports</h1>
         <p>
           Review ministry records, download monthly reports and access

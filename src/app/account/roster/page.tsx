@@ -462,7 +462,7 @@ export default function RosterPage() {
     printBrandedDocument({
       eyebrow: tab === "SUNDAY" ? "Sunday duties" : "Non-teaching duties",
       title: `${formatMonth(monthDate)} Roster`,
-      subtitle: "TPK teaching and ministry assignments for Petra Wuse.",
+      subtitle: "TPK teaching and ministry assignments for Petra Mabushi (Regional).",
       stats: [
         {
           label: "Scheduled days",
@@ -516,7 +516,7 @@ export default function RosterPage() {
       URL.revokeObjectURL(url);
       return;
     }
-    void loadPdfAvatar(item.profileImageUrl).then(photo=>downloadTablePdf(`TPK-${item.teacherName.replace(/[^a-z0-9]+/gi,"-")}-${monthKey}-roster.pdf`,{identity:{name:item.teacherName,photo,label:"Teacher roster"},title:"Teaching roster",subtitle:`${formatMonth(monthDate)} | Wuse Campus`,columns:["Date","Service","Responsibility","Status"],widths:[.8,1.3,1.7,.8],rows:rows.map(row=>[row.Date,row.Service,row.Responsibility,row.Status])})).catch(reason=>setError(reason instanceof Error?reason.message:"We could not download this teacher’s roster."));
+    void loadPdfAvatar(item.profileImageUrl).then(photo=>downloadTablePdf(`TPK-${item.teacherName.replace(/[^a-z0-9]+/gi,"-")}-${monthKey}-roster.pdf`,{identity:{name:item.teacherName,photo,label:"Teacher roster"},title:"Teaching roster",subtitle:`${formatMonth(monthDate)} | Mabushi (Regional) Campus`,columns:["Date","Service","Responsibility","Status"],widths:[.8,1.3,1.7,.8],rows:rows.map(row=>[row.Date,row.Service,row.Responsibility,row.Status])})).catch(reason=>setError(reason instanceof Error?reason.message:"We could not download this teacher’s roster."));
   }
   async function sendTeacherReminder(
     teacherId: number,

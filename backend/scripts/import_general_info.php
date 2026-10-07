@@ -17,7 +17,7 @@ function import_issue(PDO $db,int $run,int $row,string $code,string $message,?st
 
 $source=$argv[1]??'';$dry=in_array('--dry-run',$argv,true);if(!$source||!is_readable($source)){fwrite(STDERR,"Usage: php backend/scripts/import_general_info.php <responses.csv> [--dry-run]\n");exit(1);}
 $handle=fopen($source,'rb');$header=fgetcsv($handle);if(!$header)throw new RuntimeException('CSV needs a header row.');$heads=array_map('import_key',$header);$db=db();
-$campus=(int)$db->query("SELECT id FROM campuses WHERE code='PETRA-WUSE' LIMIT 1")->fetchColumn();if(!$campus)throw new RuntimeException('Run seed.sql before importing.');
+$campus=(int)(tpk_regular_campus($db)['id']??0);if(!$campus)throw new RuntimeException('Run seed.sql before importing.');
 $run=$db->prepare('INSERT INTO import_runs(source_name,source_hash) VALUES(?,?)');$run->execute([basename($source),hash_file('sha256',$source)]);$runId=(int)$db->lastInsertId();
 $classRows=$db->query('SELECT id,name FROM classes WHERE is_active=1')->fetchAll();$classes=[];foreach($classRows as $class)$classes[import_key($class['name'])]=(int)$class['id'];
 $seen=0;$imported=0;$rowNumber=1;

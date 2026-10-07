@@ -27,7 +27,7 @@ export function PublicHome() {
         <div className="public-decor public-decor-yellow" />
         <div className="public-decor public-decor-pink" />
         <div className="public-decor public-decor-green" />
-        <div className="public-intro"><p className="eyebrow">Welcome to</p><h1>TribePetra Kids</h1><p className="campus">Wuse Campus</p><p className="public-subtitle">Let’s get the kids checked in.</p></div>
+        <div className="public-intro"><p className="eyebrow">Welcome to</p><h1>TribePetra Kids</h1><p className="campus">Mabushi (Regional) Campus</p><p className="public-subtitle">Let’s get the kids checked in.</p></div>
         <div className="public-actions">
           <Link className="public-action returning" href="/check-in/parent"><span className="public-action-icon"><FiUsers /></span><span><strong>We’ve been here before</strong><b>Quick Check-In</b><small>Check in your child or children in a few seconds.</small></span><FiChevronRight className="public-arrow" /></Link>
           <Link className="public-action new" href="/check-in/parent?flow=new"><span className="public-action-icon"><FiFilePlus /></span><span><strong>This is our first time</strong><b>Register &amp; Check In</b><small>Add your child’s details and check them in.</small></span><FiChevronRight className="public-arrow" /></Link>

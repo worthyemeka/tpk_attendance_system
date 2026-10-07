@@ -46,6 +46,12 @@ function db(): PDO {
     return $pdo;
 }
 
+/** Single regular TPK headquarters; event home campuses remain event-specific. */
+function tpk_regular_campus(PDO $db): ?array {
+    // The old code is a deployment-transition fallback, not a second campus.
+    return $db->query("SELECT id,name,code FROM campuses WHERE code IN ('PETRA-WUSE','PETRA-MABUSHI') ORDER BY FIELD(code,'PETRA-WUSE','PETRA-MABUSHI') LIMIT 1")->fetch() ?: null;
+}
+
 /**
  * Sundays that intentionally run as one combined service. Keeping this in
  * deployment configuration lets the service-session guard and operational
