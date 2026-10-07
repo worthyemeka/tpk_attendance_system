@@ -118,6 +118,12 @@ CREATE TABLE IF NOT EXISTS staff_appearance_preferences (
  staff_user_id INT UNSIGNED PRIMARY KEY, preference VARCHAR(20) NOT NULL DEFAULT 'DEFAULT',
  FOREIGN KEY(staff_user_id) REFERENCES staff_users(id)
 );
+ALTER TABLE event_appearances ADD COLUMN preserve_after BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE event_appearances ADD COLUMN palette_json JSON NULL;
+ALTER TABLE event_appearances ADD COLUMN artwork_file_id INT UNSIGNED NULL;
+ALTER TABLE event_appearances ADD CONSTRAINT fk_event_appearance_artwork FOREIGN KEY(artwork_file_id) REFERENCES event_source_files(id);
+ALTER TABLE staff_appearance_preferences ADD COLUMN selected_event_id INT UNSIGNED NULL;
+ALTER TABLE staff_appearance_preferences ADD CONSTRAINT fk_staff_preferred_event FOREIGN KEY(selected_event_id) REFERENCES ministry_events(id);
 CREATE TABLE IF NOT EXISTS event_reported_statistics (
  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, event_id INT UNSIGNED NOT NULL,
  day_id INT UNSIGNED NULL, metric VARCHAR(40) NOT NULL, reported_value INT UNSIGNED NOT NULL,

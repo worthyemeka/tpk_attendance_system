@@ -70,25 +70,26 @@ try {
         smokeCheck($db->query('SELECT status FROM teacher_welfare_cases WHERE id='.$caseId)->fetchColumn()==='CONTACTED','Welfare outcome not saved');
         $smokeActor=$owner;
     }
-    $smokeInput=['kind'=>'MDWK','date'=>api_teacher_now()->modify('next wednesday')->format('Y-m-d'),'name'=>'Temporary MDWK diagnostic','startTime'=>'18:00','endTime'=>'20:00','question'=>'Diagnostic colour?','answers'=>['Blue']];
-    $values=api_teacher_service_values($smokeInput);$db->prepare('INSERT IGNORE INTO teacher_services(campus_id,kind,name,starts_at,ends_at,question,answer_hashes_json,created_by) VALUES(?,?,?,?,?,?,?,?)')->execute(array_merge([$owner['campus_id']],$values,[$owner['id']]));$q=$db->prepare("SELECT id FROM teacher_services WHERE campus_id=? AND kind='MDWK' AND starts_at=?");$q->execute([$owner['campus_id'],$values[2]]);$wid=(int)$q->fetchColumn();api_teacher_expected($db,$wid,(int)$owner['campus_id']);
-    $q=$db->prepare('SELECT COUNT(*) FROM teacher_service_expected WHERE service_id=?');$q->execute([$wid]);
-    smokeCheck((int)$q->fetchColumn()===$expected,'MDWK does not expect every active teacher');
-    $smokeInput=['attendanceMode'=>'ONLINE','attended'=>true];$date=substr($values[2],0,10);$zone=new DateTimeZone('Africa/Lagos');
-    smokeResult(fn()=>api_teacher_confirm_mdwk($db,$wid,new DateTimeImmutable($date.' 20:59:59',$zone)));smokeResult(fn()=>api_teacher_confirm_mdwk($db,$wid,new DateTimeImmutable($date.' 20:59:59',$zone)));smokeReject(fn()=>api_teacher_confirm_mdwk($db,$wid,new DateTimeImmutable($date.' 21:00:00',$zone)),'SIGNIN_CLOSED');
-    smokeCheck((int)$db->query('SELECT COUNT(*) FROM teacher_service_attendance WHERE service_id='.$wid)->fetchColumn()===1,'Repeated Wednesday confirmation duplicated');
-    smokeCheck($db->query('SELECT attendance_mode FROM teacher_service_attendance WHERE service_id='.$wid)->fetchColumn()==='ONLINE','MDWK modality was not stored');
-    smokeReject(fn()=>api_teacher_qr($db,$wid),'QR_NOT_REQUIRED');smokeReject(fn()=>api_teacher_security($db,$wid),'MDWK_NO_QUESTION');
-    $q=$db->prepare("SELECT id,campus_id,name,access_level FROM staff_users WHERE id<>? AND campus_id=? AND is_active=1 AND account_status='VERIFIED' AND team_status<>'INACTIVE' ORDER BY id LIMIT 1");$q->execute([$owner['id'],$owner['campus_id']]);$regular=$q->fetch();$regular['access_level']='TPK_ADMIN';
-    $db->prepare('DELETE FROM staff_sub_unit_assignments WHERE staff_user_id=?')->execute([$regular['id']]);
-    $db->prepare("UPDATE teacher_services SET starts_at='2000-01-05 00:00:00',ends_at='2000-01-05 21:00:00' WHERE id=?")->execute([$wid]);$smokeActor=$regular;$smokeInput=['reason'=>'Private diagnostic reason'];smokeResult(fn()=>api_teacher_absence_reason($db,$wid));
-    $smokeActor=$owner;$_GET=['month'=>'2000-01','serviceId'=>$wid];$managed=smokeResult(fn()=>api_teacher_attendance($db));$case=array_values(array_filter($managed['cases'],fn($c)=>(int)$c['teacherId']===(int)$regular['id']))[0];smokeCheck($case['absenceReason']==='Private diagnostic reason','Super cannot read absence reason');
-    foreach($managed['items'] as $row)smokeCheck(!array_key_exists('reason',$row)&&!array_key_exists('absenceReason',$row),'Public register exposed private reason');
-    $smokeInput=['assignedTo'=>(int)$regular['id']];$other=array_values(array_filter($managed['cases'],fn($c)=>(int)$c['teacherId']!==(int)$regular['id']))[0];smokeResult(fn()=>api_teacher_welfare_case($db,(int)$other['id']));
-    $smokeActor=$regular;$assigned=smokeResult(fn()=>api_teacher_attendance($db));foreach($assigned['cases'] as $row)smokeCheck(!array_key_exists('absenceReason',$row),'Ordinary follow-up assignee exposed private reason');
-    $smokeActor=$owner;$_GET=['month'=>api_teacher_now()->format('Y-m')];$scheduled=smokeResult(fn()=>api_teacher_attendance($db));$linked=(int)$db->query('SELECT COUNT(*) FROM teacher_services WHERE service_session_id IS NOT NULL')->fetchColumn();smokeCheck($linked>0,'Sunday services not linked to configured sessions');
-    echo "PASS: MySQL service creation, all-active expectation, question-free self-confirmation, repeat sign-in, absence and idempotent welfare queue.\n";
-    echo "PASS: scheduled Sunday linking, MDWK cutoff/idempotence, no Wednesday QR/question, private absence reasons and subunit-based welfare access.\n";
+    // Historical MDWK data is retained, but no new attendance or welfare is generated.
+    $db->prepare("INSERT INTO teacher_services(campus_id,kind,name,starts_at,ends_at,question,answer_hashes_json,created_by) VALUES(?,'MDWK','Historical MDWK','2000-01-05 00:00:00','2000-01-05 21:00:00','','[]',?)")->execute([$owner['campus_id'],$owner['id']]);$wid=(int)$db->lastInsertId();
+    api_teacher_expected($db,$wid,(int)$owner['campus_id']);
+    $db->prepare("INSERT INTO teacher_service_attendance(service_id,staff_user_id,checked_in_at,attendance_mode) VALUES(?,?,'2000-01-05 20:00:00','ONLINE')")->execute([$wid,$owner['id']]);
+    $db->prepare("INSERT INTO teacher_service_absence_reasons(service_id,staff_user_id,reason) VALUES(?,?,'Historical private reason')")->execute([$wid,$owner['id']]);
+    $smokeInput=['attended'=>true,'attendanceMode'=>'ONLINE','reason'=>'New reason'];
+    smokeReject(fn()=>api_teacher_confirm_mdwk($db,$wid),'MDWK_SIGNIN_REMOVED');
+    smokeReject(fn()=>api_teacher_absence_reason($db,$wid),'MDWK_SIGNIN_REMOVED');
+    smokeReject(fn()=>api_teacher_my_mdwk($db),'MDWK_SIGNIN_REMOVED');
+    api_teacher_queue_welfare($db,$owner);
+    smokeCheck((int)$db->query('SELECT COUNT(*) FROM teacher_welfare_cases WHERE service_id='.$wid)->fetchColumn()===0,'MDWK still queues absences');
+    smokeCheck($db->query('SELECT attendance_mode FROM teacher_service_attendance WHERE service_id='.$wid)->fetchColumn()==='ONLINE','Historical MDWK attendance changed');
+    smokeCheck($db->query('SELECT reason FROM teacher_service_absence_reasons WHERE service_id='.$wid)->fetchColumn()==='Historical private reason','Historical private reason changed');
+    $_GET=['month'=>api_teacher_now()->format('Y-m')];$scheduled=smokeResult(fn()=>api_teacher_attendance($db));
+    foreach($scheduled['services'] as $service)smokeCheck($service['kind']==='SUNDAY','MDWK exposed in current register');
+    $linked=(int)$db->query('SELECT COUNT(*) FROM teacher_services WHERE service_session_id IS NOT NULL')->fetchColumn();smokeCheck($linked>0,'Sunday services not linked to configured sessions');
+    smokeCheck((int)$db->query("SELECT COUNT(*) FROM teacher_services WHERE kind='MDWK'")->fetchColumn()===1,'Sync created new MDWK services');
+    if(api_teacher_now()->format('w')!=='0')smokeCheck(smokeResult(fn()=>api_teacher_my_sunday($db))['services']===[],'Overview shows sign-in on a weekday');
+    echo "PASS: MySQL Sunday linking, all-active expectation, question-free confirmation, repeat sign-in and subunit-based welfare.\n";
+    echo "PASS: MDWK writes disabled, historical records retained and no new Wednesday welfare tasks.\n";
 } finally {
     if($db->inTransaction())$db->rollBack();
     foreach(array_reverse($temporary) as $table)$db->exec('DROP TEMPORARY TABLE `'.$table.'`');

@@ -1,6 +1,6 @@
 import { campusToday } from "./registration-eligibility";
 export type MinistryEvent={id:number;name:string;type:string;startDate:string;endDate:string;status:string;lifecycle?:string;themeName?:string;themeSongUrl?:string;timezone?:string;countdown:boolean;registrationOpens?:string;registrationCloses?:string;description?:string;publicRegistration?:boolean;publicKey?:string;summary?:EventSummary};
-export type EventSummary={registered:number;volunteers:number;careNotes:number;checkedIn:number;awaitingPickup:number};
+export type EventSummary={registered:number;volunteers:number;volunteerAccounts?:number;rosterNames?:number;registeredCampuses?:number;careNotes:number;checkedIn:number;awaitingPickup:number};
 export type EventSession={id:number;dayId?:number;name:string;startsAt:string;endsAt:string;expected?:number;attended?:number;awaitingPickup?:number};
 export function eventCountdown(event:MinistryEvent,now=new Date()) {
  const today=eventToday(event,now);if(event.status==="CANCELLED")return "Cancelled";if(event.status==="ARCHIVED")return "Archived event";

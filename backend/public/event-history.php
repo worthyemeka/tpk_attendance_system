@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__.'/event-appearance.php';
 
 function event_volunteer_api_allowed(string $path,string $method): bool {
     if($path==='/api/v1/me/appearance')return in_array($method,['GET','PATCH'],true);
@@ -82,7 +83,7 @@ function event_history_data(PDO $db,array $actor,array $event,array &$data): voi
     $data['event']['themeName']=$event['theme_name'];$data['event']['themeSongUrl']=$event['theme_song_url'];$data['event']['timezone']=$event['timezone'];$data['event']['lifecycle']=event_lifecycle($event);
     $q=$db->prepare('SELECT id,day_number AS dayNumber,label,calendar_date AS date FROM event_days WHERE event_id=? ORDER BY day_number');$q->execute([$id]);$data['days']=$q->fetchAll();
     $data['campuses']=$db->query('SELECT id,name,code,timezone FROM campuses ORDER BY name')->fetchAll();
-    $q=$db->prepare('SELECT * FROM event_appearances WHERE event_id=?');$q->execute([$id]);$data['appearance']=$q->fetch()?:['preset'=>'DEFAULT','enabled'=>false,'apply_dashboard'=>false,'artwork_url'=>null];
+    $q=$db->prepare('SELECT * FROM event_appearances WHERE event_id=?');$q->execute([$id]);$data['appearance']=event_appearance_value($q->fetch()?:['preset'=>'DEFAULT','enabled'=>false,'apply_dashboard'=>false,'preserve_after'=>false,'artwork_url'=>null,'artwork_file_id'=>null,'palette_json'=>null]);
     $q=$db->prepare('SELECT r.id,r.title,r.resource_type AS type,r.description,r.content,r.external_url AS url,r.source_file_id AS fileId,r.source_page_start AS pageStart,r.source_page_end AS pageEnd,r.min_age AS minAge,r.max_age AS maxAge,f.original_name AS filename FROM event_curriculum_resources r LEFT JOIN event_source_files f ON f.id=r.source_file_id WHERE r.event_id=? ORDER BY r.resource_type,r.title');$q->execute([$id]);$data['curriculum']=[];
     foreach($q->fetchAll() as $row){if(!$super&&!event_resource_visible($db,$actor,$id,(int)$row['id']))continue;$t=$db->prepare('SELECT day_id AS dayId,session_id AS sessionId,group_id AS groupId FROM event_curriculum_targets WHERE resource_id=?');$t->execute([$row['id']]);$row['targets']=$t->fetchAll();$data['curriculum'][]=$row;}
     $q=$db->prepare('SELECT a.id,a.day_id AS dayId,a.session_id AS sessionId,a.group_id AS groupId,a.title,a.starts_at AS startsAt,a.ends_at AS endsAt,a.notes,a.source_page AS sourcePage,a.responsible_raw AS responsibleRaw,a.roster_group_id AS rosterGroupId,f.original_name AS sourceName FROM event_programme_activities a LEFT JOIN event_source_files f ON f.id=a.source_file_id WHERE a.event_id=? ORDER BY a.day_id,a.sort_order');$q->execute([$id]);$data['programme']=$q->fetchAll();
@@ -100,6 +101,15 @@ function event_history_data(PDO $db,array $actor,array $event,array &$data): voi
     // One batch query, not a query per child, for scalable event directories.
     $q=$db->prepare('SELECT c.id,COALESCE(c.home_campus_id,r.home_campus_id) AS homeCampusId,c.reported_age AS reportedAge,c.age_qualifier AS ageQualifier,c.gender,c.scholarship,c.food,c.registration_id AS registrationId,COALESCE(ca.name,r.home_campus) AS homeCampus FROM event_children c JOIN event_registrations r ON r.id=c.registration_id LEFT JOIN campuses ca ON ca.id=COALESCE(c.home_campus_id,r.home_campus_id) WHERE c.event_id=?');$q->execute([$id]);$extra=[];foreach($q->fetchAll() as $row)$extra[$row['id']]=$row;
     foreach($data['children'] as &$child)$child=array_merge($child,$extra[$child['id']]??[]);unset($child);
+    if(!$data['canOperate']){
+        // Exact safe directory projection: never query addresses, phones, DOB,
+        // medical notes, scholarship, source contacts or pickup credentials.
+        $filter='';$params=[$id];
+        if($actor['access_level']==='EVENT_VOLUNTEER'){
+            $filter=" AND EXISTS (SELECT 1 FROM event_volunteer_assignments a WHERE a.event_id=c.event_id AND a.staff_user_id=? AND (a.group_id IS NULL OR a.group_id=c.group_id) AND (a.session_id IS NULL OR EXISTS (SELECT 1 FROM event_child_sessions cs WHERE cs.child_id=c.id AND cs.session_id=a.session_id)))";$params[]=$actor['id'];
+        }
+        $q=$db->prepare('SELECT c.id,c.name,COALESCE(c.home_campus_id,r.home_campus_id) AS homeCampusId,COALESCE(ca.name,r.home_campus) AS homeCampus,r.guardian_name AS guardianName FROM event_children c JOIN event_registrations r ON r.id=c.registration_id LEFT JOIN campuses ca ON ca.id=COALESCE(c.home_campus_id,r.home_campus_id) WHERE c.event_id=?'.$filter.' ORDER BY c.name');$q->execute($params);$data['children']=$q->fetchAll();
+    }
 }
 function api_event_roster_identity(PDO $db,int $id,int $person): never {
     $actor=api_actor($db,true);event_allowed($db,$actor,$id);$v=api_input();$uid=(int)($v['staffId']??0);
@@ -131,13 +141,14 @@ function api_event_file(PDO $db,int $id,int $file=0): never {
     $actor=api_actor($db,!$file);event_allowed($db,$actor,$id);
     $dir=dirname(__DIR__).'/storage/event-resources';
     if($file){$q=$db->prepare('SELECT * FROM event_source_files WHERE id=? AND event_id=?');$q->execute([$file,$id]);$row=$q->fetch();if(!$row)api_error('FILE_NOT_FOUND','File not found.',404);
-        if($actor['access_level']!=='TPK_SUPER_ADMIN'){$q=$db->prepare('SELECT id FROM event_curriculum_resources WHERE event_id=? AND source_file_id=?');$q->execute([$id,$file]);$allowed=false;foreach($q->fetchAll() as $r)if(event_resource_visible($db,$actor,$id,(int)$r['id']))$allowed=true;if(!$allowed)api_error('FORBIDDEN','This source file is not available for your assignment.',403);}
+        if($actor['access_level']!=='TPK_SUPER_ADMIN'){$q=$db->prepare('SELECT id FROM event_curriculum_resources WHERE event_id=? AND source_file_id=?');$q->execute([$id,$file]);$allowed=false;foreach($q->fetchAll() as $r)if(event_resource_visible($db,$actor,$id,(int)$r['id']))$allowed=true;$q=$db->prepare("SELECT 1 FROM event_appearances WHERE event_id=? AND artwork_file_id=? AND enabled=1");$q->execute([$id,$file]);if(in_array($row['mime_type'],['image/png','image/jpeg','image/webp'],true)&&$q->fetchColumn())$allowed=true;if(!$allowed)api_error('FORBIDDEN','This source file is not available for your assignment.',403);}
         if(!preg_match('/^[a-f0-9]{40}\.[a-z0-9]+$/',$row['stored_name'])||!is_file($dir.'/'.$row['stored_name']))api_error('FILE_NOT_FOUND','File unavailable.',404);
         header('Access-Control-Allow-Origin: '.tpk_cors_origin());header('Vary: Origin');header('Access-Control-Expose-Headers: Content-Disposition');header('Content-Type: '.$row['mime_type']);header('X-Content-Type-Options: nosniff');header('Cache-Control: private, no-store');header('Content-Disposition: attachment; filename="'.str_replace(['"',"\r","\n"],'',basename($row['original_name'])).'"');readfile($dir.'/'.$row['stored_name']);exit;
     }
     $f=$_FILES['file']??null;if(!$f||($f['error']??1)!==UPLOAD_ERR_OK||!is_uploaded_file($f['tmp_name'])||$f['size']<1||$f['size']>25*1024*1024)api_error('VALIDATION_ERROR','Choose a resource up to 25 MB.',422);
     $types=['application/pdf'=>'pdf','image/jpeg'=>'jpg','image/png'=>'png','image/webp'=>'webp','video/mp4'=>'mp4','video/webm'=>'webm','audio/mpeg'=>'mp3','text/plain'=>'txt','text/csv'=>'csv','application/vnd.openxmlformats-officedocument.wordprocessingml.document'=>'docx'];
     $mime=(new finfo(FILEINFO_MIME_TYPE))->file($f['tmp_name']);if(!isset($types[$mime]))api_error('VALIDATION_ERROR','Use a PDF, document, CSV, image, audio or supported video.',422);
+    if(str_starts_with($mime,'image/')){$size=@getimagesize($f['tmp_name']);if(!$size||$size[0]*$size[1]>16000000)api_error('VALIDATION_ERROR','Use a valid image under 16 megapixels.',422);}
     $hash=hash_file('sha256',$f['tmp_name']);$q=$db->prepare('SELECT id FROM event_source_files WHERE event_id=? AND sha256=?');$q->execute([$id,$hash]);if($existing=$q->fetchColumn())api_ok(['id'=>(int)$existing,'duplicate'=>true]);
     if(!is_dir($dir)&&!mkdir($dir,0750,true)&&!is_dir($dir))api_error('STORAGE_UNAVAILABLE','Resource storage is unavailable.',503);
     $name=bin2hex(random_bytes(20)).'.'.$types[$mime];$path=$dir.'/'.$name;if(!move_uploaded_file($f['tmp_name'],$path))api_error('STORAGE_UNAVAILABLE','Could not store resource.',503);chmod($path,0640);
@@ -178,12 +189,4 @@ function api_event_volunteer_presence(PDO $db,int $id): never {
     $q=$db->prepare("SELECT s.starts_at,s.ends_at FROM event_sessions s JOIN event_volunteer_assignments a ON a.event_id=s.event_id AND (a.session_id=s.id OR a.session_id IS NULL) JOIN event_volunteers v ON v.event_id=a.event_id AND v.staff_user_id=a.staff_user_id WHERE s.id=? AND s.event_id=? AND a.staff_user_id=? AND v.membership_status='ACTIVE' LIMIT 1");$q->execute([$sid,$id,$uid]);$session=$q->fetch();$now=(new DateTimeImmutable('now',new DateTimeZone($e['timezone'])))->format('Y-m-d H:i:s');
     if(!$session||$now<$session['starts_at']||$now>$session['ends_at']||event_lifecycle($e)!=='LIVE')api_error('SESSION_CLOSED','Attendance is available during your assigned live session.',409);
     $db->prepare('INSERT IGNORE INTO event_volunteer_attendance(event_id,staff_user_id,session_id,checked_in_at,recorded_by) VALUES(?,?,?,?,?)')->execute([$id,$uid,$sid,$now,$actor['id']]);api_audit($db,$actor,'EVENT_VOLUNTEER_ARRIVED','Event',$id);api_ok(['present'=>true]);
-}
-function api_event_appearance(PDO $db,int $id): never {
-    $actor=api_actor($db,true);event_allowed($db,$actor,$id);$v=api_input();$preset=$v['preset']??'DEFAULT';if(!in_array($preset,['DEFAULT','JUNGLE'],true))api_error('VALIDATION_ERROR','Choose a supported accessible appearance.',422);
-    $db->prepare('INSERT INTO event_appearances(event_id,preset,enabled,apply_dashboard,artwork_url,updated_by) VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE preset=VALUES(preset),enabled=VALUES(enabled),apply_dashboard=VALUES(apply_dashboard),artwork_url=VALUES(artwork_url),updated_by=VALUES(updated_by)')->execute([$id,$preset,(int)!empty($v['enabled']),(int)!empty($v['applyDashboard']),event_url($v['artworkUrl']??null),$actor['id']]);api_audit($db,$actor,'EVENT_APPEARANCE_UPDATED','Event',$id);api_ok(['id'=>$id]);
-}
-function api_staff_appearance(PDO $db): never {
-    $actor=api_actor($db);if(api_method()==='PATCH'){$v=api_input();$p=$v['preference']??'';if(!in_array($p,['DEFAULT','EVENT'],true))api_error('VALIDATION_ERROR','Choose default TPK or event appearance.',422);$db->prepare('INSERT INTO staff_appearance_preferences(staff_user_id,preference) VALUES(?,?) ON DUPLICATE KEY UPDATE preference=VALUES(preference)')->execute([$actor['id'],$p]);}
-    $q=$db->prepare('SELECT preference FROM staff_appearance_preferences WHERE staff_user_id=?');$q->execute([$actor['id']]);$preference=$q->fetchColumn()?:'DEFAULT';$q=$db->prepare("SELECT e.*,a.preset,a.artwork_url FROM ministry_events e JOIN event_appearances a ON a.event_id=e.id WHERE e.campus_id=? AND e.status='PUBLISHED' AND a.enabled=1 AND a.apply_dashboard=1 ORDER BY e.starts_on DESC,e.id DESC");$q->execute([$actor['campus_id']]);$active=null;foreach($q->fetchAll() as $event)if(event_lifecycle($event)==='LIVE'&&($actor['access_level']!=='EVENT_VOLUNTEER'||event_member($db,$actor,(int)$event['id']))){$active=['eventId'=>$event['id'],'name'=>$event['name'],'preset'=>$event['preset'],'artworkUrl'=>$event['artwork_url']];break;}api_ok(['preference'=>$preference,'active'=>$preference==='EVENT'?$active:null]);
 }

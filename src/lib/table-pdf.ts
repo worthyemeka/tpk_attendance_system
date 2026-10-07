@@ -33,7 +33,7 @@ export function createTablePdf({title,subtitle="",columns,rows,widths,photos,bra
   const start=()=>{
     commands=["0.10 0.17 0.29 rg"];
     const headingX=branding.length?margin+128:margin;
-    branding.slice(0,2).forEach((logo,index)=>{const scale=Math.min(52/logo.width,58/logo.height);const width=logo.width*scale,height=logo.height*scale;commands.push(`q ${width.toFixed(2)} 0 0 ${height.toFixed(2)} ${margin+index*62} ${(h-23-height).toFixed(2)} cm /B${index} Do Q`);});
+    branding.slice(0,2).forEach((logo,index)=>{const scale=Math.min((branding.length===1?116:52)/logo.width,58/logo.height);const width=logo.width*scale,height=logo.height*scale;commands.push(`q ${width.toFixed(2)} 0 0 ${height.toFixed(2)} ${margin+index*62} ${(h-23-height).toFixed(2)} cm /B${index} Do Q`);});
     text("TRIBEPETRA KIDS - WUSE CAMPUS",headingX,30,9,true);text(title,headingX,54,17,true);
     wrap(subtitle,w-margin-headingX).slice(0,2).forEach((line,index)=>text(line,headingX,71+index*11,9));
     if(identity && !pages.length){avatar(identity.name,identity.photo,"H",margin,91,36);text(identity.label||"Teacher roster",margin+46,101,8);wrap(identity.name,available-46).slice(0,2).forEach((line,index)=>text(line,margin+46,116+index*11,11,true));}
@@ -66,14 +66,16 @@ export function createTablePdf({title,subtitle="",columns,rows,widths,photos,bra
   const xref=pdf.length;pdf+=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n${offsets.slice(1).map(offset=>`${String(offset).padStart(10,"0")} 00000 n \n`).join("")}trailer\n<< /Size ${objects.length+1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
   return new Blob([pdf],{type:"application/pdf"});
 }
-let brandingPromise:Promise<PdfImage[]>|undefined;
-export function loadReportBranding():Promise<PdfImage[]> {
-  if(!brandingPromise)brandingPromise=Promise.all(["/brand/petra-logo.jpg","/brand/tpk-logo.png"].map(source=>new Promise<PdfImage>((resolve,reject)=>{
+const brandingCache:Record<string,Promise<PdfImage[]>|undefined>={};
+export function loadEventReportBranding(type:string){return loadReportBranding(type==="VBS");}
+export function loadReportBranding(vbs=false):Promise<PdfImage[]> {
+  const key=vbs?"vbs":"tpk";let brandingPromise=brandingCache[key];
+  if(!brandingPromise)brandingPromise=Promise.all((vbs?["/brand/vbs-great-jungle-journey.png"]:["/brand/petra-logo.jpg","/brand/tpk-logo.png"]).map(source=>new Promise<PdfImage>((resolve,reject)=>{
     const image=new Image();const timer=window.setTimeout(()=>reject(new Error("The report logos could not load. Please try exporting again.")),8000);
-    image.onload=()=>{window.clearTimeout(timer);try{const canvas=document.createElement("canvas");canvas.width=180;canvas.height=Math.round(180*image.naturalHeight/image.naturalWidth);const ctx=canvas.getContext("2d");if(!ctx)throw new Error("PDF image rendering is unavailable.");ctx.fillStyle="#fff";ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0,canvas.width,canvas.height);const bytes=atob(canvas.toDataURL("image/jpeg",.92).split(",")[1]);resolve({hex:Array.from(bytes,char=>char.charCodeAt(0).toString(16).padStart(2,"0")).join(""),width:canvas.width,height:canvas.height});}catch(error){reject(error);}};
+    image.onload=()=>{window.clearTimeout(timer);try{const canvas=document.createElement("canvas");canvas.width=vbs?480:180;canvas.height=Math.round(canvas.width*image.naturalHeight/image.naturalWidth);const ctx=canvas.getContext("2d");if(!ctx)throw new Error("PDF image rendering is unavailable.");ctx.fillStyle="#fff";ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0,canvas.width,canvas.height);const bytes=atob(canvas.toDataURL("image/jpeg",.92).split(",")[1]);resolve({hex:Array.from(bytes,char=>char.charCodeAt(0).toString(16).padStart(2,"0")).join(""),width:canvas.width,height:canvas.height});}catch(error){reject(error);}};
     image.onerror=()=>{window.clearTimeout(timer);reject(new Error("The report logos could not load. Please try exporting again."));};image.src=source;
-  }))).catch(error=>{brandingPromise=undefined;throw error;});
-  return brandingPromise;
+  }))).catch(error=>{brandingCache[key]=undefined;throw error;});
+  brandingCache[key]=brandingPromise;return brandingPromise;
 }
 export async function downloadTablePdf(filename:string,report:TableReport):Promise<void> {
   const branding=report.branding??await loadReportBranding();

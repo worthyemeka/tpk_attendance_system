@@ -28,7 +28,10 @@ function event_operator(PDO $db,array $actor,int $id,string $duty=''): bool {
 }
 function event_summary(PDO $db,int $id): array {
     $s=$db->prepare('SELECT COUNT(*) AS registered,SUM(c.care_notes IS NOT NULL AND c.care_notes<>\'\') AS careNotes FROM event_children c JOIN event_registrations r ON r.id=c.registration_id WHERE r.event_id=?');$s->execute([$id]);$counts=$s->fetch();
-    $s=$db->prepare('SELECT COUNT(*) FROM event_volunteers WHERE event_id=?');$s->execute([$id]);$counts['volunteers']=(int)$s->fetchColumn();
+    $s=$db->prepare('SELECT COUNT(*) FROM event_volunteers WHERE event_id=?');$s->execute([$id]);$counts['volunteerAccounts']=(int)$s->fetchColumn();
+    $s=$db->prepare('SELECT COUNT(*) FROM event_roster_people WHERE event_id=?');$s->execute([$id]);$counts['rosterNames']=(int)$s->fetchColumn();
+    $s=$db->prepare('SELECT COUNT(*) FROM event_volunteers v WHERE v.event_id=? AND NOT EXISTS (SELECT 1 FROM event_roster_people p WHERE p.event_id=v.event_id AND p.staff_user_id=v.staff_user_id)');$s->execute([$id]);$counts['volunteers']=$counts['rosterNames']+(int)$s->fetchColumn();
+    $s=$db->prepare('SELECT COUNT(DISTINCT COALESCE(c.home_campus_id,r.home_campus_id)) FROM event_children c JOIN event_registrations r ON r.id=c.registration_id WHERE c.event_id=?');$s->execute([$id]);$counts['registeredCampuses']=(int)$s->fetchColumn();
     $zone=$db->prepare('SELECT timezone FROM ministry_events WHERE id=?');$zone->execute([$id]);$timezone=$zone->fetchColumn()?:'Africa/Lagos';$s=$db->prepare('SELECT COUNT(*) AS checkedIn,SUM(a.picked_up_at IS NULL) AS awaitingPickup FROM event_attendance a JOIN event_sessions s ON s.id=a.session_id WHERE s.event_id=? AND DATE(s.starts_at)=?');$s->execute([$id,(new DateTimeImmutable('now',new DateTimeZone($timezone)))->format('Y-m-d')]);return array_merge($counts,$s->fetch());
 }
 function api_events(PDO $db,int $id=0): never {
@@ -46,7 +49,7 @@ function api_events(PDO $db,int $id=0): never {
       $s=$db->prepare('SELECT a.id,a.child_id AS childId,a.session_id AS sessionId,a.checked_in_at AS checkedInAt,a.picked_up_at AS pickedUpAt,a.pickup_code AS pickupCode,a.collector_name AS collectorName FROM event_attendance a JOIN event_sessions s ON s.id=a.session_id WHERE s.event_id=? ORDER BY a.checked_in_at DESC');$s->execute([$id]);$data['attendance']=$s->fetchAll();}
     if($super){$s=$db->prepare("SELECT u.id,u.name FROM staff_users u WHERE u.campus_id=? AND u.is_active=1 AND u.account_status='VERIFIED' AND u.team_status<>'INACTIVE' ORDER BY u.name");$s->execute([$actor['campus_id']]);$data['staff']=$s->fetchAll();}
     event_history_data($db,$actor,$e,$data);
-    if($actor['access_level']==='EVENT_VOLUNTEER'){$data['children']=[];$data['attendance']=[];$data['volunteers']=array_values(array_filter($data['volunteers'],fn($v)=>(int)$v['userId']===(int)$actor['id']));$data['volunteerAssignments']=array_values(array_filter($data['volunteerAssignments'],fn($v)=>(int)$v['userId']===(int)$actor['id']));$data['canOperate']=false;$data['canCheckIn']=false;$data['canPickUp']=false;event_limit_volunteer_data($data);}
+    if($actor['access_level']==='EVENT_VOLUNTEER'){$data['attendance']=[];$data['volunteers']=array_values(array_filter($data['volunteers'],fn($v)=>(int)$v['userId']===(int)$actor['id']));$data['volunteerAssignments']=array_values(array_filter($data['volunteerAssignments'],fn($v)=>(int)$v['userId']===(int)$actor['id']));$data['canOperate']=false;$data['canCheckIn']=false;$data['canPickUp']=false;event_limit_volunteer_data($data);}
     api_ok($data);
 }
 function api_event_save(PDO $db,int $id=0): never {

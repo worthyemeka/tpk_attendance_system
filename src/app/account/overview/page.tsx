@@ -4,7 +4,8 @@ import Link from "next/link";
 import { AttentionPanel } from "@/components/attention-panel";
 import { EventHighlights } from "@/components/events-workspace";
 import { TeacherQuickView, type TeacherQuickTarget } from "@/components/dashboard-quick-views";
-import { MdwkAttendanceCard } from "@/components/mdwk-attendance-card";
+import { SundayAttendanceCard } from "@/components/sunday-attendance-card";
+import { overviewRolesHeading } from "@/lib/overview-attendance";
 import { useEffect, useState } from "react";
 import {
   FiCheckCircle,
@@ -165,7 +166,7 @@ export default function AccountOverview() {
         </div>
       </header>
       <EventHighlights />
-      <MdwkAttendanceCard />
+      <SundayAttendanceCard />
       {personalAssignments.length > 0 && (
         <section className="panel assignment-card">
           <div>
@@ -174,7 +175,7 @@ export default function AccountOverview() {
                 ? "You’re Serving Today"
                 : "Your Assignment"}
             </p>
-            <h2>{personalAssignments.length === 1 ? personalAssignments[0].dutyName : "Today’s roles"}</h2>
+            <h2>{overviewRolesHeading(personalAssignments.map(assignment => assignment.assignmentDate), today)}</h2>
             <div className="assignment-list">
               {personalAssignments.map((assignment, index) => (
                 <div className="assignment-row" key={assignment.assignmentId ?? `${assignment.assignmentDate}-${assignment.dutyName}-${assignment.serviceSessionId ?? index}`}>

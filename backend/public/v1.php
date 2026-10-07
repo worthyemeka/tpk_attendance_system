@@ -511,6 +511,7 @@ function api_dashboard(PDO $db): never {
 function api_notifications(PDO $db): never {
     $actor=api_actor($db); api_reconcile_stale_checkin_requests($db,(int)$actor['campus_id']); $campus=(int)$actor['campus_id']; $isSuper=$actor['access_level']==='TPK_SUPER_ADMIN'; $followUpLead=api_is_followup_lead($actor);
     $allowed=api_permitted_class_ids($db,$actor); $items=[];
+    if($reminder=api_teacher_wednesday_reminder())$items[]=$reminder;
     try{
         $saved=$db->prepare("SELECT id,type,title,body,target_path AS href FROM notifications WHERE campus_id=? AND staff_user_id=? AND type IN ('ROSTER_PUBLISHED','ROSTER_REMINDER') ORDER BY created_at DESC LIMIT 20");
         $saved->execute([$campus,(int)$actor['id']]);
@@ -1041,6 +1042,7 @@ try { $db=api_db();$path=api_path();$method=api_method();
     if($method==='POST'&&preg_match('#^/api/v1/events/(\d+)/group-assignment$#',$path,$m))api_event_group_assignment($db,(int)$m[1]);
     if($method==='POST'&&preg_match('#^/api/v1/events/(\d+)/duplicate$#',$path,$m))api_event_duplicate($db,(int)$m[1]);
     if($method==='GET'&&$path==='/api/v1/teacher-attendance')api_teacher_attendance($db);
+    if($method==='GET'&&$path==='/api/v1/teacher-attendance/my-sunday')api_teacher_my_sunday($db);
     if($method==='GET'&&$path==='/api/v1/teacher-attendance/my-mdwk')api_teacher_my_mdwk($db);
     if($method==='POST'&&preg_match('#^/api/v1/teacher-attendance/services/(\d+)/confirm$#',$path,$m))api_teacher_confirm_mdwk($db,(int)$m[1]);
     if($method==='PUT'&&preg_match('#^/api/v1/teacher-attendance/services/(\d+)/absence-reason$#',$path,$m))api_teacher_absence_reason($db,(int)$m[1]);
