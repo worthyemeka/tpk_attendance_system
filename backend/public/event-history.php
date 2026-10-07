@@ -73,10 +73,9 @@ function event_limit_volunteer_data(array &$data): void {
 }
 function event_resource_visible(PDO $db,array $actor,int $event,int $resource): bool {
     if($actor['access_level']==='TPK_SUPER_ADMIN')return true;
-    if(!event_member($db,$actor,$event))return false;
-    // An untargeted resource is for the whole team; otherwise every constrained
-    // dimension must match the SAME assignment (not roles from unrelated days).
-    $q=$db->prepare('SELECT 1 FROM event_curriculum_targets t JOIN event_volunteer_assignments a ON a.event_id=? AND a.staff_user_id=? LEFT JOIN event_sessions s ON s.id=a.session_id WHERE t.resource_id=? AND (t.group_id IS NULL OR a.group_id IS NULL OR t.group_id=a.group_id) AND (t.session_id IS NULL OR a.session_id IS NULL OR t.session_id=a.session_id) AND (t.day_id IS NULL OR a.session_id IS NULL OR t.day_id=s.day_id) LIMIT 1');$q->execute([$event,$actor['id'],$resource]);return (bool)$q->fetchColumn();
+    // The event endpoint has already checked published-event access. Curriculum
+    // is shared with every teacher; event-only accounts still need membership.
+    return $actor['access_level']!=='EVENT_VOLUNTEER'||event_member($db,$actor,$event);
 }
 function event_history_data(PDO $db,array $actor,array $event,array &$data): void {
     $id=(int)$event['id'];$super=$actor['access_level']==='TPK_SUPER_ADMIN';
@@ -90,13 +89,14 @@ function event_history_data(PDO $db,array $actor,array $event,array &$data): voi
     $q=$db->prepare('SELECT d.id AS dayId,d.label,d.calendar_date AS date,COUNT(h.child_id) AS recorded,SUM(h.present=1) AS present,SUM(h.present=0) AS absent,SUM(h.picked_up=1) AS pickedUp,SUM(h.picked_up IS NULL) AS pickupUnknown FROM event_days d LEFT JOIN event_historical_attendance h ON h.day_id=d.id WHERE d.event_id=? GROUP BY d.id ORDER BY d.day_number');$q->execute([$id]);$data['historicalReport']=$q->fetchAll();
     $data['historicalAttendance']=[];$data['contacts']=[];$data['cards']=[];$data['imports']=[];$data['sourceFiles']=[];
     $data['historicalRoster']=[];$data['rosterGroups']=[];$data['rosterPeople']=[];
-    if($super){
+    {
         $q=$db->prepare('SELECT id,name,kind FROM event_roster_groups WHERE event_id=? ORDER BY kind,name');$q->execute([$id]);$data['rosterGroups']=$q->fetchAll();
         $q=$db->prepare('SELECT m.rotation_id,c.name FROM event_roster_group_members m JOIN event_roster_groups c ON c.id=m.class_id WHERE c.event_id=? ORDER BY c.name');$q->execute([$id]);$members=[];foreach($q->fetchAll() as $member)$members[$member['rotation_id']][]=$member['name'];foreach($data['rosterGroups'] as &$group)$group['classes']=implode(', ',$members[$group['id']]??[]);unset($group);
-        $q=$db->prepare('SELECT p.id,p.source_name AS name,p.staff_user_id AS staffId,p.review_required AS reviewRequired,s.name AS staffName FROM event_roster_people p LEFT JOIN staff_users s ON s.id=p.staff_user_id WHERE p.event_id=? ORDER BY p.source_name');$q->execute([$id]);$data['rosterPeople']=$q->fetchAll();
+        if($super){$q=$db->prepare('SELECT p.id,p.source_name AS name,p.staff_user_id AS staffId,p.review_required AS reviewRequired,s.name AS staffName FROM event_roster_people p LEFT JOIN staff_users s ON s.id=p.staff_user_id WHERE p.event_id=? ORDER BY p.source_name');$q->execute([$id]);$data['rosterPeople']=$q->fetchAll();}
         $q=$db->prepare('SELECT a.id,a.day_id AS dayId,a.activity_id AS activityId,a.person_id AS personId,a.responsibility,a.call_time AS callTime,a.source_page AS sourcePage,g.name AS groupName,p.source_name AS name,p.review_required AS reviewRequired FROM event_roster_assignments a JOIN event_roster_people p ON p.id=a.person_id LEFT JOIN event_roster_groups g ON g.id=a.roster_group_id WHERE a.event_id=? ORDER BY a.day_id,a.activity_id,a.id');$q->execute([$id]);$data['historicalRoster']=$q->fetchAll();
     }
     if($super){foreach(['historicalAttendance'=>'SELECT h.child_id AS childId,h.day_id AS dayId,h.present,h.picked_up AS pickedUp,h.food FROM event_historical_attendance h JOIN event_days d ON d.id=h.day_id WHERE d.event_id=?','contacts'=>'SELECT t.id,t.registration_id AS registrationId,t.child_id AS childId,t.contact_type AS type,t.name,t.phone,t.relationship,t.source_text AS sourceText FROM event_registration_contacts t JOIN event_registrations r ON r.id=t.registration_id WHERE r.event_id=?','cards'=>'SELECT t.child_id AS childId,t.day_id AS dayId,t.card_number AS number FROM event_registration_cards t JOIN event_children c ON c.id=t.child_id WHERE c.event_id=?','imports'=>'SELECT id,source_name AS sourceName,import_kind AS kind,state,created_at AS createdAt FROM event_import_batches WHERE event_id=? ORDER BY id DESC','sourceFiles'=>'SELECT id,original_name AS name,mime_type AS mimeType,byte_size AS size,sha256 FROM event_source_files WHERE event_id=? ORDER BY id'] as $key=>$sql){$q=$db->prepare($sql);$q->execute([$id]);$data[$key]=$q->fetchAll();}}
+    else{$q=$db->prepare('SELECT h.child_id AS childId,h.day_id AS dayId,h.present FROM event_historical_attendance h JOIN event_days d ON d.id=h.day_id WHERE d.event_id=?');$q->execute([$id]);$data['historicalAttendance']=$q->fetchAll();}
     $q=$db->prepare('SELECT s.day_id AS dayId,s.metric,s.reported_value AS value,s.source_page AS page,f.original_name AS source FROM event_reported_statistics s JOIN event_source_files f ON f.id=s.source_file_id WHERE s.event_id=?');$q->execute([$id]);$data['reportedStatistics']=$super?$q->fetchAll():[];
     // One batch query, not a query per child, for scalable event directories.
     $q=$db->prepare('SELECT c.id,COALESCE(c.home_campus_id,r.home_campus_id) AS homeCampusId,c.reported_age AS reportedAge,c.age_qualifier AS ageQualifier,c.gender,c.scholarship,c.food,c.registration_id AS registrationId,COALESCE(ca.name,r.home_campus) AS homeCampus FROM event_children c JOIN event_registrations r ON r.id=c.registration_id LEFT JOIN campuses ca ON ca.id=COALESCE(c.home_campus_id,r.home_campus_id) WHERE c.event_id=?');$q->execute([$id]);$extra=[];foreach($q->fetchAll() as $row)$extra[$row['id']]=$row;
@@ -104,11 +104,7 @@ function event_history_data(PDO $db,array $actor,array $event,array &$data): voi
     if(!$data['canOperate']){
         // Exact safe directory projection: never query addresses, phones, DOB,
         // medical notes, scholarship, source contacts or pickup credentials.
-        $filter='';$params=[$id];
-        if($actor['access_level']==='EVENT_VOLUNTEER'){
-            $filter=" AND EXISTS (SELECT 1 FROM event_volunteer_assignments a WHERE a.event_id=c.event_id AND a.staff_user_id=? AND (a.group_id IS NULL OR a.group_id=c.group_id) AND (a.session_id IS NULL OR EXISTS (SELECT 1 FROM event_child_sessions cs WHERE cs.child_id=c.id AND cs.session_id=a.session_id)))";$params[]=$actor['id'];
-        }
-        $q=$db->prepare('SELECT c.id,c.name,COALESCE(c.home_campus_id,r.home_campus_id) AS homeCampusId,COALESCE(ca.name,r.home_campus) AS homeCampus,r.guardian_name AS guardianName FROM event_children c JOIN event_registrations r ON r.id=c.registration_id LEFT JOIN campuses ca ON ca.id=COALESCE(c.home_campus_id,r.home_campus_id) WHERE c.event_id=?'.$filter.' ORDER BY c.name');$q->execute($params);$data['children']=$q->fetchAll();
+        $q=$db->prepare('SELECT c.id,c.name,c.group_id AS groupId,g.name AS groupName,COALESCE(c.home_campus_id,r.home_campus_id) AS homeCampusId,COALESCE(ca.name,r.home_campus) AS homeCampus,(SELECT GROUP_CONCAT(cs.session_id) FROM event_child_sessions cs WHERE cs.child_id=c.id) AS sessionIds FROM event_children c JOIN event_registrations r ON r.id=c.registration_id LEFT JOIN event_groups g ON g.id=c.group_id LEFT JOIN campuses ca ON ca.id=COALESCE(c.home_campus_id,r.home_campus_id) WHERE c.event_id=? ORDER BY c.name');$q->execute([$id]);$data['children']=$q->fetchAll();
     }
 }
 function api_event_roster_identity(PDO $db,int $id,int $person): never {

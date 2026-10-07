@@ -6,3 +6,4 @@
 @media(max-width:650px){.event-profile-drawer>section{padding:22px}.event-curriculum-grid article{padding:20px}.event-toolbar>input{width:100%;min-width:0}.event-curriculum-grid footer{width:100%}.event-curriculum-grid footer>*{flex:1;text-align:center}}
 
 @media(max-width:900px){.event-register .records-table td{border:0!important;padding:0!important}.event-register .records-table td[data-label="Child"]{padding-bottom:10px!important}}
+.event-session-grid article ul{list-style:none;margin:14px 0 0;padding:12px 0 0;border-top:1px solid #e9edf1;display:grid;gap:8px;max-height:220px;overflow:auto}.event-session-grid article li{font-size:13px;color:#405570;line-height:1.4}.event-session-grid article li::before{content:"•";color:#ed643f;margin-right:8px}
