@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { youtubeDuration } from "@/lib/youtube-video";
+import { youtubeDuration, youtubeDurationSeconds } from "@/lib/youtube-video";
 
 export const runtime = "nodejs";
 
@@ -34,6 +34,17 @@ export async function GET(request: NextRequest) {
         thumbnail = video?.snippet?.thumbnails?.high?.url || thumbnail;
       }
     } catch { /* The public card remains available without duration. */ }
+  }
+  if (!duration) {
+    try {
+      const response = await fetch("https://www.youtube.com/youtubei/v1/player", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ videoId: id, context: { client: { clientName: "WEB", clientVersion: "2.20250301.00.00" } } }),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (response.ok) duration = youtubeDurationSeconds((await response.json()).videoDetails?.lengthSeconds);
+    } catch { /* YouTube may not expose duration for every video. */ }
   }
   return NextResponse.json({ id, title, channel, duration, thumbnail, url: watchUrl }, { headers: { "Cache-Control": "public, max-age=300, s-maxage=86400" } });
 }

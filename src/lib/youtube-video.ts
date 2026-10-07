@@ -21,3 +21,12 @@ export function youtubeDuration(value: string | undefined): string | null {
   if (!hours && !minutes && !seconds) return null;
   return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}` : `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
+
+export function youtubeDurationSeconds(value: string | number | undefined): string | null {
+  const total = Number(value);
+  if (!Number.isFinite(total) || total <= 0) return null;
+  const seconds = Math.floor(total);
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor(seconds % 3600 / 60);
+  return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}` : `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
+}
