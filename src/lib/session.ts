@@ -1,14 +1,14 @@
-export type AccessLevel = "TPK_SUPER_ADMIN" | "TPK_FOLLOW_UP_ADMIN" | "TPK_ADMIN";
+export type AccessLevel = "TPK_SUPER_ADMIN" | "TPK_FOLLOW_UP_ADMIN" | "TPK_ADMIN" | "EVENT_VOLUNTEER";
 export type TeamStatus = "ACTIVE" | "PROBATION" | "INACTIVE";
 export type TeacherSession = {
   staffUserId: number;
   name: string;
   firstName: string;
   lastName: string;
-  title: "Auntie" | "Uncle";
+  title: "Auntie" | "Uncle" | "";
   accessLevel: AccessLevel;
   teamStatus: TeamStatus;
-  role: "TPK Teacher";
+  role: "TPK Teacher" | "Event Volunteer";
   profileImageUrl?: string | null;
   sessionToken: string;
   /** Browser-clock deadline returned by the server, refreshed only by activity. */

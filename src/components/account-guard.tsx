@@ -13,6 +13,7 @@ export function AccountGuard({ children }: { children: React.ReactNode }) {
     const expired = () => { setReady(false); router.replace(`/teacher/login?next=${encodeURIComponent(pathname + window.location.search)}`); };
     const session = readTeacherSession();
     if (!session) { expired(); return; }
+    if(session.accessLevel==="EVENT_VOLUNTEER"&&pathname!=="/account/event-volunteer") { setReady(false);router.replace("/account/event-volunteer");return; }
     setReady(true);
     return monitorTeacherSession(expired);
   }, [pathname, router]);

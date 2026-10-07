@@ -18,7 +18,7 @@ function teacher_request_origin(): string {
 function teacher_response(array $teacher): array {
     // Access level is deliberately returned for server-authorised navigation,
     // but the teacher-facing label stays the same for every team member.
-    return ['staffUserId' => (int)$teacher['staff_user_id'], 'name' => trim($teacher['first_name'] . ' ' . $teacher['last_name']), 'firstName' => $teacher['first_name'], 'lastName' => $teacher['last_name'], 'title' => $teacher['title'] ?: (($teacher['gender'] ?? '') === 'FEMALE' ? 'Auntie' : 'Uncle'), 'accessLevel' => $teacher['access_level'], 'teamStatus' => $teacher['team_status'], 'profileImageUrl' => $teacher['profile_image_url'] ?? null, 'role' => 'TPK Teacher'];
+    return ['staffUserId' => (int)$teacher['staff_user_id'], 'name' => trim($teacher['first_name'] . ' ' . $teacher['last_name']), 'firstName' => $teacher['first_name'], 'lastName' => $teacher['last_name'], 'title' => $teacher['title'] ?: (($teacher['gender'] ?? '') === 'FEMALE' ? 'Auntie' : (($teacher['gender'] ?? '') === 'MALE' ? 'Uncle' : '')), 'accessLevel' => $teacher['access_level'], 'teamStatus' => $teacher['team_status'], 'profileImageUrl' => $teacher['profile_image_url'] ?? null, 'role' => $teacher['access_level']==='EVENT_VOLUNTEER'?'Event Volunteer':'TPK Teacher'];
 }
 function teacher_issue_session(PDO $db, int $staffId): string {
     $token = bin2hex(random_bytes(32));
@@ -88,7 +88,7 @@ if ($method === 'POST' && $path === '/api/teachers/login') {
     $v = teacher_input(); $identifier = trim((string)($v['identifier'] ?? $v['email'] ?? ''));
     if ($identifier === '' || empty($v['password'])) json_response(['error' => 'Email or WhatsApp number and password are required.'], 422);
     $phone = tpk_normalize_nigerian_phone($identifier);
-    $s = $db->prepare('SELECT s.id AS staff_user_id,s.is_active,s.account_status,s.access_level,s.team_status,p.first_name,p.last_name,p.title,p.gender,p.profile_image_url,p.password_hash FROM staff_users s JOIN teacher_profiles p ON p.staff_user_id=s.id WHERE s.campus_id=? AND (s.email=? OR p.whatsapp_number_normalized=?) LIMIT 1');
+    $s = $db->prepare("SELECT s.id AS staff_user_id,s.is_active,s.account_status,s.access_level,s.team_status,p.first_name,p.last_name,p.title,p.gender,p.profile_image_url,p.password_hash FROM staff_users s JOIN teacher_profiles p ON p.staff_user_id=s.id WHERE (s.campus_id=? OR s.access_level='EVENT_VOLUNTEER') AND (s.email=? OR p.whatsapp_number_normalized=?) LIMIT 1");
     $s->execute([$campusId, strtolower($identifier), $phone ?: '']); $teacher = $s->fetch();
     if (!$teacher || !password_verify($v['password'], $teacher['password_hash'])) json_response(['error' => 'Incorrect email, WhatsApp number, or password.'], 401);
     if (!(bool)$teacher['is_active'] || $teacher['team_status'] === 'INACTIVE') json_response(['error' => 'This team account is inactive. Please speak with a TPK Super Admin.'], 403);

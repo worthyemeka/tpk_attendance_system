@@ -10,6 +10,15 @@ $campus = $db->query("SELECT id FROM campuses WHERE code = 'PETRA-WUSE' LIMIT 1"
 if (!$campus) json_response(['error' => 'Run backend/database/seed.sql first.'], 503);
 $campusId = (int)$campus['id'];
 
+// Event-only accounts cannot use the legacy Sunday/people endpoints either.
+// Anonymous parent routes retain their existing behaviour.
+$authorization=$_SERVER['HTTP_AUTHORIZATION']??'';
+if(preg_match('/^Bearer ([a-f0-9]{64})$/i',$authorization,$match)){
+    $limited=$db->prepare("SELECT 1 FROM staff_sessions ss JOIN staff_users u ON u.id=ss.staff_user_id WHERE ss.token_hash=? AND ss.revoked_at IS NULL AND ss.expires_at>NOW() AND u.access_level='EVENT_VOLUNTEER'");
+    $limited->execute([hash('sha256',$match[1])]);
+    if($limited->fetchColumn())json_response(['error'=>'Use your assigned event dashboard. Sunday and people administration are not available to event volunteers.'],403);
+}
+
 function family_rows(PDO $db, int $campusId, string $q): array {
     $like = "%$q%";
     $sql = "SELECT DISTINCT f.id, f.family_code AS familyCode, f.surname, f.phone FROM families f

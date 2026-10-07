@@ -13,6 +13,7 @@ function api_ok(array $data,int $status=200):void {throw new EventResult($data);
 function api_error(string $code,string $message,int $status=400):void {throw new EventError($code);}
 function api_actor(PDO $db,bool $super=false):array {if($super&&$GLOBALS['actor']['access_level']!=='TPK_SUPER_ADMIN')api_error('FORBIDDEN','Super required',403);return $GLOBALS['actor'];}
 function api_input():array{return $GLOBALS['input'];}
+function api_method():string{return $GLOBALS['method']??'POST';}
 function api_audit(PDO $db,array $actor,string $event,string $entity,int $id,array $meta=[]):void{}
 function api_phone(?string $value):?string{$v=preg_replace('/\D+/','',(string)$value);if(str_starts_with($v,'234')&&strlen($v)===13)$v='0'.substr($v,3);return strlen($v)===11&&str_starts_with($v,'0')?$v:null;}
 function result(callable $fn):array{try{$fn();}catch(EventResult $r){return $r->data;}throw new RuntimeException('Missing response');}
@@ -27,6 +28,15 @@ try{
  check(is_array(api_assembly_sessions($db,$actor)),'Assembly month query fails against actual service schema');
  $sql=preg_replace('/^\s*--[^\n]*(?:\n|$)/m','',file_get_contents(__DIR__.'/../database/2026_events.sql'));
  foreach(explode(';',$sql) as $statement){if(!trim($statement))continue;$statement=preg_replace('/CREATE TABLE IF NOT EXISTS/','CREATE TEMPORARY TABLE',$statement);$statement=preg_replace('/^\s*FOREIGN KEY[^\n]*(?:\n|$)/m','',$statement);$statement=preg_replace('/,\s*\)/',')',$statement);preg_match('/CREATE TEMPORARY TABLE (\w+)/',$statement,$m);$db->exec($statement);$temporary[]=$m[1];}
+ // Extend only the connection-local event tables. Never ALTER real staff tables.
+ $sql=preg_replace('/^\s*--[^\n]*(?:\n|$)/m','',file_get_contents(__DIR__.'/../database/2026_event_history.sql'));
+ foreach(explode(';',$sql) as $statement){$statement=trim($statement);if(!$statement)continue;
+  if(preg_match('/^ALTER TABLE (staff_users|teacher_profiles) /',$statement)||str_contains($statement,'ADD CONSTRAINT'))continue;
+  $statement=preg_replace('/FOREIGN KEY\s*\([^)]*\)\s*REFERENCES\s*\w+\s*\([^)]*\)/','',$statement);
+  $statement=preg_replace('/,\s*(?=,|\))/', '',$statement);
+  if(str_starts_with($statement,'CREATE TABLE')){$statement=str_replace('CREATE TABLE IF NOT EXISTS','CREATE TEMPORARY TABLE',$statement);preg_match('/CREATE TEMPORARY TABLE (\w+)/',$statement,$m);$temporary[]=$m[1];}
+  $db->exec($statement);
+ }
  $today=(new DateTimeImmutable('now',new DateTimeZone('Africa/Lagos')))->format('Y-m-d');
  $input=['name'=>'Temporary VBS diagnostic','type'=>'VBS','startDate'=>$today,'endDate'=>$today,'registrationOpens'=>$today,'registrationCloses'=>$today,'publicRegistration'=>true,'countdown'=>true,'status'=>'PUBLISHED'];
  $id=result(fn()=>api_event_save($db))['id'];check(count(result(fn()=>api_events($db))['items'])===1,'Event listing');
@@ -63,6 +73,33 @@ try{
  $actor=$owner;$input=['userId'=>$owner['id'],'duty'=>'LEAD','sessionId'=>$sid,'responsibility'=>'Prayers'];result(fn()=>api_event_setup($db,$id,'volunteers'));$input['responsibility']='Assembly';result(fn()=>api_event_setup($db,$id,'volunteers'));$input['responsibility']='Assembly';result(fn()=>api_event_setup($db,$id,'volunteers'));$view=result(fn()=>api_events($db,$id));check(count(array_filter($view['volunteerAssignments'],fn($a)=>$a['sessionId']==$sid))===2,'Multiple responsibilities, duplicate saves are idempotent');$input['sessionId']=99999;reject(fn()=>api_event_setup($db,$id,'volunteers'),'VALIDATION_ERROR');
  $actor['campus_id']=(int)$owner['campus_id']+999;reject(fn()=>api_events($db,$id),'EVENT_NOT_FOUND');$actor=$owner;
  $db->exec("UPDATE ministry_events SET registration_closes='2000-01-01' WHERE id=".$id);$input=$original;reject(fn()=>api_public_event($db,$key,true),'REGISTRATION_CLOSED');
+ check(event_lifecycle(['status'=>'PUBLISHED','starts_on'=>'2026-08-24','ends_on'=>'2026-08-29'],'2026-08-23')==='UPCOMING','Upcoming boundary');
+ check(event_lifecycle(['status'=>'PUBLISHED','starts_on'=>'2026-08-24','ends_on'=>'2026-08-29'],'2026-08-29')==='LIVE','Inclusive final day');
+ check(event_lifecycle(['status'=>'PUBLISHED','starts_on'=>'2026-08-24','ends_on'=>'2026-08-29'],'2026-08-30')==='COMPLETED','Completed boundary');
+ $input=['name'=>'Historical diagnostic','type'=>'VBS','startDate'=>'2026-08-24','endDate'=>'2026-08-29','registrationOpens'=>'2026-08-24','registrationCloses'=>'2026-08-29','status'=>'ARCHIVED','themeName'=>'The Great Jungle Journey','timezone'=>'Africa/Lagos'];
+ $history=result(fn()=>api_event_save($db))['id'];check(result(fn()=>api_events($db,$history))['event']['lifecycle']==='ARCHIVED','Past events publish and remain readable');
+ $input=['dayNumber'=>1,'label'=>'Monday','date'=>'2026-08-24'];$day=result(fn()=>api_event_day($db,$history))['id'];
+ $input['date']='2026-08-30';reject(fn()=>api_event_day($db,$history),'VALIDATION_ERROR');
+ $row=['sourceKey'=>'diagnostic-source-1','name'=>'Diagnostic historical child','age'=>4,'gender'=>'FEMALE','homeCampusId'=>$owner['campus_id'],'guardianPhone'=>null,'contacts'=>[['type'=>'DOCTOR','name'=>'Historical doctor','phone'=>null]],'food'=>true,'days'=>[['dayNumber'=>1,'present'=>true,'pickedUp'=>null,'cardNumber'=>'48']]];
+ $input=['kind'=>'CHILDREN','sourceName'=>'Private diagnostic','rows'=>[$row]];$batch=result(fn()=>api_event_import($db,$history))['id'];
+ check((int)$db->query('SELECT COUNT(*) FROM event_children WHERE event_id='.$history)->fetchColumn()===0,'Preview makes no registrations');
+ check(result(fn()=>api_event_import($db,$history))['duplicate'],'Repeated preview idempotent');
+ $input=['confirm'=>false];reject(fn()=>api_event_import($db,$history,$batch,'commit'),'CONFIRMATION_REQUIRED');
+ $input=['confirm'=>true];check(result(fn()=>api_event_import($db,$history,$batch,'commit'))['imported']===1,'Reviewed source commits');
+ check(result(fn()=>api_event_import($db,$history,$batch,'commit'))['alreadyCommitted'],'Commit idempotent');
+ $view=result(fn()=>api_events($db,$history));check($view['children'][0]['dateOfBirth']===null,'Missing DOB is not fabricated');check((int)$view['children'][0]['reportedAge']===4,'Reported age preserved');check(count($view['contacts'])===1&&count($view['cards'])===1,'Doctor and daily card relational records');check($view['historicalAttendance'][0]['pickedUp']===null,'Unknown pickup remains null');check($view['historicalAttendance'][0]['food']===null,'Whole-event food is not copied onto every day');
+ $bad=$row;$bad['sourceKey']='needs-review';$bad['requiresReview']=true;$input=['rows'=>[$bad]];$review=result(fn()=>api_event_import($db,$history))['id'];$input=['confirm'=>true];reject(fn()=>api_event_import($db,$history,$review,'commit'),'IMPORT_REVIEW_REQUIRED');
+ $method='GET';$preview=result(fn()=>api_event_import($db,$history,$review));$method='PATCH';$input=['rowId'=>$preview['rows'][0]['id'],'payload'=>$bad,'skip'=>true];result(fn()=>api_event_import($db,$history,$review,'row'));$method='POST';$input=['confirm'=>true];check(result(fn()=>api_event_import($db,$history,$review,'commit'))['imported']===0,'Explicit skip does not fabricate facts');
+ $clear=$row;$clear['sourceKey']='partial-clear';$pending=$row;$pending['sourceKey']='partial-pending';$pending['requiresReview']=true;
+ $input=['rows'=>[$clear,$pending]];$partial=result(fn()=>api_event_import($db,$history))['id'];$input=['confirm'=>true,'readyOnly'=>true];$partialResult=result(fn()=>api_event_import($db,$history,$partial,'commit'));
+ check($partialResult['imported']===1&&$partialResult['state']==='PARTIAL','Clear rows import while ambiguous rows stay pending');
+ check(result(fn()=>api_event_import($db,$history,$partial,'commit'))['imported']===0,'Repeated partial import is idempotent');
+ $method='GET';$partialRows=result(fn()=>api_event_import($db,$history,$partial))['rows'];$method='PATCH';$input=['rowId'=>$partialRows[0]['id'],'payload'=>$clear,'skip'=>true];reject(fn()=>api_event_import($db,$history,$partial,'row'),'IMPORT_ROW_COMMITTED');if($db->inTransaction())$db->rollBack();$method='POST';
+ check(event_volunteer_api_allowed('/api/v1/events','GET'),'Volunteer event list allowed');check(!event_volunteer_api_allowed('/api/v1/children','GET'),'Volunteer directory blocked');check(!event_volunteer_api_allowed('/api/v1/events/1','PATCH'),'Volunteer administration blocked');check(!event_volunteer_api_allowed('/api/v1/events/1/imports','POST'),'Volunteer import blocked');
+ $actor=$owner;$actor['access_level']='EVENT_VOLUNTEER';$view=result(fn()=>api_events($db,$id));check(!$view['canOperate']&&!$view['canPickUp']&&$view['children']===[]&&$view['attendance']===[]&&$view['staff']===[],'Event-only response strips operations and people');reject(fn()=>api_events($db,$history),'EVENT_NOT_FOUND');$actor=$owner;
+ $input=['preset'=>'JUNGLE','enabled'=>true,'applyDashboard'=>true];result(fn()=>api_event_appearance($db,$id));$method='GET';check(result(fn()=>api_staff_appearance($db))['active']===null,'Default appearance fallback');
+ $method='PATCH';$input=['preference'=>'EVENT'];check(result(fn()=>api_staff_appearance($db))['active']['preset']==='JUNGLE','Live event appearance preference');$method='POST';
+ $input=['childId'=>$view['children'][0]['id']??0,'sessionId'=>$sid];reject(fn()=>api_event_arrival($db,$history),'EVENT_CLOSED');
  check($db->query('SELECT (SELECT COUNT(*) FROM children)+(SELECT COUNT(*) FROM families)+(SELECT COUNT(*) FROM attendance)')->fetchColumn()===$peopleBefore,'Permanent ministry records changed');
  echo "PASS: $checks MySQL event, privacy, registration, group, pickup, duplication and assembly-history checks.\n";
 }finally{if($db->inTransaction())$db->rollBack();foreach(array_reverse($temporary)as$table)$db->exec('DROP TEMPORARY TABLE `'.$table.'`');}

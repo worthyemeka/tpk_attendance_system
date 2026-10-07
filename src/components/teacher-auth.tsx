@@ -98,7 +98,7 @@ export function TeacherAuth({ mode }: Props) {
     let cancelled = false;
     // Verify the saved token with the server; a stale browser record is not a sign-in.
     void validateTeacherSession().then(session => {
-      if (session && !cancelled) { const next = new URLSearchParams(window.location.search).get("next"); window.location.replace(next && next.startsWith("/account/") ? next : "/account/overview"); }
+      if (session && !cancelled) { const next = new URLSearchParams(window.location.search).get("next"); window.location.replace(session.accessLevel === "EVENT_VOLUNTEER" ? "/account/event-volunteer" : next && next.startsWith("/account/") ? next : "/account/overview"); }
     }).catch(() => undefined);
     return () => { cancelled = true; };
   }, [signup]);
@@ -181,7 +181,7 @@ export function TeacherAuth({ mode }: Props) {
       if (!data?.teacher || !data?.sessionToken) throw new Error("The TPK sign-in service returned an incomplete session. Please try again.");
       saveTeacherSession({ ...teacherSessionFromResponse(data, data.sessionToken), lastActivityAt: Date.now() });
       const next = new URLSearchParams(window.location.search).get("next");
-      window.location.replace(next && next.startsWith("/account/") ? next : "/account/overview");
+      window.location.replace(data.teacher.accessLevel === "EVENT_VOLUNTEER" ? "/account/event-volunteer" : next && next.startsWith("/account/") ? next : "/account/overview");
     } catch (reason) { const message = reason instanceof Error ? reason.message : ""; setError(/failed to fetch|load failed|networkerror/i.test(message) ? "The TPK sign-in service cannot be reached right now. Please try again shortly or contact a Super Admin." : (message || "Please try again.")); } finally { setBusy(false); }
   }
   const field = (key: keyof Values, label: string, type = "text", autoComplete?: string) => <label htmlFor={`teacher-${key}`}>{label}<input autoComplete={autoComplete} id={`teacher-${key}`} name={key} type={type} value={typeof values[key] === "string" ? values[key] : ""} onChange={(event) => update(key, event.currentTarget.value as never)} onInput={(event) => update(key, event.currentTarget.value as never)} required /></label>;

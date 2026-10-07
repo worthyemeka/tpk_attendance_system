@@ -1,5 +1,55 @@
 # TribePetra Kids backend setup
 
+## Historical and live events
+
+Apply `database/2026_events.sql` and the existing event-volunteer-assignment migration first. Back up the database and private storage, then run `php backend/scripts/migrate_event_history.php --confirm` from the repository root. The new `database/2026_event_history.sql` migration is additive and resumable; MySQL DDL is not transactional. Deploy the matching PHP routes and frontend together. PHP needs PDO MySQL, mbstring and fileinfo. Set upload limits to at least 25 MB per file and 30 MB per request. Make `backend/storage/event-resources` writable by PHP, mode 0750; files are 0640. It must not be served by nginx or committed to Git. Include it in encrypted/restricted backups.
+
+The migration extends events, registrations, event children, sessions, volunteer membership and the existing staff account/profile model. It creates:
+
+- `event_days`, `event_registration_contacts`, `event_historical_attendance`, `event_registration_cards`
+- `event_source_files`, `event_curriculum_resources`, `event_curriculum_targets`, `event_programme_activities`
+- `event_import_batches`, `event_import_rows`, `event_reported_statistics`
+- `event_volunteer_attendance`, `event_account_invitations`, `event_appearances`, `staff_appearance_preferences`
+
+Seven Abuja home campuses are seeded by stable campus code, preserving existing campus names. A child's event home campus can be edited independently of their Sunday family record. Events have an IANA timezone. Published lifecycle is derived from inclusive local event dates (upcoming/live/completed); archived/draft/cancelled are explicit states. Past dates never prevent saving or publication. Historical attendance is not live check-in or a pickup queue.
+
+### Routes and permissions
+
+Existing event list/detail/save, registration, groups, sessions, volunteers and reports remain in use. New routes are:
+
+- `POST /api/v1/events/{event}/days`
+- `POST /api/v1/events/{event}/curriculum`
+- `POST /api/v1/events/{event}/files`; `GET /api/v1/events/{event}/files/{file}`
+- `PATCH /api/v1/events/{event}/children/{child}` (home campus)
+- `POST /api/v1/events/{event}/volunteer-registration`
+- `POST /api/v1/events/{event}/volunteer-attendance`
+- `POST /api/v1/public/event-account/setup`
+- `POST /api/v1/events/{event}/appearance`; `GET/PATCH /api/v1/me/appearance`
+- `POST /api/v1/events/{event}/imports`; `GET /api/v1/events/{event}/imports/{batch}`
+- `PATCH /api/v1/events/{event}/imports/{batch}/row`; `POST /api/v1/events/{event}/imports/{batch}/commit`
+
+Event administration, archival imports and original attendance-source downloads require a host-campus Super Admin. Existing staff accounts are reused by ID or email without changing passwords or general access. New people get `EVENT_VOLUNTEER`, never TPK Admin access. They are pending until a hashed, single-use, 48-hour invitation is consumed. The invitation link contains a fragment token (not a URL query); share it privately. Importing volunteers does not import passwords; issue setup invitations from Volunteer Registration afterward.
+
+Event-only accounts use `/account/event-volunteer`, not the Sunday dashboard. Server permissions restrict them to assigned published/completed/archived events, assignment-scoped sessions/groups/resources, appearance settings and their own live-session attendance. They cannot read children/guardians, import data, change events, or perform child desk check-in/pickup. CHECK_IN/PICKUP/LEAD are event responsibilities; child desk operation is still for existing authorised staff, not a general-access grant to a newly registered volunteer. Curriculum downloads require a matching assignment across all constrained target dimensions. Original attendance PDFs are not exposed to volunteers. Existing teacher sign-in and 48-hour inactivity expiry are reused.
+
+### Source-grounded VBS 2026 backfill
+
+The confirmed dates are **24–29 August 2026**, theme **The Great Jungle Journey**. The source-specific adapter `scripts/extract_vbs_2026.py` reads the three supplied PDFs. It uses table geometry and vector checkbox marks, not guessed text alignment, and writes a private structured JSON package. Do not commit that package: it contains child/guardian medical and contact data. The source package keeps stable row keys, original hashes, raw values and page references.
+
+Run `php backend/scripts/backfill_vbs_2026.php --package=/private/path/package.json --source-dir=/private/path/pdfs --admin-id=HOST_SUPER_ADMIN_ID` for a dry run. Add `--confirm` to create/reuse the archived event, six dated days, two explicitly named historical groups, twelve curriculum resources, the proposed finale run of show, printed statistics, protected original PDFs and a review batch. It does not import attendance automatically. Use Reports → Import ready rows to commit reviewed rows, or correct/skip flagged rows first. Re-running the same source package reuses the event, resources and batch.
+
+Imports stage raw JSON for provenance but commit to relational child registrations, contacts, daily attendance, cards and assignments. A batch is locked during commit. `confirm:true, readyOnly:true` imports clear rows and leaves a PARTIAL batch for unresolved source ambiguities; retrying does not reimport imported rows. Complete imports are idempotent. Core children/families/guardians and Sunday attendance are never edited by this flow. Core people can be linked explicitly; automatic linking requires an exact child-name plus unique normalised guardian-phone match, never name alone. Uncertain matches remain event-specific guests rather than duplicate core people.
+
+The attendance PDF has 76 source rows and printed daily drop-off totals of 62, 64, 61, 65, 65 and 63. Three rows need review: one unclear age and two conflicting rows for the same child. They remain pending, not silently merged. Birth dates and daily session times are absent; no birth dates, live pickup codes or arrival times are fabricated. Food is a whole-event checkbox unless a source explicitly supplies a daily value. Unknown campus strings and missing contacts remain raw/unknown. The outline is planning evidence, not delivered activity evidence: the finale is provisionally associated with the last confirmed day and clearly labelled PLANNED. Only Tribe D (2–4) and Tribe C (5–8) are explicitly named in those historical plans; older group names are not invented. No volunteer roster has yet been supplied.
+
+### Appearance and verification
+
+Super Admins select Default TPK or a Jungle preset, optional supplied HTTPS artwork, an event-local enable flag and a dashboard-period enable flag. Settings offers Default TPK (the default) or Event appearance. The dashboard layer applies only during a published event's local dates, automatically falls back afterward, and never replaces logo artwork or parent check-in styling. The archive may retain its local Jungle appearance without recolouring today's dashboard.
+
+Frontend changes include the Events workspace Curriculum/Reports/Attendance panels, resource/import/day/volunteer forms, event-only dashboard and invitation setup page, sign-in routing/guards, Settings appearance preference and scoped appearance styles. All selects use the existing shared dropdown.
+
+Verification: run `TPK_MYSQL_SMOKE=1 php backend/scripts/test_events_mysql.php` and `TPK_MYSQL_SMOKE=1 php backend/scripts/test_event_accounts_mysql.php` only against the configured development/backend database. They use connection-local temporary event/account tables, not persistent diagnostic people. Run the production Next.js build plus existing session, eligibility, dropdown and simple sign-in regressions. Take a backup before applying schema changes; restoring schema/data from that backup is the rollback strategy, not destructive down-migrations against archive records.
+
 ## Classes, curriculum and assembly video reactions
 
 Apply `database/2026_curriculum_resources.sql` after the existing classroom/assembly migrations. It adds curriculum resources, class descriptions and activity reactions without changing attendance records. Until applied, class browsing still works and the UI disables uploads/reactions that need the new tables.

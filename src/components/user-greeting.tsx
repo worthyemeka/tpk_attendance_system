@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { readTeacherSession } from "@/lib/session";
 
-type Teacher = { firstName: string; title: "Auntie" | "Uncle" };
+type Teacher = { firstName: string; title: "Auntie" | "Uncle" | "" };
 const fallbackTeacher: Teacher = { firstName: "there", title: "Auntie" };
 function timeGreeting(hour: number) { return hour < 12 ? "Morning" : hour < 17 ? "Afternoon" : "Evening"; }
 

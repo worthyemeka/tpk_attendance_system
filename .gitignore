@@ -6,4 +6,6 @@ node_modules
 prisma/*.db
 .vercel
 /backend/storage/assembly-media/
+/backend/storage/event-resources/
+/backend/storage/event-imports/
 /public/vendor/video-trimmer/

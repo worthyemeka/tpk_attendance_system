@@ -107,7 +107,8 @@ async function run() {
   const auth = fs.readFileSync(path.join(root, 'src/components/teacher-auth.tsx'), 'utf8');
   assert.match(auth, /if \(signup\) return;[\s\S]*validateTeacherSession\(\)/);
   assert.match(auth, /session && !cancelled\)[\s\S]*new URLSearchParams\(window.location.search\).get\("next"\)/);
-  assert.match(auth, /window.location.replace\(next && next.startsWith\("\/account\/"\) \? next : "\/account\/overview"\)/);
+  assert.match(auth, /window.location.replace\(session.accessLevel === "EVENT_VOLUNTEER" \? "\/account\/event-volunteer" : next && next.startsWith\("\/account\/"\) \? next : "\/account\/overview"\)/);
+  assert.match(auth, /window.location.replace\(data.teacher.accessLevel === "EVENT_VOLUNTEER" \? "\/account\/event-volunteer" : next && next.startsWith\("\/account\/"\) \? next : "\/account\/overview"\)/);
   console.log('Teacher session checks passed: redirect wiring, 48-hour boundary, clock drift, activity, polling, outages, logout and multiple tabs.');
 }
 run().catch(error => { console.error(error); process.exitCode = 1; });

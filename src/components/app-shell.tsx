@@ -6,6 +6,17 @@ import { Sidebar } from "@/components/sidebar";
 import { AccountGuard } from "@/components/account-guard";
 import { SundayContextProvider } from "@/lib/sunday-context";
 import { usePathname } from "next/navigation";
+import { useEffect,useState } from "react";
+import { readTeacherSession } from "@/lib/session";
+import { DashboardAppearance } from "./dashboard-appearance";
+import { VolunteerNavigation } from "./event-volunteer-dashboard";
+
+function AccountShell({children}:{children:React.ReactNode}){
+  const[volunteer,setVolunteer]=useState<boolean|null>(null);
+  useEffect(()=>setVolunteer(readTeacherSession()?.accessLevel==="EVENT_VOLUNTEER"),[]);
+  if(volunteer===null)return <main className="route-loading"/>;
+  return <><DashboardAppearance/>{volunteer?<main className="volunteer-shell"><VolunteerNavigation/>{children}</main>:<SundayContextProvider><Sidebar/><main className="content"><AdminTopbar/>{children}</main></SundayContextProvider>}</>;
+}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -14,7 +25,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <>
       <PagePreloader />
-      {isAccountPage ? <AccountGuard><SundayContextProvider><Sidebar /><main className="content"><AdminTopbar />{children}</main></SundayContextProvider></AccountGuard> : <main className="parent-shell">{children}</main>}
+      {isAccountPage ? <AccountGuard><AccountShell>{children}</AccountShell></AccountGuard> : <main className="parent-shell">{children}</main>}
       <style jsx global>{`
         .page-preloader { position: fixed; z-index: 10000; inset: 0; display: grid; place-items: center; background: #fffdf9; animation: page-preloader-fade .2s ease .25s forwards; }
         .page-preloader-mark, .route-loading { display: flex; align-items: end; justify-content: center; gap: 6px; min-height: 46px; }
