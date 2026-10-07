@@ -1,0 +1,53 @@
+.event-list-filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(280px, 320px) minmax(185px, 220px);
+  align-items: end;
+  gap: 14px;
+}
+
+.event-list-month {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  position: relative;
+}
+
+.event-list-month > span {
+  color: #7c8aa0;
+  font: 700 12px var(--font-body);
+}
+
+.event-list-month .tpk-month-picker {
+  min-width: 0;
+  width: 100%;
+}
+
+.event-list-month .tpk-month-picker-trigger {
+  font: 700 14px var(--font-body);
+}
+
+.event-list-filters > .app-select,
+.event-list-filters > .event-search {
+  width: 100%;
+  min-width: 0;
+}
+
+.event-clear-month {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #d65334;
+  cursor: pointer;
+  font: 700 12px var(--font-body);
+}
+
+@media (max-width: 940px) {
+  .event-list-filters { grid-template-columns: minmax(0, 1fr) minmax(280px, 320px); }
+  .event-list-filters > .app-select { grid-column: 1 / -1; }
+}
+
+@media (max-width: 640px) {
+  .event-list-filters { grid-template-columns: minmax(0, 1fr); }
+  .event-list-filters > .app-select { grid-column: auto; }
+}
