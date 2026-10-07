@@ -112,3 +112,17 @@ html[data-event-appearance="event"] .content .pickup-register-heading>b{backgrou
 html[data-event-appearance="event"] .content .upcoming-service-list section>span{color:#ffffffc9!important}
 html[data-event-appearance="event"] .content .attention-task em{color:var(--theme-button)!important}
 html[data-event-appearance="event"] .content .team-person>em{background:var(--theme-button)!important;color:var(--theme-button-ink)!important;border-color:var(--theme-button)!important}
+
+/* A search field includes its wrapper, not only the input. Cover the named
+   legacy wrappers and any search label added by a future directory page. */
+html[data-event-appearance="event"] body :is(.content,.volunteer-shell,[role="dialog"]) :is(.guardian-search,.teacher-search,.search-row,label:has(>input[placeholder*="search" i])){background:var(--theme-panel)!important;color:var(--theme-ink)!important;border-color:var(--theme-edge)!important}
+html[data-event-appearance="event"] body :is(.content,.volunteer-shell,[role="dialog"]) :is(.guardian-search,.teacher-search,.search-row,label:has(>input[placeholder*="search" i])) input{background:transparent!important;border:0!important;box-shadow:none!important;min-width:0}
+
+/* Pale icon tiles need dark ink. Icons on dark tiles keep their yellow ink. */
+html[data-event-appearance="event"] body :is(.content,.volunteer-shell,[role="dialog"]) :is(.setting-icon,.card-title>i,.discussion-title-icon,.review-form-intro>i,.discussion-empty>i,.followup-complete-icon,.followup-history-icon,.class-detail-icon){color:#963b0b!important}
+html[data-event-appearance="event"] body :is(.content,.volunteer-shell,[role="dialog"]) :is(.setting-icon,.card-title>i,.discussion-title-icon,.review-form-intro>i,.discussion-empty>i,.followup-complete-icon,.followup-history-icon,.class-detail-icon) svg{color:inherit!important}
+
+/* Links remain text links, even when legacy pages style them as buttons. */
+html[data-event-appearance="event"] body :is(.content,.volunteer-shell,[role="dialog"]) :is(a,.settings-grid button){background:transparent!important;background-image:none!important;color:var(--theme-button)!important;border-color:transparent!important;box-shadow:none!important}
+html[data-event-appearance="event"] body :is(.content,.volunteer-shell,[role="dialog"]) :is(a,.settings-grid button) :is(span,b,strong,small,svg){color:inherit!important}
+html[data-event-appearance="event"] body :is(.content,.volunteer-shell,[role="dialog"]) :is(a,.settings-grid button):is(:hover,:focus-visible,:active){background:transparent!important;background-image:none!important;color:var(--theme-button)!important;box-shadow:none!important}
