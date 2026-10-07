@@ -5,6 +5,7 @@ declare(strict_types=1);
 require dirname(__DIR__).'/config.php';
 require dirname(__DIR__).'/registration-eligibility.php';
 require dirname(__DIR__).'/public/events.php';
+require __DIR__.'/import_vbs_roster.php';
 final class BackfillResponse extends RuntimeException {public function __construct(public array $data){parent::__construct('Response');}}
 function api_ok(array $data,int $status=200):void{throw new BackfillResponse($data);}
 function api_error(string $code,string $message,int $status=400):void{throw new RuntimeException($code.': '.$message);}
@@ -16,7 +17,7 @@ function api_audit(PDO $db,array $actor,string $action,string $entity,int $id,ar
 }
 function api_phone(?string $value):?string{$p=preg_replace('/\D+/','',(string)$value);if(str_starts_with($p,'234')&&strlen($p)===13)$p='0'.substr($p,3);return strlen($p)===11&&str_starts_with($p,'0')?$p:null;}
 function backfill_result(callable $fn):array{try{$fn();}catch(BackfillResponse $r){return $r->data;}throw new RuntimeException('No result');}
-$options=getopt('',['package:','source-dir:','admin-id:','confirm']);
+$options=getopt('',['package:','source-dir:','admin-id:','confirm','import-ready']);
 if(empty($options['package'])||empty($options['source-dir'])||empty($options['admin-id'])){fwrite(STDERR,"Supply --package=private.json --source-dir=original-pdfs --admin-id=N; add --confirm to create the archive preview.\n");exit(1);}
 $package=json_decode(file_get_contents($options['package']),true,512,JSON_THROW_ON_ERROR);
 if(($package['startDate']??'')!=='2026-08-24'||($package['endDate']??'')!=='2026-08-29'||count($package['days']??[])!==6)throw new RuntimeException('Expected the confirmed six VBS dates.');
@@ -25,7 +26,7 @@ if(!array_key_exists('confirm',$options)){echo json_encode(['mode'=>'preview onl
 $db=db();$q=$db->prepare("SELECT id,campus_id,name,access_level FROM staff_users WHERE id=? AND access_level='TPK_SUPER_ADMIN' AND account_status='VERIFIED' AND is_active=1");$q->execute([(int)$options['admin-id']]);$actor=$q->fetch();if(!$actor)throw new RuntimeException('An active Super Admin is required.');
 $campus=$db->query("SELECT id FROM campuses WHERE code='PETRA-WUSE'")->fetchColumn();if((int)$actor['campus_id']!==(int)$campus)throw new RuntimeException('This source package belongs to the Wuse host campus.');
 $q=$db->prepare('SELECT id FROM ministry_events WHERE campus_id=? AND name=? AND starts_on=? AND ends_on=?');$q->execute([$campus,$package['name'],$package['startDate'],$package['endDate']]);$existing=$q->fetchAll();if(count($existing)>1)throw new RuntimeException('Multiple matching archives found; review before retrying.');
-$id=(int)($existing[0]['id']??0);$files=[];$days=[];$createdFiles=[];
+$id=(int)($existing[0]['id']??0);$files=[];$days=[];$createdFiles=[];$rosterResult=null;
 $directory=dirname(__DIR__).'/storage/event-resources';if(!is_dir($directory)&&!mkdir($directory,0750,true)&&!is_dir($directory))throw new RuntimeException('Private storage unavailable.');
 $db->beginTransaction();
 try{
@@ -53,7 +54,12 @@ try{
       ['14:30',null,'Programme Ends','Hard deadline from the planning minutes.']];
     foreach($programme as $i=>[$start,$end,$title,$notes]){$q=$db->prepare('SELECT id FROM event_programme_activities WHERE event_id=? AND day_id=? AND title=?');$q->execute([$id,$days[6],$title]);if(!$q->fetchColumn())$db->prepare('INSERT INTO event_programme_activities(event_id,day_id,title,starts_at,ends_at,notes,sort_order) VALUES(?,?,?,?,?,?,?)')->execute([$id,$days[6],$title,$start,$end,'PLANNED · Source: VBS Outline Plans (Word).pdf, pages 5–6. Finale mapped to the final confirmed VBS day; delivery was not recorded. '.$notes,$i]);}
     $q=$db->prepare('SELECT event_id FROM event_appearances WHERE event_id=?');$q->execute([$id]);if(!$q->fetchColumn())$db->prepare("INSERT INTO event_appearances(event_id,preset,enabled,apply_dashboard,updated_by) VALUES(?,'JUNGLE',1,0,?)")->execute([$id,$actor['id']]);
+    if(!empty($package['volunteerRoster'])){
+        $rosterResult=import_vbs_roster($db,$id,$package['volunteerRoster'],$days,$files[$package['volunteerRoster']['sourceName']]);
+        foreach($package['days'] as $d){$q=$db->prepare('SELECT id FROM event_sessions WHERE event_id=? AND day_id=? AND name=?');$name=$d['label'].' · daily roster (planned)';$q->execute([$id,$days[$d['dayNumber']],$name]);if($q->fetchColumn())continue;$schedule=array_values(array_filter($package['volunteerRoster']['activities'],fn($a)=>$a['dayNumber']===$d['dayNumber']));$starts=min(array_column($schedule,'startsAt'));$ends=max(array_column($schedule,'endsAt'));$db->prepare('INSERT INTO event_sessions(event_id,day_id,name,starts_at,ends_at) VALUES(?,?,?,?,?)')->execute([$id,$days[$d['dayNumber']],$name,$d['date'].' '.$starts,$d['date'].' '.$ends]);}
+    }
     $db->commit();
 }catch(Throwable $error){if($db->inTransaction())$db->rollBack();foreach($createdFiles as $path)if(is_file($path))unlink($path);throw $error;}
 $input=['kind'=>'CHILDREN','sourceName'=>$package['sourceName'],'rows'=>$package['rows']];$preview=backfill_result(fn()=>api_event_import($db,$id));
-echo json_encode(['eventId'=>$id,'batchId'=>$preview['id'],'sourceRows'=>count($package['rows']),'attendanceCommitted'=>false,'note'=>'Review the source rows in Reports before committing. Existing children and Sunday records are unchanged.'])."\n";
+$committed=null;if(array_key_exists('import-ready',$options)){$input=['confirm'=>true,'readyOnly'=>true];$committed=backfill_result(fn()=>api_event_import($db,$id,(int)$preview['id'],'commit'));}
+echo json_encode(['eventId'=>$id,'batchId'=>$preview['id'],'sourceRows'=>count($package['rows']),'attendanceImport'=>$committed,'plannedRoster'=>$rosterResult,'note'=>'Ambiguous rows remain pending. Historical planned roles do not confirm volunteer attendance or grant accounts. Existing children and Sunday records are unchanged.'])."\n";

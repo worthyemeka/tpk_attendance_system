@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS event_historical_attendance (
  PRIMARY KEY(child_id,day_id), FOREIGN KEY(child_id) REFERENCES event_children(id),
  FOREIGN KEY(day_id) REFERENCES event_days(id), FOREIGN KEY(recorded_by) REFERENCES staff_users(id)
 );
+ALTER TABLE event_registration_contacts ADD COLUMN source_text TEXT NULL;
 CREATE TABLE IF NOT EXISTS event_registration_cards (
  child_id INT UNSIGNED NOT NULL, day_id INT UNSIGNED NOT NULL, card_number VARCHAR(50) NOT NULL,
  PRIMARY KEY(child_id,day_id), FOREIGN KEY(child_id) REFERENCES event_children(id), FOREIGN KEY(day_id) REFERENCES event_days(id)
@@ -122,5 +123,42 @@ CREATE TABLE IF NOT EXISTS event_reported_statistics (
  day_id INT UNSIGNED NULL, metric VARCHAR(40) NOT NULL, reported_value INT UNSIGNED NOT NULL,
  source_file_id INT UNSIGNED NOT NULL, source_page SMALLINT UNSIGNED NOT NULL,
  FOREIGN KEY(event_id) REFERENCES ministry_events(id), FOREIGN KEY(day_id) REFERENCES event_days(id),
+ FOREIGN KEY(source_file_id) REFERENCES event_source_files(id)
+);
+-- Historical class/rotation labels have no invented age bands or live routing.
+CREATE TABLE IF NOT EXISTS event_roster_groups (
+ id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, event_id INT UNSIGNED NOT NULL,
+ name VARCHAR(120) NOT NULL, kind VARCHAR(20) NOT NULL,
+ UNIQUE KEY event_roster_group(event_id,name), FOREIGN KEY(event_id) REFERENCES ministry_events(id)
+);
+CREATE TABLE IF NOT EXISTS event_roster_group_members (
+ rotation_id INT UNSIGNED NOT NULL, class_id INT UNSIGNED NOT NULL,
+ PRIMARY KEY(rotation_id,class_id), FOREIGN KEY(rotation_id) REFERENCES event_roster_groups(id),
+ FOREIGN KEY(class_id) REFERENCES event_roster_groups(id)
+);
+CREATE TABLE IF NOT EXISTS event_roster_people (
+ id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, event_id INT UNSIGNED NOT NULL,
+ source_name VARCHAR(180) NOT NULL, source_key CHAR(64) NOT NULL,
+ staff_user_id INT UNSIGNED NULL, review_required BOOLEAN NOT NULL DEFAULT FALSE,
+ UNIQUE KEY roster_person(event_id,source_key), FOREIGN KEY(event_id) REFERENCES ministry_events(id),
+ FOREIGN KEY(staff_user_id) REFERENCES staff_users(id)
+);
+ALTER TABLE event_programme_activities ADD COLUMN source_key VARCHAR(180) NULL;
+ALTER TABLE event_programme_activities ADD COLUMN source_file_id INT UNSIGNED NULL;
+ALTER TABLE event_programme_activities ADD COLUMN source_page SMALLINT UNSIGNED NULL;
+ALTER TABLE event_programme_activities ADD COLUMN roster_group_id INT UNSIGNED NULL;
+ALTER TABLE event_programme_activities ADD COLUMN responsible_raw TEXT NULL;
+ALTER TABLE event_programme_activities ADD CONSTRAINT event_programme_source_key UNIQUE(event_id,source_key);
+ALTER TABLE event_programme_activities ADD CONSTRAINT event_programme_source_fk FOREIGN KEY(source_file_id) REFERENCES event_source_files(id);
+ALTER TABLE event_programme_activities ADD CONSTRAINT event_programme_roster_group_fk FOREIGN KEY(roster_group_id) REFERENCES event_roster_groups(id);
+CREATE TABLE IF NOT EXISTS event_roster_assignments (
+ id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, event_id INT UNSIGNED NOT NULL,
+ person_id INT UNSIGNED NOT NULL, day_id INT UNSIGNED NOT NULL,
+ activity_id INT UNSIGNED NULL, roster_group_id INT UNSIGNED NULL,
+ responsibility VARCHAR(180) NOT NULL, call_time TIME NULL,
+ source_file_id INT UNSIGNED NOT NULL, source_page SMALLINT UNSIGNED NOT NULL,
+ INDEX roster_day(event_id,day_id), FOREIGN KEY(event_id) REFERENCES ministry_events(id),
+ FOREIGN KEY(person_id) REFERENCES event_roster_people(id), FOREIGN KEY(day_id) REFERENCES event_days(id),
+ FOREIGN KEY(activity_id) REFERENCES event_programme_activities(id), FOREIGN KEY(roster_group_id) REFERENCES event_roster_groups(id),
  FOREIGN KEY(source_file_id) REFERENCES event_source_files(id)
 );

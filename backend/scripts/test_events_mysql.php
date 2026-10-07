@@ -7,6 +7,7 @@ require $configRoot.'/config.php';
 require __DIR__.'/../registration-eligibility.php';
 require __DIR__.'/../public/events.php';
 require __DIR__.'/../public/assembly-context.php';
+require __DIR__.'/import_vbs_roster.php';
 class EventResult extends RuntimeException {public function __construct(public array $data){parent::__construct('Result');}}
 class EventError extends RuntimeException {public function __construct(public string $apiCode){parent::__construct($apiCode);}}
 function api_ok(array $data,int $status=200):void {throw new EventResult($data);}
@@ -80,14 +81,14 @@ try{
  $history=result(fn()=>api_event_save($db))['id'];check(result(fn()=>api_events($db,$history))['event']['lifecycle']==='ARCHIVED','Past events publish and remain readable');
  $input=['dayNumber'=>1,'label'=>'Monday','date'=>'2026-08-24'];$day=result(fn()=>api_event_day($db,$history))['id'];
  $input['date']='2026-08-30';reject(fn()=>api_event_day($db,$history),'VALIDATION_ERROR');
- $row=['sourceKey'=>'diagnostic-source-1','name'=>'Diagnostic historical child','age'=>4,'gender'=>'FEMALE','homeCampusId'=>$owner['campus_id'],'guardianPhone'=>null,'contacts'=>[['type'=>'DOCTOR','name'=>'Historical doctor','phone'=>null]],'food'=>true,'days'=>[['dayNumber'=>1,'present'=>true,'pickedUp'=>null,'cardNumber'=>'48']]];
+ $row=['sourceKey'=>'diagnostic-source-1','name'=>'Diagnostic historical child','age'=>4,'gender'=>'FEMALE','homeCampusId'=>$owner['campus_id'],'guardianPhone'=>null,'contacts'=>[['type'=>'DOCTOR','name'=>'Historical doctor','phone'=>null,'sourceText'=>'Unseparated source clinic entry']], 'food'=>true,'days'=>[['dayNumber'=>1,'present'=>true,'pickedUp'=>null,'cardNumber'=>'48']]];
  $input=['kind'=>'CHILDREN','sourceName'=>'Private diagnostic','rows'=>[$row]];$batch=result(fn()=>api_event_import($db,$history))['id'];
  check((int)$db->query('SELECT COUNT(*) FROM event_children WHERE event_id='.$history)->fetchColumn()===0,'Preview makes no registrations');
  check(result(fn()=>api_event_import($db,$history))['duplicate'],'Repeated preview idempotent');
  $input=['confirm'=>false];reject(fn()=>api_event_import($db,$history,$batch,'commit'),'CONFIRMATION_REQUIRED');
  $input=['confirm'=>true];check(result(fn()=>api_event_import($db,$history,$batch,'commit'))['imported']===1,'Reviewed source commits');
  check(result(fn()=>api_event_import($db,$history,$batch,'commit'))['alreadyCommitted'],'Commit idempotent');
- $view=result(fn()=>api_events($db,$history));check($view['children'][0]['dateOfBirth']===null,'Missing DOB is not fabricated');check((int)$view['children'][0]['reportedAge']===4,'Reported age preserved');check(count($view['contacts'])===1&&count($view['cards'])===1,'Doctor and daily card relational records');check($view['historicalAttendance'][0]['pickedUp']===null,'Unknown pickup remains null');check($view['historicalAttendance'][0]['food']===null,'Whole-event food is not copied onto every day');
+ $view=result(fn()=>api_events($db,$history));check($view['children'][0]['dateOfBirth']===null,'Missing DOB is not fabricated');check((int)$view['children'][0]['reportedAge']===4,'Reported age preserved');check(count($view['contacts'])===1&&count($view['cards'])===1,'Doctor and daily card relational records');check($view['contacts'][0]['sourceText']==='Unseparated source clinic entry'&&$view['contacts'][0]['phone']===null,'Merged source contact text preserved without inventing a phone');check($view['historicalAttendance'][0]['pickedUp']===null,'Unknown pickup remains null');check($view['historicalAttendance'][0]['food']===null,'Whole-event food is not copied onto every day');
  $bad=$row;$bad['sourceKey']='needs-review';$bad['requiresReview']=true;$input=['rows'=>[$bad]];$review=result(fn()=>api_event_import($db,$history))['id'];$input=['confirm'=>true];reject(fn()=>api_event_import($db,$history,$review,'commit'),'IMPORT_REVIEW_REQUIRED');
  $method='GET';$preview=result(fn()=>api_event_import($db,$history,$review));$method='PATCH';$input=['rowId'=>$preview['rows'][0]['id'],'payload'=>$bad,'skip'=>true];result(fn()=>api_event_import($db,$history,$review,'row'));$method='POST';$input=['confirm'=>true];check(result(fn()=>api_event_import($db,$history,$review,'commit'))['imported']===0,'Explicit skip does not fabricate facts');
  $clear=$row;$clear['sourceKey']='partial-clear';$pending=$row;$pending['sourceKey']='partial-pending';$pending['requiresReview']=true;
@@ -100,6 +101,18 @@ try{
  $input=['preset'=>'JUNGLE','enabled'=>true,'applyDashboard'=>true];result(fn()=>api_event_appearance($db,$id));$method='GET';check(result(fn()=>api_staff_appearance($db))['active']===null,'Default appearance fallback');
  $method='PATCH';$input=['preference'=>'EVENT'];check(result(fn()=>api_staff_appearance($db))['active']['preset']==='JUNGLE','Live event appearance preference');$method='POST';
  $input=['childId'=>$view['children'][0]['id']??0,'sessionId'=>$sid];reject(fn()=>api_event_arrival($db,$history),'EVENT_CLOSED');
+ $roster=['classes'=>['Archive class'],'rotations'=>['Rotation'=>['Archive class']],'sourceName'=>'Diagnostic.pdf','warning'=>'Planned, not delivered','leads'=>[['dayNumber'=>1,'name'=>'Source Lead','sourcePage'=>1]],'activities'=>[['sourceKey'=>'roster-a1','dayNumber'=>1,'sourcePage'=>1,'title'=>'Diagnostic lesson','startsAt'=>'09:20','endsAt'=>'09:50','group'=>'Archive class','rawPeople'=>'Source Teacher / Ambiguous Block','people'=>[['name'=>'Source Teacher','role'=>'Lesson'],['name'=>'Ambiguous Block','role'=>'Lesson','requiresReview'=>true]]]]];
+ $dayId=(int)$db->query('SELECT id FROM event_days WHERE event_id='.$history)->fetchColumn();$fileId=(int)$db->query('SELECT id FROM event_source_files WHERE event_id='.$history)->fetchColumn();
+ if(!$fileId){$db->prepare("INSERT INTO event_source_files(event_id,original_name,stored_name,mime_type,byte_size,sha256,uploaded_by) VALUES(?,'Diagnostic.pdf','diagnostic.pdf','application/pdf',1,?,?)")->execute([$history,str_repeat('a',64),$owner['id']]);$fileId=(int)$db->lastInsertId();}
+ $first=import_vbs_roster($db,$history,$roster,[1=>$dayId],$fileId);check($first['activitiesAdded']===1&&$first['sourceIdentities']===3,'Name-only historical roster is relational');
+ check(import_vbs_roster($db,$history,$roster,[1=>$dayId],$fileId)['activitiesAdded']===0,'Roster retry is idempotent');
+ $rosterView=result(fn()=>api_events($db,$history));check(count($rosterView['historicalRoster'])===3&&count($rosterView['rosterGroups'])===2,'Roster archive retains lead, class and rotation');
+ check(count(array_filter($rosterView['rosterPeople'],fn($p)=>$p['staffId']!==null))===0,'First names do not auto-link staff or grant access');
+ $sourcePerson=array_values(array_filter($rosterView['rosterPeople'],fn($p)=>$p['name']==='Source Teacher'))[0];$input=['staffId'=>$owner['id']];result(fn()=>api_event_roster_identity($db,$history,(int)$sourcePerson['id']));
+ check(!event_member($db,$owner,$history),'Archive identity linking does not grant membership');
+ $ambiguous=array_values(array_filter($rosterView['rosterPeople'],fn($p)=>$p['reviewRequired']))[0];reject(fn()=>api_event_roster_identity($db,$history,(int)$ambiguous['id']),'IDENTITY_REVIEW_REQUIRED');
+ $input=['staffId'=>99999999];reject(fn()=>api_event_roster_identity($db,$history,(int)$sourcePerson['id']),'VALIDATION_ERROR');
+ $actor['access_level']='TPK_TEACHER';reject(fn()=>api_event_roster_identity($db,$history,(int)$sourcePerson['id']),'FORBIDDEN');$actor=$owner;
  check($db->query('SELECT (SELECT COUNT(*) FROM children)+(SELECT COUNT(*) FROM families)+(SELECT COUNT(*) FROM attendance)')->fetchColumn()===$peopleBefore,'Permanent ministry records changed');
  echo "PASS: $checks MySQL event, privacy, registration, group, pickup, duplication and assembly-history checks.\n";
 }finally{if($db->inTransaction())$db->rollBack();foreach(array_reverse($temporary)as$table)$db->exec('DROP TEMPORARY TABLE `'.$table.'`');}

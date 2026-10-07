@@ -15,9 +15,10 @@ function expect(bool $value,string $label):void{if(!$value)throw new RuntimeExce
 $db=db();$tables=[];$checks=0;$campus=(int)$db->query('SELECT id FROM campuses ORDER BY id LIMIT 1')->fetchColumn();
 $actor=['id'=>1,'campus_id'=>$campus,'access_level'=>'TPK_SUPER_ADMIN'];
 try{
- foreach(['staff_users','teacher_profiles','staff_sessions'] as $table){$db->exec("CREATE TEMPORARY TABLE $table LIKE $table");$tables[]=$table;}
+ foreach(['staff_users','teacher_profiles','staff_sessions'] as $table){$ddl=$db->query('SHOW CREATE TABLE `'.$table.'`')->fetch(PDO::FETCH_NUM)[1];$ddl=str_replace('CREATE TABLE','CREATE TEMPORARY TABLE',$ddl);$ddl=preg_replace('/^\s*CONSTRAINT[^\n]*\n/m','',$ddl);$ddl=preg_replace('/,\s*\)/',')',$ddl);$db->exec($ddl);$tables[]=$table;}
  $db->exec("ALTER TABLE staff_users MODIFY access_level VARCHAR(40) NOT NULL");
  $db->exec("ALTER TABLE teacher_profiles MODIFY gender ENUM('FEMALE','MALE') NULL");
+ $db->exec("ALTER TABLE teacher_profiles MODIFY birth_date DATE NULL");
  $db->prepare("INSERT INTO staff_users(id,campus_id,name,email,role,access_level,account_status,is_active) VALUES(1,?,'Diagnostic admin','admin@example.test','ADMIN','TPK_SUPER_ADMIN','VERIFIED',1)")->execute([$campus]);
  foreach(['2026_events.sql','2026_event_history.sql'] as $file){
   $sql=preg_replace('/^\s*--[^\n]*(?:\n|$)/m','',file_get_contents(dirname(__DIR__).'/database/'.$file));
