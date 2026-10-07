@@ -15,7 +15,7 @@ export function paletteFromPixels(pixels:ArrayLike<number>):EventPalette{
  const green=colours.find(c=>{const[r,g,b]=rgb(c);return g>r*.9&&g>b*1.25;});const primary=darken(green||colours[0]);
  const accent=colours.find(c=>{const[r,g,b]=rgb(c);return r>130&&g>75&&b<g*.75;})||colours.find(c=>contrast(c,primary)>2)||colours[0];
  const secondary=darken([...colours].sort((a,b)=>luminance(a)-luminance(b))[0]);
- return {primary,secondary,accent,surface:hex(rgb(accent).map(v=>v*.06+255*.94)),text:darken(primary),onPrimary:"#ffffff",onAccent:contrast(accent,"#171c11")>=4.5?"#171c11":"#ffffff"};
+ return {primary,secondary,accent,surface:hex(rgb(accent).map(v=>v*.06+255*.94)),text:darken(primary),onPrimary:"#ffffff",onAccent:contrast(accent,"#ffffff")>=4.5?"#ffffff":"#000000"};
 }
 export async function scanEventImage(file:File):Promise<EventPalette>{
  if(!["image/png","image/jpeg","image/webp"].includes(file.type)||file.size>25*1024*1024)throw Error("Choose a PNG, JPG or WebP image up to 25 MB.");

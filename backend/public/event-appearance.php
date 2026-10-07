@@ -7,6 +7,7 @@ function event_palette($value):array{
  if(!is_array($value))api_error('VALIDATION_ERROR','Upload an image to generate a valid colour palette.',422);$result=[];
  foreach(array_keys(event_default_palette()) as $key){$c=$value[$key]??'';if(!is_string($c)||!preg_match('/^#[a-f0-9]{6}$/i',$c))api_error('VALIDATION_ERROR','Use valid six-digit theme colours.',422);$result[$key]=strtolower($c);}
  foreach([['primary','onPrimary'],['accent','onAccent'],['surface','text']] as [$bg,$fg])if(event_colour_contrast($result[$bg],$result[$fg])<4.5)api_error('VALIDATION_ERROR','The generated theme needs readable text contrast. Choose another image or use the Jungle preset.',422);
+ if(event_colour_contrast($result['secondary'],'#ffffff')<4.5)api_error('VALIDATION_ERROR','The sidebar colour needs readable white text.',422);
  return $result;
 }
 function event_appearance_value(array $row):array{$row['palette']=$row['palette_json']?json_decode($row['palette_json'],true):($row['preset']==='JUNGLE'?event_default_palette():null);unset($row['palette_json']);return $row;}

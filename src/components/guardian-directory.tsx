@@ -514,11 +514,11 @@ function Drawer({
               }
             />
             <Info label="Email" value={guardian.email || "Not recorded"} />
-            <Info
+            {readTeacherSession()?.accessLevel==="TPK_SUPER_ADMIN"&&<Info
               icon={<FiMapPin />}
               label="Address"
               value={guardian.homeAddress || "Not recorded"}
-            />
+            />}
             </div>
             </article>
             <article className="guardian-profile-group">

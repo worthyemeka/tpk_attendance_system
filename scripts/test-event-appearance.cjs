@@ -1,0 +1,10 @@
+const fs=require('node:fs'),assert=require('node:assert/strict'),ts=require('typescript');
+require.extensions['.ts']=(module,file)=>module._compile(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,file);
+const{paletteFromPixels,contrast,junglePalette,paletteStyle}=require('../src/lib/event-palette.ts');
+const pixels=[];for(let i=0;i<120;i++)pixels.push(85,110,28,255);for(let i=0;i<80;i++)pixels.push(235,179,35,255);for(let i=0;i<40;i++)pixels.push(54,33,16,255);for(let i=0;i<100;i++)pixels.push(255,255,255,0);
+const palette=paletteFromPixels(pixels);
+for(const p of[palette,junglePalette]){for(const c of Object.values(p))assert.match(c,/^#[a-f0-9]{6}$/i);assert.ok(contrast(p.primary,p.onPrimary)>=4.5);assert.ok(contrast(p.accent,p.onAccent)>=4.5);assert.ok(contrast(p.surface,p.text)>=4.5);assert.ok(contrast(p.secondary,'#ffffff')>=4.5);}
+assert.deepEqual(paletteFromPixels(pixels),palette);assert.throws(()=>paletteFromPixels([255,255,255,0,128,128,128,255]));assert.equal(paletteStyle(palette)['--event-on-primary'],'#ffffff');
+for(let r=0;r<256;r+=17)for(let g=0;g<256;g+=17)for(let b=0;b<256;b+=17){if(Math.max(r,g,b)-Math.min(r,g,b)<22||Math.max(r,g,b)<35)continue;const p=paletteFromPixels([r,g,b,255]);assert.ok(contrast(p.accent,p.onAccent)>=4.5,JSON.stringify(p));}
+const workspace=fs.readFileSync('src/components/events-workspace.tsx','utf8');assert.ok(workspace.includes('loadEventReportBranding(data.event.type)'));assert.ok(workspace.includes('Total campuses registered'));assert.ok(!workspace.includes('Source contacts'));assert.ok(fs.readFileSync('src/components/event-child-register.tsx','utf8').includes('loadEventReportBranding(eventType)'));assert.ok(fs.readFileSync('src/components/event-historical-roster.tsx','utf8').includes('loadEventReportBranding(eventType)'));assert.ok(fs.readFileSync('src/components/records-system.css','utf8').includes('.records-table,.event-table,'));
+console.log('PASS: accessible extracted palettes, transparency exclusion, event PDF branding and shared table styles.');

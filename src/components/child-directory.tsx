@@ -29,6 +29,8 @@ import { ChildrenGrid, ChildrenList } from "@/components/children-records";
 import "./child-directory-refinement.css";
 import { ClassBadge, GenderBadge, RecordBadge } from "./record-badge";
 
+import { TeacherChildDirectory } from "./teacher-child-directory";
+
 type Session = ReturnType<typeof readTeacherSession>;
 type Child = {
   id: number;
@@ -180,7 +182,13 @@ function openChildrenAttendanceReport(report: AttendanceReport, target?: Window 
   return true;
 }
 
-export function ChildDirectory({needsClassAssignment=false}: {needsClassAssignment?:boolean}={}) {
+export function ChildDirectory(props: {needsClassAssignment?:boolean}={}) {
+  const [session,setSession]=useState<Session>(null);const[ready,setReady]=useState(false);
+  useEffect(()=>{setSession(readTeacherSession());setReady(true);},[]);
+  if(!ready)return <p role="status">Loading children…</p>;
+  return session?.accessLevel==="TPK_ADMIN"?<TeacherChildDirectory/>:<FullChildDirectory {...props}/>;
+}
+function FullChildDirectory({needsClassAssignment=false}: {needsClassAssignment?:boolean}={}) {
   const session = useMemo<Session>(() => readTeacherSession(), []);
   const searchParams = useSearchParams();
   const openedChildId = useRef<number | null>(null);
@@ -589,7 +597,12 @@ export function ChildDirectory({needsClassAssignment=false}: {needsClassAssignme
 }
 
 /** Mount the same child card without navigating away from its source page. */
-export function ChildProfileDialog({childId,close,onUpdated,initialMonth}: {childId:number;close:()=>void;onUpdated?:()=>void;initialMonth?:string}) {
+export function ChildProfileDialog(props: {childId:number;close:()=>void;onUpdated?:()=>void;initialMonth?:string}) {
+  const[session,setSession]=useState<Session>(null);const[ready,setReady]=useState(false);useEffect(()=>{setSession(readTeacherSession());setReady(true);},[]);
+  if(!ready)return <p role="status">Loading child…</p>;
+  return session?.accessLevel==="TPK_ADMIN"?<TeacherChildDirectory childId={props.childId} close={props.close}/>:<FullChildProfileDialog {...props}/>;
+}
+function FullChildProfileDialog({childId,close,onUpdated,initialMonth}: {childId:number;close:()=>void;onUpdated?:()=>void;initialMonth?:string}) {
   const session=useMemo(()=>readTeacherSession(),[]);
   const [child,setChild]=useState<Detail|null>(null);
   const [tab,setTab]=useState<"overview"|"guardians"|"care"|"attendance"|"followup">("overview");

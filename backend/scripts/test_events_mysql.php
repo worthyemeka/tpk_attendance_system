@@ -56,7 +56,7 @@ try{
  check((int)$db->query('SELECT COUNT(*) FROM event_registrations')->fetchColumn()===1,'Duplicate rollback');
  $original=$input;$input['children'][0]['name']='Young diagnostic';$input['children'][0]['dateOfBirth']=$today;reject(fn()=>api_public_event($db,$key,true),'CHILD_TOO_YOUNG');$input=$original;
  $public=result(fn()=>api_public_event($db,$key));check(!isset($public['children'])&&!isset($public['attendance']),'Public metadata excludes personal records');
- $actor['access_level']='TPK_TEACHER';$view=result(fn()=>api_events($db,$id));check(!$view['canOperate']&&$view['children']===[]&&$view['attendance']===[],'Ordinary staff personal-data restrictions');
+ $actor['access_level']='TPK_TEACHER';$view=result(fn()=>api_events($db,$id));check(!$view['canOperate']&&count($view['children'])===1&&array_keys($view['children'][0])===['id','name','homeCampusId','homeCampus','guardianName']&&$view['attendance']===[],'Ordinary staff receive only safe child fields');
  reject(fn()=>api_event_save($db),'FORBIDDEN');$input=['childId'=>$cid,'sessionId'=>$sid];reject(fn()=>api_event_arrival($db,$id),'FORBIDDEN');
  $actor=$owner;$input=['userId'=>$actor['id'],'duty'=>'TEACHER'];result(fn()=>api_event_setup($db,$id,'volunteers'));$actor['access_level']='TPK_TEACHER';check(!event_operator($db,$actor,$id),'Teaching duty cannot release children');$actor=$owner;
  $input=['userId'=>$actor['id'],'duty'=>'CHECK_IN'];result(fn()=>api_event_setup($db,$id,'volunteers'));$actor['access_level']='TPK_TEACHER';check(event_operator($db,$actor,$id,'CHECK_IN')&&!event_operator($db,$actor,$id,'PICKUP'),'Duty-specific operator restrictions');$actor=$owner;
@@ -97,7 +97,7 @@ try{
  check(result(fn()=>api_event_import($db,$history,$partial,'commit'))['imported']===0,'Repeated partial import is idempotent');
  $method='GET';$partialRows=result(fn()=>api_event_import($db,$history,$partial))['rows'];$method='PATCH';$input=['rowId'=>$partialRows[0]['id'],'payload'=>$clear,'skip'=>true];reject(fn()=>api_event_import($db,$history,$partial,'row'),'IMPORT_ROW_COMMITTED');if($db->inTransaction())$db->rollBack();$method='POST';
  check(event_volunteer_api_allowed('/api/v1/events','GET'),'Volunteer event list allowed');check(!event_volunteer_api_allowed('/api/v1/children','GET'),'Volunteer directory blocked');check(!event_volunteer_api_allowed('/api/v1/events/1','PATCH'),'Volunteer administration blocked');check(!event_volunteer_api_allowed('/api/v1/events/1/imports','POST'),'Volunteer import blocked');
- $actor=$owner;$actor['access_level']='EVENT_VOLUNTEER';$view=result(fn()=>api_events($db,$id));check(!$view['canOperate']&&!$view['canPickUp']&&$view['children']===[]&&$view['attendance']===[]&&$view['staff']===[],'Event-only response strips operations and people');reject(fn()=>api_events($db,$history),'EVENT_NOT_FOUND');$actor=$owner;
+ $actor=$owner;$actor['access_level']='EVENT_VOLUNTEER';$view=result(fn()=>api_events($db,$id));check(!$view['canOperate']&&!$view['canPickUp']&&count($view['children'])===1&&array_keys($view['children'][0])===['id','name','homeCampusId','homeCampus','guardianName']&&$view['attendance']===[]&&$view['staff']===[],'Event-only response strips private child fields and operations');reject(fn()=>api_events($db,$history),'EVENT_NOT_FOUND');$actor=$owner;
  $input=['preset'=>'JUNGLE','enabled'=>true,'applyDashboard'=>true];result(fn()=>api_event_appearance($db,$id));$method='GET';check(result(fn()=>api_staff_appearance($db))['active']===null,'Default appearance fallback');
  $method='PATCH';$input=['preference'=>'EVENT'];check(result(fn()=>api_staff_appearance($db))['active']['preset']==='JUNGLE','Live event appearance preference');$method='POST';
  $input=['childId'=>$view['children'][0]['id']??0,'sessionId'=>$sid];reject(fn()=>api_event_arrival($db,$history),'EVENT_CLOSED');
@@ -113,6 +113,22 @@ try{
  $ambiguous=array_values(array_filter($rosterView['rosterPeople'],fn($p)=>$p['reviewRequired']))[0];reject(fn()=>api_event_roster_identity($db,$history,(int)$ambiguous['id']),'IDENTITY_REVIEW_REQUIRED');
  $input=['staffId'=>99999999];reject(fn()=>api_event_roster_identity($db,$history,(int)$sourcePerson['id']),'VALIDATION_ERROR');
  $actor['access_level']='TPK_TEACHER';reject(fn()=>api_event_roster_identity($db,$history,(int)$sourcePerson['id']),'FORBIDDEN');$actor=$owner;
+
+ check(event_summary($db,$history)['volunteers']===3,'Source roster names included without inventing accounts');
+ $db->prepare("INSERT INTO event_volunteers(event_id,staff_user_id,duty) VALUES(?,?,'TEACHER')")->execute([$history,$owner['id']]);
+ check(event_summary($db,$history)['volunteers']===3,'Linked volunteer account not double counted');
+ check(event_summary($db,$history)['registeredCampuses']===1,'Campuses calculated from child registration campus IDs');
+ $input=['preset'=>'CUSTOM','enabled'=>true,'applyDashboard'=>true,'preserveAfter'=>true,'palette'=>event_default_palette()];result(fn()=>api_event_appearance($db,$history));
+ $method='GET';$themes=result(fn()=>api_staff_appearance($db));check(count($themes['available'])===2,'Preserved archive offered as optional appearance');check($themes['active']['eventId']===$id,'Archived event never automatically replaces live dashboard');
+ $method='PATCH';$input=['preference'=>'EVENT','selectedEventId'=>$history];check(result(fn()=>api_staff_appearance($db))['active']['eventId']===$history,'Explicit preserved archive preference applies');
+ $input=['preference'=>'DEFAULT'];check(result(fn()=>api_staff_appearance($db))['active']===null,'Default restores normal appearance');
+ $input=['preference'=>'EVENT','selectedEventId'=>999999];reject(fn()=>api_staff_appearance($db),'FORBIDDEN');$method='POST';
+ $input=['preset'=>'CUSTOM','enabled'=>true,'palette'=>array_merge(event_default_palette(),['primary'=>'url(javascript:test)'])];reject(fn()=>api_event_appearance($db,$history),'VALIDATION_ERROR');
+ $input['palette']=array_merge(event_default_palette(),['primary'=>'#ffffff']);reject(fn()=>api_event_appearance($db,$history),'VALIDATION_ERROR');
+ $input=['preset'=>'JUNGLE','enabled'=>true,'artworkFileId'=>$fileId];reject(fn()=>api_event_appearance($db,$history),'VALIDATION_ERROR');
+ $actor=$owner;$actor['access_level']='EVENT_VOLUNTEER';$method='PATCH';$input=['preference'=>'EVENT','selectedEventId'=>$history];check(result(fn()=>api_staff_appearance($db))['active']['eventId']===$history,'Assigned volunteer can choose only assigned event appearance');
+ $input=['preference'=>'EVENT','selectedEventId'=>$copy];reject(fn()=>api_staff_appearance($db),'FORBIDDEN');$actor=$owner;$method='POST';
+ $actor['access_level']='TPK_TEACHER';$safe=result(fn()=>api_events($db,$history));check(count($safe['children'])===2&&$safe['contacts']===[]&&$safe['cards']===[],'Teachers can see archived child names without private source data');foreach($safe['children'] as $child)check(array_keys($child)===['id','name','homeCampusId','homeCampus','guardianName'],'Only allowlisted child directory fields');$actor=$owner;
  check($db->query('SELECT (SELECT COUNT(*) FROM children)+(SELECT COUNT(*) FROM families)+(SELECT COUNT(*) FROM attendance)')->fetchColumn()===$peopleBefore,'Permanent ministry records changed');
  echo "PASS: $checks MySQL event, privacy, registration, group, pickup, duplication and assembly-history checks.\n";
 }finally{if($db->inTransaction())$db->rollBack();foreach(array_reverse($temporary)as$table)$db->exec('DROP TEMPORARY TABLE `'.$table.'`');}

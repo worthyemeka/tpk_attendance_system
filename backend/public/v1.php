@@ -15,6 +15,7 @@ require_once __DIR__ . '/admin-registration.php';
 require_once __DIR__ . '/curriculum.php';
 require_once __DIR__ . '/teacher-attendance.php';
 require_once __DIR__ . '/events.php';
+require_once __DIR__ . '/people-privacy.php';
 
 function api_ok(mixed $data, int $status = 200, ?array $meta = null): never {
     http_response_code($status); header('Content-Type: application/json; charset=utf-8');
@@ -23,6 +24,7 @@ function api_ok(mixed $data, int $status = 200, ?array $meta = null): never {
     header('Access-Control-Allow-Origin: ' . tpk_cors_origin()); header('Vary: Origin');
     header('Access-Control-Allow-Headers: Content-Type, Authorization, X-TPK-User-Id');
     header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    if(isset($GLOBALS['tpk_response_actor'])&&$GLOBALS['tpk_response_actor']['access_level']!=='TPK_SUPER_ADMIN')$data=api_without_household_addresses($data);
     $payload = ['success' => true, 'data' => $data]; if ($meta) $payload['meta'] = $meta;
     echo json_encode($payload, JSON_UNESCAPED_SLASHES); exit;
 }
@@ -64,6 +66,7 @@ function api_actor(PDO $db, bool $super = false): array {
        request after Sunday’s 2:00 PM cutoff, queue the idempotent absence tasks
        so Follow-Up Leads see them without needing a manual “close service” step. */
     if($user['access_level']!=='EVENT_VOLUNTEER')try { api_queue_post_cutoff_followups($db, (int)$user['campus_id']); } catch (Throwable $e) { error_log('[TPK absence follow-up queue] ' . $e->getMessage()); }
+    $GLOBALS['tpk_response_actor']=$user;
     return $user;
 }
 function api_is_followup_lead(array $actor): bool {
@@ -241,7 +244,7 @@ function api_create_classroom_note(PDO $db,int $classId): never {$actor=api_acto
 function api_create_classroom_weekly_review(PDO $db,int $classId): never {$actor=api_actor($db);if(!api_table_exists($db,'classroom_weekly_reviews'))api_error('FEATURE_UNAVAILABLE','Weekly review storage is not ready yet.',503);$class=api_classroom_allowed($db,$actor,$classId,true);$v=api_input();$sessionId=(int)($v['serviceSessionId']??0);if(!$sessionId)api_error('VALIDATION_ERROR','Choose the Sunday this review is for.',422);$service=$db->prepare("SELECT id FROM service_sessions WHERE id=? AND campus_id=? AND service_type IS NOT NULL");$service->execute([$sessionId,(int)$actor['campus_id']]);if(!$service->fetch())api_error('SERVICE_SESSION_NOT_FOUND','That Sunday service is not available.',404);if(!api_review_allowed($db,$actor,$classId,$sessionId))api_error('FORBIDDEN','Only the assigned class team or service leadership can add this Sunday’s review.',403);$worked=trim((string)($v['workedWell']??''));$improve=trim((string)($v['needsImprovement']??''));if($worked===''&&$improve==='')api_error('VALIDATION_ERROR','Add what worked or what needs improvement.',422);$s=$db->prepare('INSERT INTO classroom_weekly_reviews(campus_id,class_id,service_session_id,worked_well,needs_improvement,created_by_staff_user_id) VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE worked_well=VALUES(worked_well),needs_improvement=VALUES(needs_improvement),updated_at=CURRENT_TIMESTAMP');$s->execute([(int)$class['campusId'],$classId,$sessionId,$worked?:null,$improve?:null,(int)$actor['id']]);api_audit($db,$actor,'CLASSROOM_WEEKLY_REVIEW_SAVED','Classroom',$classId,['serviceSessionId'=>$sessionId]);api_ok(['saved'=>true]);}
 function api_create_class(PDO $db): never { $actor=api_actor($db,true);$v=api_input();foreach(['campusId','name','ageLabel'] as $key)if(empty($v[$key]))api_error('VALIDATION_ERROR',"$key is required.",422);$s=$db->prepare('INSERT INTO classes(campus_id,name,age_label,min_age,max_age,display_order) VALUES(?,?,?,?,?,?)');$s->execute([(int)$v['campusId'],$v['name'],$v['ageLabel'],$v['minAge']??null,$v['maxAge']??null,$v['displayOrder']??999]);$id=(int)$db->lastInsertId();api_audit($db,$actor,'CLASS_CREATED','Class',$id);api_ok(['id'=>$id],201); }
 function api_list_children(PDO $db): never {
-    $actor=api_actor($db);[$page,$limit,$offset]=api_page();$where=[];$params=[];$allowed=null;$currentSunday=api_latest_completed_sunday($db,(int)$actor['campus_id']);
+    $actor=api_actor($db);if(api_basic_teacher($actor)&&api_path()==='/api/v1/children'){$safe=api_safe_children($db,$actor);api_ok($safe['rows'],200,$safe['meta']);}[$page,$limit,$offset]=api_page();$where=[];$params=[];$allowed=null;$currentSunday=api_latest_completed_sunday($db,(int)$actor['campus_id']);
     if($allowed!==null){if(!$allowed)api_ok([],200,['page'=>$page,'limit'=>$limit,'total'=>0,'totalPages'=>1]);$where[]='c.class_id IN ('.implode(',',array_fill(0,count($allowed),'?')).')';$params=array_merge($params,$allowed);}
     if(($q=trim((string)($_GET['search']??'')))!==''){$where[]='(c.first_name LIKE ? OR c.last_name LIKE ? OR EXISTS (SELECT 1 FROM child_guardians search_cg JOIN guardians search_g ON search_g.id=search_cg.guardian_id WHERE search_cg.child_id=c.id AND (search_g.first_name LIKE ? OR search_g.last_name LIKE ? OR search_g.phone LIKE ?)))';$params=array_merge($params,["%$q%","%$q%","%$q%","%$q%","%$q%"]);}
     $where[]='f.campus_id=?';$params[]=$actor['campus_id'];
@@ -274,6 +277,7 @@ function api_list_children(PDO $db): never {
 function api_child(PDO $db,int $id): never {
     $actor=api_actor($db,api_method()==='PATCH');$child=api_child_allowed($db,$actor,$id,api_method()==='GET');
     if(api_method()==='GET'){
+        if(api_basic_teacher($actor)){$safe=api_safe_children($db,$actor,$id);if(!$safe['rows'])api_error('CHILD_NOT_FOUND','Child not found.',404);api_ok($safe['rows'][0]);}
         $care=$db->prepare('SELECT 1 FROM child_care_profiles WHERE child_id=?');$care->execute([$id]);$child['careInformationAvailable']=(bool)$care->fetchColumn();$child['age']=api_child_age($child['dateOfBirth']);$currentSunday=api_latest_completed_sunday($db,(int)$actor['campus_id']);$prior=$db->prepare("SELECT 1 FROM attendance a JOIN service_sessions ss ON ss.id=a.service_session_id WHERE a.child_id=? AND a.status IN ('CHECKED_IN','PICKUP_REQUESTED','PICKED_UP')".($currentSunday?" AND ss.service_date<?":"")." LIMIT 1");$prior->execute($currentSunday?[$id,$currentSunday]:[$id]);$child['visitType']=$prior->fetchColumn()?'RETURNING':'FIRST_TIMER';$child['currentSundayDate']=$currentSunday;$today=api_sunday_presence($db,[$id],$currentSunday);$child['currentSundayStatus']=!$currentSunday||empty($child['joinedAt'])||$child['joinedAt']>$currentSunday?'NOT_EXPECTED':(!empty($today[$id])?'PRESENT':'ABSENT');
         $guards=$db->prepare('SELECT g.id,g.first_name AS firstName,g.last_name AS lastName,g.phone AS primaryPhone,g.secondary_phone AS secondaryPhone,g.email,cg.relationship,cg.is_primary AS `primary`,cg.authorised_pickup AS authorisedPickup FROM child_guardians cg JOIN guardians g ON g.id=cg.guardian_id WHERE cg.child_id=? ORDER BY cg.is_primary DESC,g.first_name');$guards->execute([$id]);$child['guardians']=$guards->fetchAll();$child['guardianId']=$child['guardians'][0]['id']??null;$child['guardianPhone']=$child['guardians'][0]['primaryPhone']??null;
         $pickups=$db->prepare('SELECT id,first_name AS firstName,last_name AS lastName,phone,relationship FROM authorized_pickups WHERE family_id=? AND is_active=1 ORDER BY first_name');$pickups->execute([$child['familyId']]);$child['authorisedPickups']=$pickups->fetchAll();
