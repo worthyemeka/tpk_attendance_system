@@ -23,7 +23,6 @@ function event_allowed(PDO $db,array $actor,int $id): array {
 }
 function event_operator(PDO $db,array $actor,int $id,string $duty=''): bool {
     if($actor['access_level']==='TPK_SUPER_ADMIN')return true;
-    if($actor['access_level']!=='EVENT_VOLUNTEER'&&!api_can_view_people_directory($db,$actor))return false;
     $s=$db->prepare("SELECT duty FROM event_volunteers WHERE event_id=? AND staff_user_id=? AND membership_status='ACTIVE'");$s->execute([$id,$actor['id']]);$assigned=$s->fetchColumn();
     return $duty?($assigned==='LEAD'||$assigned===$duty):in_array($assigned,['LEAD','CHECK_IN','PICKUP'],true);
 }
@@ -51,11 +50,6 @@ function api_events(PDO $db,int $id=0): never {
     else{$s=$db->prepare('SELECT a.child_id AS childId,a.session_id AS sessionId,a.checked_in_at AS checkedInAt FROM event_attendance a JOIN event_sessions s ON s.id=a.session_id WHERE s.event_id=? ORDER BY a.checked_in_at DESC');$s->execute([$id]);$data['attendance']=$s->fetchAll();}
     if($super){$s=$db->prepare("SELECT u.id,u.name FROM staff_users u WHERE u.campus_id=? AND u.is_active=1 AND u.account_status='VERIFIED' AND u.team_status<>'INACTIVE' ORDER BY u.name");$s->execute([$actor['campus_id']]);$data['staff']=$s->fetchAll();}
     event_history_data($db,$actor,$e,$data);
-    // A regular teacher's event membership must not bypass people-record policy.
-    if($actor['access_level']!=='EVENT_VOLUNTEER'&&!api_can_view_people_directory($db,$actor)){
-        foreach(['children','attendance','historicalAttendance','contacts','cards'] as $key)$data[$key]=[];
-        $data['canOperate']=false;$data['canCheckIn']=false;$data['canPickUp']=false;
-    }
     if($actor['access_level']==='EVENT_VOLUNTEER'){$data['canOperate']=false;$data['canCheckIn']=false;$data['canPickUp']=false;}
     api_ok($data);
 }

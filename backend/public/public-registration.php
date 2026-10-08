@@ -175,19 +175,24 @@ function public_registration(PDO $db): never {
 }
 function public_pickup_ticket(PDO $db, string $token): never {
     if (!preg_match('/^[a-f0-9]{64}$/', $token)) public_error('INVALID_TICKET', 'This pickup ticket is invalid.', 422);
-    $s=$db->prepare("SELECT pc.display_code AS pickupCode,pc.qr_token AS qrToken,pc.collected_at AS collectedAt,ss.name AS serviceName,COALESCE(ss.service_date,DATE(ss.starts_at)) AS serviceDate,f.surname FROM service_pickup_codes pc JOIN service_sessions ss ON ss.id=pc.service_session_id JOIN families f ON f.id=pc.family_id WHERE pc.qr_token=? LIMIT 1");$s->execute([$token]);$ticket=$s->fetch();if(!$ticket)public_error('TICKET_NOT_FOUND','This pickup ticket is unavailable.',404);
+    $s=$db->prepare("SELECT pc.id AS pickupCodeId,pc.display_code AS pickupCode,pc.qr_token AS qrToken,pc.collected_at AS collectedAt,ss.name AS serviceName,COALESCE(ss.service_date,DATE(ss.starts_at)) AS serviceDate,f.surname FROM service_pickup_codes pc JOIN service_sessions ss ON ss.id=pc.service_session_id JOIN families f ON f.id=pc.family_id WHERE pc.qr_token=? LIMIT 1");$s->execute([$token]);$ticket=$s->fetch();if(!$ticket)public_error('TICKET_NOT_FOUND','This pickup ticket is unavailable.',404);
+    $state=tpk_pickup_code_state($db,(int)$ticket['pickupCodeId']);if(!$state['valid'])public_error('PICKUP_CODE_EXPIRED','This pickup ticket has expired. It was only valid on its service Sunday.',410);
+    $ticket['expiresAt']=$state['expiresAt'];unset($ticket['pickupCodeId']);
     $children=$db->prepare("SELECT c.first_name AS firstName,CONCAT(LEFT(c.last_name,1),'.') AS lastInitial,cl.name AS className FROM attendance a JOIN children c ON c.id=a.child_id LEFT JOIN classes cl ON cl.id=a.class_id JOIN service_pickup_codes pc ON pc.service_session_id=a.service_session_id AND pc.family_id=c.family_id WHERE pc.qr_token=? ORDER BY c.first_name");$children->execute([$token]);$ticket['children']=$children->fetchAll();$ticket['qrData']='TPK-PICKUP:'.$ticket['qrToken'];public_reply($ticket);
 }
 function public_checkin_request_status(PDO $db, string $token): never {
     if (!preg_match('/^[a-f0-9]{64}$/', $token)) public_error('INVALID_REQUEST', 'This check-in request is invalid.', 422);
-    $s=$db->prepare("SELECT r.id,r.status,r.requested_at AS requestedAt,r.approved_at AS approvedAt,r.decision_note AS decisionNote,r.child_ids_json,r.family_id,pc.display_code AS pickupCode,pc.qr_token AS qrToken FROM check_in_requests r LEFT JOIN service_pickup_codes pc ON pc.id=r.pickup_code_id WHERE r.request_token=? LIMIT 1");$s->execute([$token]);$request=$s->fetch();
+    $s=$db->prepare("SELECT pc.id AS pickupCodeId,r.id,r.status,r.requested_at AS requestedAt,r.approved_at AS approvedAt,r.decision_note AS decisionNote,r.child_ids_json,r.family_id,pc.display_code AS pickupCode,pc.qr_token AS qrToken FROM check_in_requests r LEFT JOIN service_pickup_codes pc ON pc.id=r.pickup_code_id WHERE r.request_token=? LIMIT 1");$s->execute([$token]);$request=$s->fetch();
     if(!$request) public_error('REQUEST_NOT_FOUND','This check-in request is unavailable.',404);
     $ids=json_decode((string)$request['child_ids_json'],true);$ids=is_array($ids)?array_values(array_filter(array_map('intval',$ids))):[];
     $request['children']=[];
     if($ids){$marks=implode(',',array_fill(0,count($ids),'?'));$children=$db->prepare("SELECT first_name AS firstName,CONCAT(LEFT(last_name,1),'.') AS lastInitial FROM children WHERE id IN ($marks) ORDER BY first_name");$children->execute($ids);$request['children']=$children->fetchAll();}
     unset($request['child_ids_json'],$request['family_id']);
-    if(!empty($request['qrToken'])) $request['pickupTicketUrl']=tpk_pickup_ticket_url($request['qrToken']);
-    unset($request['qrToken']); public_reply($request);
+    if(!empty($request['qrToken'])){
+        $state=tpk_pickup_code_state($db,(int)$request['pickupCodeId']);$request['pickupCodeExpired']=!$state['valid'];$request['pickupCodeExpiresAt']=$state['expiresAt'];
+        if($state['valid'])$request['pickupTicketUrl']=tpk_pickup_ticket_url($request['qrToken']);else{$request['pickupCode']=null;$request['pickupTicketUrl']=null;}
+    }
+    unset($request['qrToken'],$request['pickupCodeId']); public_reply($request);
 }
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') public_reply(null, 204);

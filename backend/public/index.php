@@ -19,7 +19,7 @@ if(preg_match('#^/api/(?:families|pickup|attendance)(?:/|$)#',$path)){
     $recordActor=$db->prepare("SELECT u.id,u.campus_id,u.access_level FROM staff_sessions ss JOIN staff_users u ON u.id=ss.staff_user_id WHERE ss.token_hash=? AND ss.revoked_at IS NULL AND ss.expires_at>NOW() AND u.is_active=1 AND u.account_status='VERIFIED' AND u.team_status<>'INACTIVE' LIMIT 1");
     $recordActor->execute([hash('sha256',$token[1])]);$recordActor=$recordActor->fetch();
     if(!$recordActor)json_response(['error'=>'Staff sign-in is required.'],401);
-    if(!api_can_view_people_directory($db,$recordActor))json_response(['error'=>'People records are restricted to this week’s service leadership, Follow-Up Leads and Super Admins.'],403);
+    if(!api_can_view_people_directory($db,$recordActor))json_response(['error'=>'An active TPK staff account is required to view these records.'],403);
 }
 if(preg_match('/^Bearer ([a-f0-9]{64})$/i',$authorization,$match)){
     $limited=$db->prepare("SELECT 1 FROM staff_sessions ss JOIN staff_users u ON u.id=ss.staff_user_id WHERE ss.token_hash=? AND ss.revoked_at IS NULL AND ss.expires_at>NOW() AND u.access_level='EVENT_VOLUNTEER'");

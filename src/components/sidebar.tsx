@@ -34,7 +34,6 @@ import { subscribeToActiveService, type ActiveService } from "@/lib/active-servi
 import { NotificationBell } from "@/components/notification-bell";
 import { useProfileDialog } from "@/components/use-profile-dialog";
 import "./sidebar-refinement.css";
-import { usePeopleAccess } from "@/lib/use-people-access";
 
 const campusFont = localFont({ src: "../../public/fonts/dm-serif-display.ttf", weight: "400", display: "swap", variable: "--font-campus" });
 
@@ -132,8 +131,7 @@ export function Sidebar() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [mobileNavScrolled, setMobileNavScrolled] = useState(false);
   const [activeService, setActiveService] = useState<ActiveService | null>(null);
-  const peopleDirectoryVisible = usePeopleAccess() === "allowed";
-  const checkinVisible = peopleDirectoryVisible;
+  const peopleDirectoryVisible = !!session && session.accessLevel !== "EVENT_VOLUNTEER";
   const [profileImageFailed, setProfileImageFailed] = useState(false);
   useProfileDialog(() => setMobileNavOpen(false), ".sidebar.mobile-open", mobileNavOpen);
   useEffect(() => {
@@ -267,7 +265,7 @@ export function Sidebar() {
           <nav aria-label="Dashboard navigation">
             <Group
               title="Sunday"
-              items={superAdmin ? superSunday : adminSunday.filter(([, href]) => checkinVisible || !["/account/check-in", "/account/pick-up"].includes(href))}
+              items={superAdmin ? superSunday : adminSunday}
               onNavigate={closeMobileNav}
             />
             {superAdmin && (
@@ -293,7 +291,7 @@ export function Sidebar() {
                 />
                 <Group
                   title="My Ministry"
-                  items={(followUpLead ? followUpLeadMinistry : adminMinistry).filter(([, href]) => peopleDirectoryVisible || href !== "/account/relations")}
+                  items={followUpLead ? followUpLeadMinistry : adminMinistry}
                   onNavigate={closeMobileNav}
                 />
               </>

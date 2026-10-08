@@ -3,7 +3,7 @@
 import { AdminTopbar } from "@/components/admin-topbar";
 import { PagePreloader } from "@/components/page-preloader";
 import { Sidebar } from "@/components/sidebar";
-import { AccountGuard, PeopleRecordsGuard } from "@/components/account-guard";
+import { AccountGuard } from "@/components/account-guard";
 import { SundayContextProvider } from "@/lib/sunday-context";
 import { usePathname } from "next/navigation";
 import { useEffect,useState } from "react";
@@ -21,12 +21,11 @@ function AccountShell({children}:{children:React.ReactNode}){
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isAccountPage = pathname.startsWith("/account");
-  const peoplePage = /^\/account\/(children|guardians|families|check-in|pick-up|relations)(\/|$)/.test(pathname);
 
   return (
     <>
       <PagePreloader />
-      {isAccountPage ? <AccountGuard><AccountShell>{peoplePage ? <PeopleRecordsGuard key={pathname}>{children}</PeopleRecordsGuard> : children}</AccountShell></AccountGuard> : <main className="parent-shell">{children}</main>}
+      {isAccountPage ? <AccountGuard><AccountShell>{children}</AccountShell></AccountGuard> : <main className="parent-shell">{children}</main>}
       <style jsx global>{`
         .page-preloader { position: fixed; z-index: 10000; inset: 0; display: grid; place-items: center; background: #fffdf9; animation: page-preloader-fade .2s ease .25s forwards; }
         .page-preloader-mark, .route-loading { display: flex; align-items: end; justify-content: center; gap: 6px; min-height: 46px; }

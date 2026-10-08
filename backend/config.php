@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__.'/public/pickup-validity.php';
 
 function load_env_file(): void {
     $candidates = array_filter([
@@ -311,14 +312,15 @@ function tpk_pickup_ticket_url(string $token): string {
 }
 
 function tpk_issue_pickup_code(PDO $db, int $serviceSessionId, int $familyId, ?int $guardianId): array {
+    $session=$db->prepare('SELECT ss.service_type,ss.service_order,ss.service_date AS serviceDate,ss.service_type AS serviceType,cp.timezone FROM service_sessions ss JOIN campuses cp ON cp.id=ss.campus_id WHERE ss.id=? FOR UPDATE');$session->execute([$serviceSessionId]);$service=$session->fetch();
+    if(!$service||!tpk_sunday_pickup_state($service)['valid'])throw new RuntimeException('Sunday pickup codes can only be issued on their service Sunday.');
     $existing = $db->prepare('SELECT id,display_code,qr_token FROM service_pickup_codes WHERE service_session_id=? AND family_id=? LIMIT 1');
     $existing->execute([$serviceSessionId, $familyId]);
     if ($row = $existing->fetch()) return ['id' => (int)$row['id'], 'code' => $row['display_code'], 'qrToken' => $row['qr_token'], 'ticketUrl' => tpk_pickup_ticket_url($row['qr_token'])];
-    $session = $db->prepare('SELECT service_type,service_order FROM service_sessions WHERE id=? FOR UPDATE'); $session->execute([$serviceSessionId]); $service = $session->fetch();
-    if (!$service) throw new RuntimeException('The service session is unavailable for pickup-code generation.');
     $letter = $service['service_type'] === 'FIRST_SERVICE' || (int)$service['service_order'] === 1 ? 'A' : 'B';
     $sequence = $db->prepare('SELECT COALESCE(MAX(sequence_number),0)+1 FROM service_pickup_codes WHERE service_session_id=? FOR UPDATE'); $sequence->execute([$serviceSessionId]); $number = (int)$sequence->fetchColumn();
-    $code = sprintf('TPK-%s-%03d', $letter, $number); $token = bin2hex(random_bytes(32));
+    // Include the globally unique service ID so an old paper code cannot match a later Sunday.
+    $code = sprintf('TPK-%s-%s-%03d', $letter, strtoupper(base_convert((string)$serviceSessionId,10,36)), $number); $token = bin2hex(random_bytes(32));
     $insert = $db->prepare('INSERT INTO service_pickup_codes(service_session_id,family_id,guardian_id,sequence_number,display_code,qr_token) VALUES(?,?,?,?,?,?)');
     $insert->execute([$serviceSessionId, $familyId, $guardianId, $number, $code, $token]);
     return ['id' => (int)$db->lastInsertId(), 'code' => $code, 'qrToken' => $token, 'ticketUrl' => tpk_pickup_ticket_url($token)];
