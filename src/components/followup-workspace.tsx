@@ -590,7 +590,7 @@ function Drawer({
               <span className="assignment-kicker">Follow-up lead</span>
               <h3>{assignedId ? "Assigned follow-up teacher" : "Assign this family call"}</h3>
               <p>Only the selected teacher will receive and see this task in My Follow-Ups.</p>
-              <div><AppSelect aria-label="Assigned follow-up teacher" value={assignee} onChange={(event) => setAssignee(event.target.value)}><option value="">Choose a regular teacher</option>{assignedId && !assignees.some(person => String(person.id) === assignedId) && <option value={assignedId}>{detail.ownerName || "Assigned teacher"}</option>}{assignees.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</AppSelect><button type="button" disabled={!assignee || assignee === assignedId} onClick={() => assign(Number(assignee))}>{assignedId ? "Update teacher" : "Assign call"}</button></div>
+              <div><AppSelect aria-label="Assigned follow-up teacher" value={assignee} onChange={(event) => setAssignee(event.target.value)}><option value="">Choose a teacher or Follow-Up Lead</option>{assignedId && !assignees.some(person => String(person.id) === assignedId) && <option value={assignedId}>{detail.ownerName || "Assigned teacher"}</option>}{assignees.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</AppSelect><button type="button" disabled={!assignee || assignee === assignedId} onClick={() => assign(Number(assignee))}>{assignedId ? "Update teacher" : "Assign call"}</button></div>
             </div>}
             <div className="contact">
               <h3>Primary Contact</h3>
