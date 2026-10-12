@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__.'/event-history.php';
 require_once __DIR__.'/event-imports.php';
+require_once __DIR__.'/teen-programme.php';
 
 function event_text($value,int $max=180): string {
     if(!is_string($value))api_error('VALIDATION_ERROR','Enter valid event details.',422);
@@ -50,6 +51,8 @@ function api_events(PDO $db,int $id=0): never {
     else{$s=$db->prepare('SELECT a.child_id AS childId,a.session_id AS sessionId,a.checked_in_at AS checkedInAt FROM event_attendance a JOIN event_sessions s ON s.id=a.session_id WHERE s.event_id=? ORDER BY a.checked_in_at DESC');$s->execute([$id]);$data['attendance']=$s->fetchAll();}
     if($super){$s=$db->prepare("SELECT u.id,u.name FROM staff_users u WHERE u.campus_id=? AND u.is_active=1 AND u.account_status='VERIFIED' AND u.team_status<>'INACTIVE' ORDER BY u.name");$s->execute([$actor['campus_id']]);$data['staff']=$s->fetchAll();}
     event_history_data($db,$actor,$e,$data);
+    $data['teenProgramme']=event_teen_form($db,$id);
+    if($data['teenProgramme'])$data['teenRegistrations']=$super?event_teen_details($db,$id):[];
     if($actor['access_level']==='EVENT_VOLUNTEER'){$data['canOperate']=false;$data['canCheckIn']=false;$data['canPickUp']=false;}
     api_ok($data);
 }
@@ -114,15 +117,15 @@ function event_register(PDO $db,array $event,array $v,bool $public): array {
       $key=hash('sha256',$phone.'|'.mb_strtolower(preg_replace('/\s+/u',' ',trim($c[1]))).'|'.$c[2]);
       $db->prepare('INSERT INTO event_children(event_id,identity_key,registration_id,child_id,name,date_of_birth,care_notes,group_id) VALUES(?,?,?,?,?,?,?,?)')->execute([$event['id'],$key,$rid,$c[0],$c[1],$c[2],$c[3],$group]);$cid=(int)$db->lastInsertId();$db->prepare('UPDATE event_children SET home_campus_id=? WHERE id=?')->execute([$campusId,$cid]);foreach($ids as $sid)$db->prepare('INSERT INTO event_child_sessions(child_id,session_id) VALUES(?,?)')->execute([$cid,$sid]);}$db->commit();}catch(Throwable $e){if($db->inTransaction())$db->rollBack();if($e instanceof PDOException&&$e->getCode()==='23000')api_error('ALREADY_REGISTERED','This child is already registered for the event.',409);throw $e;}return ['referenceCode'=>$reference,'children'=>count($prepared)];
 }
-function api_event_registration(PDO $db,int $id): never {$actor=api_actor($db,true);$event=event_allowed($db,$actor,$id);if($event['status']==='CANCELLED')api_error('EVENT_CLOSED','This event is cancelled.',409);$result=event_register($db,$event,api_input(),false);api_audit($db,$actor,'EVENT_REGISTRATION_CREATED','Event',$id);api_ok($result,201);}
+function api_event_registration(PDO $db,int $id): never {$actor=api_actor($db,true);$event=event_allowed($db,$actor,$id);if($event['status']==='CANCELLED')api_error('EVENT_CLOSED','This event is cancelled.',409);$form=event_teen_form($db,$id);$result=$form?event_teen_register($db,$event,$form,api_input()):event_register($db,$event,api_input(),false);api_audit($db,$actor,'EVENT_REGISTRATION_CREATED','Event',$id);api_ok($result,201);}
 function api_public_event(PDO $db,string $key,bool $register=false): never {
     $s=$db->prepare("SELECT * FROM ministry_events WHERE public_key=? AND status='PUBLISHED' AND public_registration=1");$s->execute([$key]);$e=$s->fetch();if(!$e)api_error('EVENT_NOT_FOUND','This registration page is not available.',404);$today=(new DateTimeImmutable('now',new DateTimeZone($e['timezone'])))->format('Y-m-d');$open=$today>=$e['registration_opens']&&$today<=$e['registration_closes'];
     if($register){if(!$open)api_error('REGISTRATION_CLOSED','Event registration is not currently open.',409);
       $ip=hash('sha256','event-registration|'.($_SERVER['REMOTE_ADDR']??'unknown'));
       $s=$db->prepare('SELECT COUNT(*) FROM event_registration_attempts WHERE ip_hash=? AND attempted_at>DATE_SUB(NOW(),INTERVAL 1 HOUR)');$s->execute([$ip]);if((int)$s->fetchColumn()>=20)api_error('TOO_MANY_ATTEMPTS','Too many registration attempts. Please try again later or speak to the event desk.',429);
       $db->prepare('INSERT INTO event_registration_attempts(ip_hash) VALUES(?)')->execute([$ip]);
-      api_ok(event_register($db,$e,api_input(),true),201);}
-    $s=$db->prepare('SELECT id,name,starts_at AS startsAt,ends_at AS endsAt FROM event_sessions WHERE event_id=? ORDER BY starts_at');$s->execute([$e['id']]);api_ok(['campuses'=>$db->query('SELECT id,name,code FROM campuses ORDER BY name')->fetchAll(),'name'=>$e['name'],'description'=>$e['description'],'startDate'=>$e['starts_on'],'endDate'=>$e['ends_on'],'registrationOpens'=>$e['registration_opens'],'registrationCloses'=>$e['registration_closes'],'open'=>$open,'sessions'=>$s->fetchAll()]);
+      $form=event_teen_form($db,(int)$e['id']);api_ok($form?event_teen_register($db,$e,$form,api_input()):event_register($db,$e,api_input(),true),201);}
+    $s=$db->prepare('SELECT id,name,starts_at AS startsAt,ends_at AS endsAt FROM event_sessions WHERE event_id=? ORDER BY starts_at');$s->execute([$e['id']]);api_ok(['teenProgramme'=>event_teen_form($db,(int)$e['id']),'campuses'=>$db->query('SELECT id,name,code FROM campuses ORDER BY name')->fetchAll(),'name'=>$e['name'],'description'=>$e['description'],'startDate'=>$e['starts_on'],'endDate'=>$e['ends_on'],'registrationOpens'=>$e['registration_opens'],'registrationCloses'=>$e['registration_closes'],'open'=>$open,'sessions'=>$s->fetchAll()]);
 }
 function api_event_arrival(PDO $db,int $id,bool $pickup=false): never {
     $actor=api_actor($db);$e=event_allowed($db,$actor,$id);if(!event_operator($db,$actor,$id,$pickup?'PICKUP':'CHECK_IN'))api_error('FORBIDDEN','An assigned event operator is required.',403);if(in_array($e['status'],['DRAFT','CANCELLED','ARCHIVED'],true))api_error('EVENT_CLOSED','Live operations are unavailable for this event.',409);if($actor['access_level']==='EVENT_VOLUNTEER')api_error('FORBIDDEN','Event volunteers use their assignment dashboard; child release requires the host operations team.',403);$v=api_input();

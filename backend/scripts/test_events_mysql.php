@@ -14,6 +14,7 @@ function api_ok(array $data,int $status=200):void {throw new EventResult($data);
 function api_error(string $code,string $message,int $status=400):void {throw new EventError($code);}
 function api_actor(PDO $db,bool $super=false):array {if($super&&$GLOBALS['actor']['access_level']!=='TPK_SUPER_ADMIN')api_error('FORBIDDEN','Super required',403);return $GLOBALS['actor'];}
 function api_input():array{return $GLOBALS['input'];}
+function api_table_exists(PDO $db,string $table):bool{return true;}
 function api_method():string{return $GLOBALS['method']??'POST';}
 function api_audit(PDO $db,array $actor,string $event,string $entity,int $id,array $meta=[]):void{}
 function api_phone(?string $value):?string{$v=preg_replace('/\D+/','',(string)$value);if(str_starts_with($v,'234')&&strlen($v)===13)$v='0'.substr($v,3);return strlen($v)===11&&str_starts_with($v,'0')?$v:null;}
@@ -38,6 +39,7 @@ try{
   if(str_starts_with($statement,'CREATE TABLE')){$statement=str_replace('CREATE TABLE IF NOT EXISTS','CREATE TEMPORARY TABLE',$statement);preg_match('/CREATE TEMPORARY TABLE (\w+)/',$statement,$m);$temporary[]=$m[1];}
   $db->exec($statement);
  }
+ foreach(['event_teen_forms','event_teen_registration_details'] as $t){$ddl=$db->query('SHOW CREATE TABLE `'.$t.'`')->fetch(PDO::FETCH_NUM)[1];$ddl=preg_replace('/^CREATE TABLE /','CREATE TEMPORARY TABLE ',$ddl);$ddl=preg_replace('/^\s*CONSTRAINT[^\n]*\n/m','',$ddl);$ddl=preg_replace('/,\s*\)/',')',$ddl);$db->exec($ddl);$temporary[]=$t;}
  $today=(new DateTimeImmutable('now',new DateTimeZone('Africa/Lagos')))->format('Y-m-d');
  $input=['name'=>'Temporary VBS diagnostic','type'=>'VBS','startDate'=>$today,'endDate'=>$today,'registrationOpens'=>$today,'registrationCloses'=>$today,'publicRegistration'=>true,'countdown'=>true,'status'=>'PUBLISHED'];
  $id=result(fn()=>api_event_save($db))['id'];check(count(result(fn()=>api_events($db))['items'])===1,'Event listing');
@@ -131,6 +133,15 @@ try{
  $actor=$owner;$actor['access_level']='EVENT_VOLUNTEER';$method='PATCH';$input=['preference'=>'EVENT','selectedEventId'=>$history];check(result(fn()=>api_staff_appearance($db))['active']['eventId']===$history,'Assigned volunteer can choose only assigned event appearance');
  $input=['preference'=>'EVENT','selectedEventId'=>$copy];reject(fn()=>api_staff_appearance($db),'FORBIDDEN');$actor=$owner;$method='POST';
  $actor['access_level']='TPK_TEACHER';$safe=result(fn()=>api_events($db,$history));check(count($safe['children'])===2&&$safe['contacts']===[]&&$safe['cards']===[],'Teachers can see archived child names without private source data');foreach($safe['children'] as $child)check(array_keys($child)===['id','name','groupId','groupName','homeCampusId','homeCampus','sessionIds'],'Only allowlisted child directory fields');check(count($safe['historicalAttendance'])>0&&array_keys($safe['historicalAttendance'][0])===['childId','dayId','present'],'Archive marks exclude pickup and food data');$actor=$owner;
+ // Exercise the short public form through the real event dispatch, on temporary tables only.
+ $input=['name'=>'Temporary Boys Programme','type'=>'OTHER','startDate'=>$today,'endDate'=>$today,'registrationOpens'=>$today,'registrationCloses'=>$today,'publicRegistration'=>true,'status'=>'PUBLISHED'];$teenId=result(fn()=>api_event_save($db))['id'];
+ $db->prepare('INSERT INTO event_teen_forms(event_id,slug,min_age,max_age,rules) VALUES(?,?,11,19,?)')->execute([$teenId,'temporary-teen-programme','Respect everyone']);
+ $teenKey=$db->query('SELECT public_key FROM ministry_events WHERE id='.$teenId)->fetchColumn();$teenMeta=result(fn()=>api_public_event($db,$teenKey));check($teenMeta['teenProgramme']['minAge']===11&&$teenMeta['sessions']===[],'Short form available without fabricated sessions');
+ $input=['name'=>'Temporary Boy','dateOfBirth'=>(new DateTimeImmutable($today))->modify('-11 years')->format('Y-m-d'),'school'=>'Fixture School','schoolClass'=>'JSS 1','guardianName'=>'Fixture Guardian','guardianPhone'=>'08000000000','rulesAccepted'=>true,'rulesVersion'=>$teenMeta['teenProgramme']['rulesVersion'],'guardianPermission'=>true];
+ check(strlen(result(fn()=>api_public_event($db,$teenKey,true))['referenceCode'])===16,'Public teen registration dispatch');reject(fn()=>api_public_event($db,$teenKey,true),'ALREADY_REGISTERED');
+ $teenView=result(fn()=>api_events($db,$teenId));check(count($teenView['teenRegistrations'])===1&&$teenView['teenRegistrations'][0]['school']==='Fixture School','Super Admin structured registration view');
+ $actor['id']=0;$actor['access_level']='TPK_TEACHER';$teenSafe=result(fn()=>api_events($db,$teenId));check($teenSafe['teenRegistrations']===[]&&count($teenSafe['children'])===1&&!isset($teenSafe['children'][0]['guardianPhone']),'Teacher view excludes private teen fields');$input=['rules'=>'New rules'];reject(fn()=>api_event_teen_rules($db,$teenId),'FORBIDDEN');$actor=$owner;
+ $input=['rules'=>'Updated rules'];result(fn()=>api_event_teen_rules($db,$teenId));check($db->query('SELECT rules_snapshot FROM event_teen_registration_details')->fetchColumn()==='Respect everyone','Rule edits preserve accepted snapshots');
  check($db->query('SELECT (SELECT COUNT(*) FROM children)+(SELECT COUNT(*) FROM families)+(SELECT COUNT(*) FROM attendance)')->fetchColumn()===$peopleBefore,'Permanent ministry records changed');
  echo "PASS: $checks MySQL event, privacy, registration, group, pickup, duplication and assembly-history checks.\n";
 }finally{if($db->inTransaction())$db->rollBack();foreach(array_reverse($temporary)as$table)$db->exec('DROP TEMPORARY TABLE `'.$table.'`');}

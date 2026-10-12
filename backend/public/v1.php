@@ -1030,6 +1030,7 @@ try { $db=api_db();$path=api_path();$method=api_method();
     event_history_routes($db,$path,$method);
     if(preg_match('#^/api/v1/public/events/([a-f0-9]{48})$#',$path,$m)&&in_array($method,['GET','POST'],true))api_public_event($db,$m[1],$method==='POST');
     if($method==='GET'&&$path==='/api/v1/events')api_events($db);
+    if($method==='PUT'&&preg_match('#^/api/v1/events/(\d+)/teen-rules$#',$path,$m))api_event_teen_rules($db,(int)$m[1]);
     if($method==='POST'&&$path==='/api/v1/events')api_event_save($db);
     if(preg_match('#^/api/v1/events/(\d+)$#',$path,$m)) { if($method==='GET')api_events($db,(int)$m[1]);if($method==='PATCH')api_event_save($db,(int)$m[1]); }
     if($method==='GET'&&preg_match('#^/api/v1/events/(\d+)/family$#',$path,$m))api_event_family($db,(int)$m[1]);
