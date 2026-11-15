@@ -19,6 +19,7 @@ import {
   FiUsers,
   FiX,
 } from "react-icons/fi";
+import { LuDoorOpen, LuPresentation, LuSchool, LuShieldCheck } from "react-icons/lu";
 import { apiBase, authHeaders, mediaUrl, readTeacherSession } from "@/lib/session";
 import { StatCard, type StatCardTone } from "@/components/stat-card";
 import { MonthPicker } from "@/components/month-picker";
@@ -78,6 +79,25 @@ type Overview = {
 };
 type AssemblyActivity = { id: number; activityName: string; ledByStaffUserId?: number | null; ledBy?: string | null; ledByProfileImageUrl?: string | null; notes?: string | null; media?: AssemblyMedia[]; createdAt?: string };
 type AssemblyNote = { id: number; note: string; author: string; authorId?: number; authorProfileImageUrl?: string | null; createdAt: string };
+const ministryTabs = [
+  { id: "classrooms", label: "Classrooms", Icon: LuSchool },
+  { id: "assembly", label: "Assembly", Icon: LuPresentation },
+  { id: "HEAD_OF_SERVICE", label: "Head of Service", Icon: LuShieldCheck },
+  { id: "ATTENDANCE", label: "Door & Attendance", Icon: LuDoorOpen },
+] as const;
+type MinistryTab = typeof ministryTabs[number]["id"];
+type ServiceReviewRole = Extract<MinistryTab, "HEAD_OF_SERVICE" | "ATTENDANCE">;
+type ServiceReview = {
+  id: number;
+  authorId: number;
+  author: string;
+  authorProfileImageUrl?: string | null;
+  createdAt: string;
+  workedWell: string;
+  needsImprovement: string;
+  media: AssemblyMedia[];
+};
+type ServiceReviewsData = { canReview: boolean; reviews: ServiceReview[] };
 type AssemblyGroup = { serviceSession: { id: number; name: string; serviceDate: string; serviceType?: string } | null; childrenInService: number; team: Teacher[]; leaders?: Pick<Teacher, "userId" | "name">[]; activities: AssemblyActivity[]; notes: AssemblyNote[]; canManage: boolean; isSuperAdmin: boolean; needAttention: number };
 type Child = {
   id: number;
@@ -90,6 +110,7 @@ type Child = {
   todayStatus: string;
   joinedAt?: string;
 };
+type ReviewService = { id: number | string; serviceDate: string; name?: string };
 type Detail = {
   class: { id: number; name: string; ageLabel?: string; active: boolean };
   serviceSession?: {
@@ -100,6 +121,7 @@ type Detail = {
   } | null;
   canManage: boolean;
   reviewableServiceSessionIds?: number[];
+  reviewableServices?: ReviewService[];
   isSuperAdmin: boolean;
   teachers: Teacher[];
   children: Child[];
@@ -194,7 +216,7 @@ export function ClassroomsOverview() {
   const [data, setData] = useState<Overview>(emptyOverview);
   const [classOptions, setClassOptions] = useState<{ id: number; name: string }[]>([]);
   const [assembly, setAssembly] = useState<{ groups: AssemblyGroup[] }>({ groups: [] });
-  const [activeTab, setActiveTab] = useState<"classrooms" | "assembly">("classrooms");
+  const [activeTab, setActiveTab] = useState<MinistryTab>("classrooms");
   const [localScope, setLocalScope] = useState("THIS");
   const [query, setQuery] = useState("");
   const [classId, setClassId] = useState("");
@@ -284,31 +306,36 @@ export function ClassroomsOverview() {
           {serviceDate && selectedService && <small className="cw-context-line">Viewing Sunday, {formatDate(serviceDate)} · {selectedService.name}</small>}
         </div>
       </header>
-      <nav className="cw-primary-tabs" role="tablist" aria-label="Classroom ministry views">
-        {(["classrooms", "assembly"] as const).map((view, index) => (
-          <button
-            key={view}
-            id={`cw-tab-${view}`}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === view}
-            aria-controls={`cw-panel-${view}`}
-            tabIndex={activeTab === view ? 0 : -1}
-            className={activeTab === view ? "selected" : ""}
-            onClick={() => setActiveTab(view)}
-            onKeyDown={(event) => {
-              if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-              event.preventDefault();
-              const next = event.key === "Home" ? "classrooms" : event.key === "End" ? "assembly" : index === 0 ? "assembly" : "classrooms";
-              setActiveTab(next);
-              document.getElementById(`cw-tab-${next}`)?.focus();
-            }}
-          >
-            {view === "classrooms" ? <FiUsers /> : <FiClipboard />}
-            {view === "classrooms" ? "Classrooms" : "Assembly"}
-          </button>
-        ))}
-      </nav>
+      <div className="cw-tab-frame">
+        <nav className="cw-primary-tabs" role="tablist" aria-label="Classroom ministry views">
+          {ministryTabs.map(({ id: view, label, Icon }, index) => (
+            <button
+              key={view}
+              id={`cw-tab-${view}`}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === view}
+              aria-controls={`cw-panel-${view}`}
+              tabIndex={activeTab === view ? 0 : -1}
+              className={activeTab === view ? "selected" : ""}
+              onClick={() => setActiveTab(view)}
+              onKeyDown={(event) => {
+                if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+                event.preventDefault();
+                const offset = event.key === "ArrowLeft" ? -1 : 1;
+                const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? ministryTabs.length - 1 :
+                  (index + offset + ministryTabs.length) % ministryTabs.length;
+                const next = ministryTabs[nextIndex].id;
+                setActiveTab(next);
+                document.getElementById(`cw-tab-${next}`)?.focus();
+              }}
+            >
+              <Icon aria-hidden="true" />
+              <span>{label}</span>
+            </button>
+          ))}
+        </nav>
+      </div>
       <div id={`cw-panel-${activeTab}`} role="tabpanel" aria-labelledby={`cw-tab-${activeTab}`}>
       {activeTab === "classrooms" ? <>
       <section className="cw-metrics">
@@ -438,7 +465,11 @@ export function ClassroomsOverview() {
           ))}{!group.items.length && <p className="cw-empty">No classrooms match these filters.</p>}</div>
         </section>)}</>
       )}
-      </> : <AssemblyView groups={assembly.groups} loading={loading} isSuperAdmin={Boolean(isSuperAdmin)} onRefresh={load} />}
+      </> : activeTab === "assembly" ? (
+        <AssemblyView groups={assembly.groups} loading={loading} isSuperAdmin={Boolean(isSuperAdmin)} onRefresh={load} />
+      ) : selectedService ? (
+        <ServiceReviews key={`${activeTab}:${selectedService.id}`} role={activeTab} service={selectedService} />
+      ) : <p className="cw-empty">Choose a Sunday service to see its reviews.</p>}
       </div>
       <style jsx>{styles}</style>
       {/* Assembly is a child component, so its styles must not be parent-scoped. */}
@@ -462,6 +493,181 @@ function Metric({
   tone?: StatCardTone | "red";
 }) {
   return <StatCard icon={icon} value={value} title={title} description={text} tone={tone === "red" ? "orange" : tone} />;
+}
+
+async function changeReview(path: string, method: "PATCH" | "DELETE", body?: { workedWell: string; needsImprovement: string }) {
+  const response = await fetch(`${apiBase}/api/v1/${path}`, {
+    method,
+    headers: { ...authHeaders(), ...(body && { "Content-Type": "application/json" }) },
+    ...(body && { body: JSON.stringify(body) }),
+  });
+  const result = await response.json().catch(() => null);
+  if (!response.ok || !result?.success) throw new Error(result?.error?.message || "We could not update this review. Please try again.");
+}
+
+function ReviewActions({ onEdit, onDelete, disabled }: { onEdit: () => void; onDelete: () => void; disabled: boolean }) {
+  return <div className="review-card-actions">
+    <button type="button" disabled={disabled} onClick={onEdit}>Edit review</button>
+    <button type="button" disabled={disabled} onClick={onDelete}>Delete review</button>
+  </div>;
+}
+
+function ServiceReviews({ role, service }: { role: ServiceReviewRole; service: NonNullable<Overview["serviceSession"]> }) {
+  const session = useMemo(() => readTeacherSession(), []);
+  const [data, setData] = useState<ServiceReviewsData | null>(null);
+  const [workedWell, setWorkedWell] = useState("");
+  const [needsImprovement, setNeedsImprovement] = useState("");
+  const [images, setImages] = useState<File[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+  const mediaInput = useRef<HTMLInputElement>(null);
+  const firstField = useRef<HTMLTextAreaElement>(null);
+  const endpoint = `${apiBase}/api/v1/service-reviews`;
+  const title = role === "HEAD_OF_SERVICE" ? "Head of Service" : "Teacher at Door & Attendance";
+  const myReview = data?.reviews.find((review) => Number(review.authorId) === Number(session?.staffUserId));
+  const availableImages = 6 - (myReview?.media.length ?? 0);
+  const showForm = myReview ? editing : data?.canReview;
+  useEffect(() => {
+    if (editing) firstField.current?.focus();
+  }, [editing]);
+  useEffect(() => {
+    if (!session) return;
+    const controller = new AbortController();
+    const query = new URLSearchParams({ serviceSessionId: String(service.id), role });
+    fetch(`${endpoint}?${query}`, { headers: authHeaders(session), signal: controller.signal, cache: "no-store" })
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.error?.message || "We could not load service reviews.");
+        const next: ServiceReviewsData = result.data;
+        if (controller.signal.aborted) return;
+        const own = next.reviews.find((review) => Number(review.authorId) === Number(session.staffUserId));
+        setData(next);
+        setWorkedWell(own?.workedWell ?? "");
+        setNeedsImprovement(own?.needsImprovement ?? "");
+      })
+      .catch((reason) => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "We could not load service reviews."); });
+    return () => controller.abort();
+  }, [endpoint, role, service.id, session]);
+
+  async function save(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!session || !showForm || saving) return;
+    setError("");
+    setSaved(false);
+    if (images.length > availableImages || images.some((image) => image.size > 5 * 1024 * 1024)
+        || images.reduce((bytes, image) => bytes + image.size, 0) > TOTAL_UPLOAD_BYTES) {
+      setError("Each review can have up to six pictures, 5 MB per picture and 25 MB per upload.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const form = new FormData();
+      form.set("serviceSessionId", String(service.id));
+      form.set("role", role);
+      if (myReview) form.set("reviewId", String(myReview.id));
+      form.set("workedWell", workedWell.trim());
+      form.set("needsImprovement", needsImprovement.trim());
+      for (const image of images) form.append("media[]", image);
+      const response = await fetch(endpoint, { method: "POST", headers: authHeaders(session), body: form });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.success) throw new Error(result?.error?.message ||
+        (response.status === 413 ? "These pictures are too large. Try smaller files." : "We could not save this review."));
+      setData(result.data);
+      setImages([]);
+      setEditing(false);
+      if (mediaInput.current) mediaInput.current.value = "";
+      setSaved(true);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "We could not save this review.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteReview() {
+    if (!myReview || saving || !window.confirm("Delete your review and its pictures?")) return;
+    setSaving(true);
+    setError("");
+    setSaved(false);
+    try {
+      await changeReview(`service-reviews/${myReview.id}`, "DELETE");
+      setData((current) => current && { ...current, reviews: current.reviews.filter((review) => review.id !== myReview.id) });
+      setWorkedWell("");
+      setNeedsImprovement("");
+      setImages([]);
+      setEditing(false);
+      if (mediaInput.current) mediaInput.current.value = "";
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "We could not delete this review.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return <div className="class-detail">
+    <section className="weekly-reviews" aria-label={`${title} reviews`}>
+      <header className="discussion-header">
+        <div className="discussion-title">
+          <i className="discussion-title-icon"><FiMessageCircle aria-hidden="true" /></i>
+          <div>
+            <p className="eyebrow">Service reflection</p>
+            <h2>{title} reviews</h2>
+            <p>{formatDate(service.serviceDate)} · {service.name}</p>
+          </div>
+        </div>
+      </header>
+      {error && <p className="review-save-message" role="alert">{error}</p>}
+      {!data && !error && <p role="status">Loading service reviews…</p>}
+      {saved && <p className="review-save-message success" role="status">Review saved.</p>}
+      {showForm && <form className="review-form" onSubmit={save} aria-busy={saving}>
+        <div className="review-form-heading"><b>{myReview ? "Update your review" : "Add your review"}</b></div>
+        <div className="review-fields">
+          <label className="review-field worked">
+            <span><FiCheckCircle aria-hidden="true" /> What worked well?</span>
+            <textarea ref={firstField} rows={5} maxLength={4000} disabled={saving} value={workedWell} onChange={(event) => { setWorkedWell(event.target.value); setSaved(false); }} />
+          </label>
+          <label className="review-field improve">
+            <span><FiAlertTriangle aria-hidden="true" /> What should we improve?</span>
+            <textarea rows={5} maxLength={4000} disabled={saving} value={needsImprovement} onChange={(event) => { setNeedsImprovement(event.target.value); setSaved(false); }} />
+          </label>
+        </div>
+        {availableImages > 0 && <div className="media-picker">
+          <label htmlFor="service-review-images">Attach pictures</label>
+          <small>Optional · Up to {availableImages} JPEG, PNG or WebP pictures, 5 MB each and 25 MB per upload.</small>
+          <input ref={mediaInput} id="service-review-images" type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={saving}
+            onChange={(event) => { setImages(Array.from(event.target.files ?? [])); setSaved(false); }} />
+        </div>}
+        <footer className="review-actions">
+          <p><FiUsers aria-hidden="true" /> Shared with your campus team.</p>
+          {myReview && <button type="button" disabled={saving} onClick={() => {
+            setWorkedWell(myReview.workedWell);
+            setNeedsImprovement(myReview.needsImprovement);
+            setImages([]);
+            setError("");
+            setEditing(false);
+          }}>Cancel</button>}
+          <button className="primary" disabled={saving || (!workedWell.trim() && !needsImprovement.trim() && !images.length && !myReview?.media.length)}>
+            {saving ? "Saving…" : myReview ? "Save changes" : "Save review"}
+          </button>
+        </footer>
+      </form>}
+      {data && <div className="review-list">
+        <header className="review-history-heading"><h3>Reviews for this service</h3></header>
+        {data.reviews.map((review) => <article key={review.id}>
+          <header>
+            <TeacherAttribution name={review.author} staffId={review.authorId} photo={review.authorProfileImageUrl} createdAt={review.createdAt} />
+            {review.id === myReview?.id && <ReviewActions disabled={saving || editing} onEdit={() => { setSaved(false); setEditing(true); }} onDelete={() => void deleteReview()} />}
+          </header>
+          {review.workedWell && <p><strong>Worked well</strong>{review.workedWell}</p>}
+          {review.needsImprovement && <p><strong>Improve next time</strong>{review.needsImprovement}</p>}
+          {review.media.length > 0 && <div className="assembly-media-grid">{review.media.map((item) => <AssemblyAttachment key={item.id} item={item} />)}</div>}
+        </article>)}
+        {!data.reviews.length && <p>No reviews for this service yet.</p>}
+      </div>}
+    </section>
+  </div>;
 }
 
 function AssemblyView({ groups, loading, isSuperAdmin, onRefresh }: { groups: AssemblyGroup[]; loading: boolean; isSuperAdmin: boolean; onRefresh: () => Promise<void> }) {
@@ -603,6 +809,20 @@ function AssemblyView({ groups, loading, isSuperAdmin, onRefresh }: { groups: As
   </section>;
 }
 
+function classroomReviewOptions(data: Detail): ReviewService[] {
+  const allowed = new Set(data.reviewableServiceSessionIds?.map(Number));
+  const candidates = data.reviewableServices ?? [data.serviceSession, ...data.monthly.sessions]
+    .flatMap((service) => service && allowed.has(Number(service.id)) ? [service] : []);
+  const unique = new Map<number, ReviewService>();
+  for (const service of candidates) {
+    const id = Number(service.id);
+    if (service.serviceDate.slice(0, 7) === data.monthly.month && !unique.has(id)) {
+      unique.set(id, { ...service, id });
+    }
+  }
+  return [...unique.values()].sort((left, right) => left.serviceDate.localeCompare(right.serviceDate));
+}
+
 export function ClassroomDetail({ classId }: { classId: number }) {
   const session = useMemo(() => readTeacherSession(), []);
   const searchParams = useSearchParams();
@@ -629,7 +849,7 @@ export function ClassroomDetail({ classId }: { classId: number }) {
     if (active?.serviceDate) setMonth(active.serviceDate.slice(0, 7));
   }, [active?.id, active?.serviceDate]);
   const load = useCallback(async () => {
-    if (!session) return;
+    if (!session || context.loading) return;
     const requestVersion = ++detailRequestVersion.current;
     try {
       const p = new URLSearchParams({ month });
@@ -643,10 +863,13 @@ export function ClassroomDetail({ classId }: { classId: number }) {
           b.error?.message || "We could not load this classroom.",
         );
       if (requestVersion !== detailRequestVersion.current) return;
-      setData(b.data);
-      setReviewSessionId(
-        (value) => value || String(active?.id || b.data.serviceSession?.id || ""),
-      );
+      const next: Detail = b.data;
+      const options = classroomReviewOptions(next);
+      const preferred = options.find((option) => Number(option.id) === Number(next.serviceSession?.id)) ?? options.at(-1);
+      setData(next);
+      setReviewSessionId((value) => options.some((option) => String(option.id) === value)
+        ? value
+        : String(preferred?.id ?? ""));
       setError("");
     } catch (reason) {
       if (requestVersion !== detailRequestVersion.current) return;
@@ -656,7 +879,7 @@ export function ClassroomDetail({ classId }: { classId: number }) {
           : "We could not load this classroom.",
       );
     }
-  }, [active?.id, classId, month, session]);
+  }, [active?.id, classId, context.loading, month, session]);
   useEffect(() => {
     setData(null); setReviewSessionId("");
   }, [active?.id, classId]);
@@ -667,7 +890,7 @@ export function ClassroomDetail({ classId }: { classId: number }) {
     if (
       !session ||
       discussionMessage === "Saving discussion…" ||
-      !reviewSessionId ||
+      !data || !classroomReviewOptions(data).some((option) => String(option.id) === reviewSessionId) ||
       (!workedWell.trim() && !needsImprovement.trim())
     )
       return;
@@ -860,6 +1083,8 @@ export function ClassroomDetail({ classId }: { classId: number }) {
           setNeedsImprovement={setNeedsImprovement}
           discussionMessage={discussionMessage}
           onSave={addWeeklyReview}
+          authorId={session?.staffUserId}
+          onChanged={load}
         />
       )}
       {selectedChildId!==null&&<ChildProfileDialog key={selectedChildId} childId={selectedChildId} close={()=>setSelectedChildId(null)} onUpdated={()=>void load()} initialMonth={data.serviceSession?.serviceDate.slice(0,7)}/>}
@@ -895,6 +1120,8 @@ function WeeklyReviews({
   setNeedsImprovement,
   discussionMessage,
   onSave,
+  authorId,
+  onChanged,
 }: {
   data: Detail;
   month: string;
@@ -907,15 +1134,31 @@ function WeeklyReviews({
   setNeedsImprovement: (value: string) => void;
   discussionMessage: string;
   onSave: () => void;
+  authorId?: number;
+  onChanged: () => Promise<void>;
 }) {
-  const sessions = [
-    ...(data.serviceSession ? [data.serviceSession] : []),
-    ...data.monthly.sessions,
-  ].filter(
-    (item, index, list) =>
-      list.findIndex((other) => other.id === item.id) === index && Boolean(data.reviewableServiceSessionIds?.includes(Number(item.id))),
-  );
+  const sessions = classroomReviewOptions(data);
   const saving = discussionMessage === "Saving discussion…";
+  const [historySelection, setHistorySelection] = useState<string | null>(null);
+  const historyServices = new Map<string, ReviewService>();
+  for (const service of [
+    data.serviceSession,
+    ...data.monthly.sessions,
+    ...sessions,
+    ...data.weeklyReviews.map((review) => ({ id: review.serviceSessionId, serviceDate: review.serviceDate, name: review.serviceName })),
+  ]) {
+    if (service?.serviceDate.slice(0, 7) !== month) continue;
+    const id = String(service.id);
+    if (!historyServices.has(id)) historyServices.set(id, service);
+  }
+  const activeServiceId = String(data.serviceSession?.id ?? "");
+  const defaultHistory = historyServices.has(activeServiceId) ? activeServiceId : "all";
+  const historyFilter = historySelection === "all" || (historySelection && historyServices.has(historySelection))
+    ? historySelection
+    : defaultHistory;
+  const visibleReviews = data.weeklyReviews.filter((review) =>
+    review.serviceDate.slice(0, 7) === month && (historyFilter === "all" || String(review.serviceSessionId) === historyFilter));
+  const historyLoading = data.monthly.month !== month;
   return (
     <section className="weekly-reviews">
       <header className="discussion-header">
@@ -934,13 +1177,17 @@ function WeeklyReviews({
           <span>Review month</span>
           <MonthPicker
             value={new Date(`${month}-01T00:00:00Z`)}
-            onChange={(value) => setMonth(value.toISOString().slice(0, 7))}
+            onChange={(value) => {
+              setHistorySelection(null);
+              setMonth(value.toISOString().slice(0, 7));
+            }}
             className="discussion-month-picker"
             ariaLabel="Choose review month"
           />
         </div>
       </header>
-      {Boolean(data.reviewableServiceSessionIds?.length) && (
+      {!sessions.length && <p className="cw-empty">There are no completed Sunday services available in this month yet.</p>}
+      {sessions.length > 0 && (
         <section className="review-form" aria-busy={saving}>
           <div className="review-form-heading">
             <div className="review-form-intro">
@@ -955,7 +1202,11 @@ function WeeklyReviews({
               <AppSelect
                 value={reviewSessionId}
                 disabled={saving}
-                onChange={(event) => setReviewSessionId(event.target.value)}
+                onChange={(event) => {
+                  const id = event.target.value;
+                  setReviewSessionId(id);
+                  if (id) setHistorySelection(id);
+                }}
               >
                 <option value="">Choose Sunday</option>
                 {sessions.map((item) => (
@@ -998,7 +1249,7 @@ function WeeklyReviews({
               className="primary"
               disabled={
                 saving ||
-                !data.reviewableServiceSessionIds?.includes(Number(reviewSessionId)) ||
+                !sessions.some((option) => String(option.id) === reviewSessionId) ||
                 (!workedWell.trim() && !needsImprovement.trim())
               }
               onClick={onSave}
@@ -1014,46 +1265,104 @@ function WeeklyReviews({
             <p className="eyebrow">Discussion history</p>
             <h3>This month’s class reviews</h3>
           </div>
-          <span>{data.weeklyReviews.length} {data.weeklyReviews.length === 1 ? "review" : "reviews"}</span>
+          {!historyLoading && <span aria-live="polite">{visibleReviews.length} {visibleReviews.length === 1 ? "review" : "reviews"}</span>}
         </header>
-        {data.weeklyReviews.map((review) => (
-          <article key={review.id}>
-            <header>
-              <div className="review-service">
-                <b>{formatDate(review.serviceDate)}</b>
-                <small>
-                  {review.serviceName || "Sunday service"}
-                </small>
-              </div>
-              <TeacherAttribution name={review.author} staffId={review.authorId} photo={review.authorProfileImageUrl} createdAt={review.createdAt} />
-            </header>
-            {review.workedWell && (
-              <p>
-                <strong>Worked well</strong>
-                {review.workedWell}
-              </p>
-            )}
-            {review.needsImprovement && (
-              <p>
-                <strong>Improve next time</strong>
-                {review.needsImprovement}
-              </p>
-            )}
-            <DiscussionThread reviewId={review.id} />
-          </article>
+        <label className="review-history-filter">
+          <span>View reviews for</span>
+          <AppSelect value={historyFilter} disabled={historyLoading} onChange={(event) => setHistorySelection(event.target.value)}>
+            <option value="all">All Sundays</option>
+            {[...historyServices.entries()].sort(([, left], [, right]) => left.serviceDate.localeCompare(right.serviceDate)).map(([id, service]) => (
+              <option key={id} value={id}>{formatDate(service.serviceDate)} · {service.name || "Sunday service"}</option>
+            ))}
+          </AppSelect>
+        </label>
+        {historyLoading && <p className="cw-empty" role="status">Loading reviews for this month…</p>}
+        {!historyLoading && visibleReviews.map((review) => (
+          <ClassroomReviewCard key={review.id} review={review}
+            isAuthor={authorId != null && Number(review.authorId) === Number(authorId)} onChanged={onChanged} />
         ))}
-        {!data.weeklyReviews.length && (
+        {!historyLoading && !visibleReviews.length && (
           <div className="discussion-empty">
             <i><FiMessageCircle /></i>
             <div>
-              <b>No discussion yet</b>
-              <p>After this Sunday, add a short reflection to help the next team serve even better.</p>
+              <b>{historyFilter === "all" ? "No reviews for this month yet" : "No reviews for this service yet"}</b>
+              <p>Choose another service or month to see more reviews.</p>
             </div>
           </div>
         )}
       </div>
     </section>
   );
+}
+
+function ClassroomReviewCard({ review, isAuthor, onChanged }: {
+  review: Detail["weeklyReviews"][number];
+  isAuthor: boolean;
+  onChanged: () => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [workedWell, setWorkedWell] = useState("");
+  const [needsImprovement, setNeedsImprovement] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const firstField = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (editing) firstField.current?.focus();
+  }, [editing]);
+
+  async function change(method: "PATCH" | "DELETE") {
+    if (busy || !isAuthor) return;
+    if (method === "DELETE" && !window.confirm("Delete your review and its discussion?")) return;
+    setBusy(true);
+    setError("");
+    try {
+      await changeReview(`classroom-reviews/${review.id}`, method,
+        method === "PATCH" ? { workedWell: workedWell.trim(), needsImprovement: needsImprovement.trim() } : undefined);
+      await onChanged();
+      setEditing(false);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "We could not update this review.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <article>
+    <header>
+      <div className="review-service">
+        <b>{formatDate(review.serviceDate)}</b>
+        <small>{review.serviceName || "Sunday service"}</small>
+      </div>
+      <TeacherAttribution name={review.author} staffId={review.authorId} photo={review.authorProfileImageUrl} createdAt={review.createdAt} />
+      {isAuthor && !editing && <ReviewActions disabled={busy} onEdit={() => {
+        setError("");
+        setWorkedWell(review.workedWell ?? "");
+        setNeedsImprovement(review.needsImprovement ?? "");
+        setEditing(true);
+      }} onDelete={() => void change("DELETE")} />}
+    </header>
+    {error && <p className="review-save-message" role="alert">{error}</p>}
+    {editing ? <form className="review-inline-editor" onSubmit={(event) => { event.preventDefault(); void change("PATCH"); }}>
+      <div className="review-fields">
+        <label className="review-field worked">
+          <span>What worked well?</span>
+          <textarea ref={firstField} value={workedWell} disabled={busy} onChange={(event) => setWorkedWell(event.target.value)} />
+        </label>
+        <label className="review-field improve">
+          <span>What should we improve?</span>
+          <textarea value={needsImprovement} disabled={busy} onChange={(event) => setNeedsImprovement(event.target.value)} />
+        </label>
+      </div>
+      <footer className="review-actions">
+        <button type="button" disabled={busy} onClick={() => { setError(""); setEditing(false); }}>Cancel</button>
+        <button className="primary" disabled={busy || (!workedWell.trim() && !needsImprovement.trim())}>Save changes</button>
+      </footer>
+    </form> : <>
+      {review.workedWell && <p><strong>Worked well</strong>{review.workedWell}</p>}
+      {review.needsImprovement && <p><strong>Improve next time</strong>{review.needsImprovement}</p>}
+    </>}
+    <DiscussionThread reviewId={review.id} />
+  </article>;
 }
 
 export function ChildrenTable({ rows,openChild }: { rows: Child[];openChild:(id:number)=>void }) {
@@ -1130,7 +1439,7 @@ function Attendance({ data, month, setMonth }: {
 
 const styles = `.cw-page{max-width:1260px;padding-top:16px}.cw-heading{margin-bottom:17px}.eyebrow{color:#ff5938;font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase}.cw-page h1,.cw-page h2,.cw-page h3{font-family:var(--font-display,var(--font-body),sans-serif);color:#101d3b}.cw-page h1{margin:5px 0;font-size:37px;letter-spacing:-1.2px}.cw-heading>div>p:last-child,.detail-header p{margin:0;color:#617493;font-size:15px}.cw-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:19px 0}.cw-metric{min-height:104px;padding:17px;border:1px solid #f0e6df;border-radius:10px;background:#fff5f1;display:grid;grid-template-columns:51px 1fr;grid-template-rows:30px 20px 18px}.cw-metric>i{grid-row:1/4;width:43px;height:43px;border-radius:10px;background:#ffe2db;color:#ff5938;display:grid;place-items:center;font-size:22px}.cw-metric b{font:700 28px var(--font-body),sans-serif}.cw-metric strong{font-size:12px}.cw-metric small{color:#70809a;font-size:10px}.cw-metric.green{background:#effbf4}.cw-metric.green>i{background:#d7f6e3;color:#009653}.cw-metric.purple{background:#f5f0ff}.cw-metric.purple>i{background:#e7dcff;color:#7440e8}.cw-metric.red{background:#fff1ee}.cw-metric.red>i{background:#ffdcd7;color:#f04d35}.cw-metric.blue{background:#edf6ff}.cw-metric.blue>i{background:#dceeff;color:#1576d2}.cw-tools,.detail-tools{display:grid;grid-template-columns:minmax(250px,1.7fr) 180px 180px auto;gap:10px;margin:18px 0}.cw-tools label,.detail-tools label{height:41px;border:1px solid #dbe1eb;border-radius:8px;background:#fff;display:flex;align-items:center;gap:9px;padding:0 12px;color:#6580a3}.cw-tools input,.detail-tools input{min-width:0;width:100%;border:0;outline:0;background:transparent;font:12px var(--font-body)}.cw-tools select,.detail-tools select,.cw-table select{height:41px;border:1px solid #dbe1eb;border-radius:8px;background:#fff;padding:0 10px;color:#1a2c4a;font:700 11px var(--font-body)}.cw-tools button,.detail-tools button{height:41px;border:1px solid #dbe1eb;border-radius:8px;background:#fff;padding:0 13px;font:800 11px var(--font-body);display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer}.cw-list-heading{display:flex;align-items:center;justify-content:space-between;margin-top:24px}.cw-list-heading h2{font-size:22px;margin:0}.cw-list-heading span{color:#5d6e89;font-size:11px}.class-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px;margin-top:15px}.class-card{min-height:270px;border:1px solid #e1e4e9;border-radius:10px;background:#fff;padding:16px;display:flex;flex-direction:column}.class-card>header{display:flex;justify-content:space-between;gap:10px}.class-card>header>div{display:grid;grid-template-columns:47px 1fr;column-gap:10px}.class-symbol{grid-row:1/3;width:45px;height:45px;border-radius:11px;display:grid;place-items:center;background:#fbe5f6;color:#d336a7;font-size:21px}.class-card h3{margin:2px 0 3px;font-size:18px}.class-card header p{margin:0;color:#6d7e99;font-size:11px}.cw-status{width:max-content;max-width:100%;display:inline-flex;align-items:center;gap:4px;border-radius:6px;padding:5px 8px;font-size:10px;font-weight:900;white-space:nowrap}.cw-status.good{background:#e6f8ec;color:#07844f}.cw-status.warn{background:#fff0e8;color:#d85332}.cw-status.quiet{background:#eff2f7;color:#5e6d85}.teacher-heading{margin:17px 0 8px;color:#1b2b49;font-size:11px;font-weight:900}.teacher-strip{display:flex;gap:9px;min-height:46px;flex-wrap:wrap}.teacher-strip>span{display:grid;grid-template-columns:31px auto;column-gap:6px;min-width:105px}.teacher-strip b{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.teacher-strip small{grid-column:2;color:#71809a;font-size:9px}.teacher-photo{width:31px;height:31px;border-radius:50%;object-fit:cover;background:#e9effa;color:#2d67a7;display:grid;place-items:center;font-size:9px;font-style:normal;font-weight:900}.no-teacher{font-size:10px;color:#d64e32;text-decoration:none;display:flex;gap:4px;align-items:center}.class-numbers{display:grid;grid-template-columns:repeat(3,1fr);margin:14px 0}.class-numbers b{font:700 21px var(--font-body),sans-serif}.class-numbers small{display:block;color:#71809a;font:600 10px var(--font-body)}.attendance-progress{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;font-size:10px;font-weight:800;color:#18345e}.attendance-progress:before{content:"";grid-area:1/1;height:9px;border-radius:99px;background:#e8edf3}.attendance-progress i{grid-area:1/1;height:9px;border-radius:99px;background:#00af65;z-index:1}.attendance-progress span{grid-area:1/2}.class-card footer{display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:13px;border-top:1px solid #edf0f3}.class-card footer small{display:flex;align-items:center;gap:5px;color:#71809a;font-size:9px}.class-card footer a,.assigned header a,.class-info a{border:1px solid #dce2eb;border-radius:7px;padding:8px 10px;color:#075dd3;text-decoration:none;font-size:10px;font-weight:900;display:flex;align-items:center;gap:4px}.cw-empty{min-height:90px;display:grid;place-items:center;gap:6px;color:#74829a;font-size:12px;text-align:center}.cw-empty b{color:#1d2f4c}.cw-error{padding:13px;border-radius:8px;background:#fff0ed;color:#c6452d}.cw-back{display:inline-flex;align-items:center;gap:7px;color:#476187;text-decoration:none;font-size:11px;font-weight:800}.detail-header{display:flex;align-items:center;justify-content:space-between;margin:10px 0 14px}.detail-header h1{margin:4px 0}.detail-metrics{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}.assigned{padding:15px;border:1px solid #e1e4e9;border-radius:10px;background:#fff}.assigned header{display:flex;align-items:center;justify-content:space-between;gap:10px}.assigned h2{margin:0;font-size:19px}.teacher-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}.teacher-cards article{min-height:78px;padding:12px;border:1px solid #e1e5eb;border-radius:8px;display:flex;align-items:flex-start;gap:9px}.teacher-cards article>div{min-width:0;flex:1;display:grid;gap:4px}.teacher-cards b{font-size:11px}.teacher-cards small{overflow:hidden;color:#70809a;font-size:9px;text-overflow:ellipsis;white-space:nowrap}.teacher-cards p{margin:0;color:#6f7f97;font-size:11px}.teacher-cards p a{color:#075dd3}.class-tabs{display:flex;gap:5px;margin-top:20px;border-bottom:1px solid #e2e6eb;overflow:auto}.class-tabs button{flex:none;border:0;border-bottom:2px solid transparent;background:transparent;padding:11px 14px;color:#64738c;font:800 11px var(--font-body);cursor:pointer}.class-tabs button.selected{border-color:#ff5938;color:#142543}.detail-tools{grid-template-columns:minmax(220px,1.5fr) repeat(3,170px) auto}.primary{border-color:#ff5938!important;background:#ff5938!important;color:#fff!important}.cw-table{overflow:auto;border:1px solid #e0e4ea;border-radius:9px;background:#fff}.cw-table table{width:100%;border-collapse:collapse;min-width:720px}.cw-table th{padding:11px;text-align:left;background:#fbfaf7;color:#73819a;font-size:9px;text-transform:uppercase;letter-spacing:.05em}.cw-table td{padding:11px;border-top:1px solid #ebedf0;color:#203451;font-size:11px}.cw-table td a{color:#153d86;text-decoration:none}.cw-table td small{display:block;color:#71809b;font-size:9px;margin-top:3px}.cw-table select{height:31px;font-size:10px}.attendance-view>header,.assignment-panel>header{display:flex;justify-content:space-between;align-items:center;padding:16px 0}.attendance-view h2,.assignment-panel h2{margin:0;font-size:21px}.attendance-view p,.assignment-panel p{color:#697a95;font-size:12px}.attendance-view input{height:38px;border:1px solid #dbe1eb;border-radius:7px;padding:0 9px;font:11px var(--font-body)}.matrix th small{display:block;margin-top:3px;font-size:8px}.notes-panel{display:grid;gap:10px;padding:16px 0}.notes-panel textarea{min-height:90px;border:1px solid #dce1e8;border-radius:8px;padding:11px;font:12px var(--font-body);resize:vertical}.notes-panel article{padding:13px;border:1px solid #e2e5ea;border-radius:8px;background:#fff}.notes-panel article small{margin-left:8px;color:#75829a;font-size:9px}.notes-panel article p{margin:7px 0 0;color:#586a85;font-size:12px;white-space:pre-wrap}.class-info{display:grid;gap:10px;padding:17px 0}.class-info p{display:grid;gap:3px;margin:0;color:#677995;font-size:12px}.class-info b{color:#182b48}.assignment-panel{padding:5px 0}.assignment-panel>header{padding-bottom:8px}.cw-modal{position:fixed;z-index:99;inset:0;background:#0a173a77;display:grid;place-items:center;padding:20px}.cw-modal>section{position:relative;width:min(100%,510px);padding:25px;border-radius:12px;background:#fffdfa;box-shadow:0 20px 60px #101c373d;display:grid;gap:12px}.cw-modal h2{margin:0;font:700 26px var(--font-body),sans-serif}.cw-modal label{display:grid;gap:6px;color:#33445f;font-size:11px;font-weight:800}.cw-modal input,.cw-modal textarea{border:1px solid #dce2eb;border-radius:8px;padding:10px;font:12px var(--font-body)}.cw-modal textarea{min-height:90px;resize:vertical}.modal-close{position:absolute;top:12px;right:14px;border:0;background:none;font-size:23px;cursor:pointer}.cw-modal footer{display:flex;justify-content:flex-end;gap:9px}.cw-modal footer button{height:40px;border:1px solid #dce2eb;border-radius:8px;padding:0 14px;background:#fff;font:800 11px var(--font-body);cursor:pointer}@media(max-width:1100px){.cw-metrics{grid-template-columns:repeat(2,1fr)}.class-grid{grid-template-columns:1fr}.cw-tools,.detail-tools{grid-template-columns:1fr 1fr}.cw-tools label,.detail-tools label{grid-column:1/-1}.teacher-cards{grid-template-columns:1fr 1fr}}@media(max-width:650px){.cw-page{padding-top:0}.cw-page h1{font-size:31px}.cw-metrics,.cw-tools,.detail-tools,.teacher-cards{grid-template-columns:1fr}.cw-tools label,.detail-tools label{grid-column:auto}.cw-list-heading{align-items:flex-start;gap:7px;flex-direction:column}.class-card{min-height:285px}.detail-header{align-items:flex-start;gap:10px;flex-direction:column}.assigned header{align-items:flex-start;flex-direction:column}.class-tabs button{padding:11px 9px;font-size:10px}.cw-modal{align-items:end;padding:0}.cw-modal>section{width:100%;border-radius:14px 14px 0 0}.teacher-cards article{min-width:0}}`;
 
-const assemblyStyles = `.cw-primary-tabs{display:flex;gap:4px;margin:12px 0 18px;border-bottom:1px solid #e2e6eb}.cw-primary-tabs button{border:0;border-bottom:3px solid transparent;background:transparent;padding:12px 19px;color:#687992;font:800 12px var(--font-body);cursor:pointer}.cw-primary-tabs button.selected{border-color:#ff5938;color:#172a48}.cw-context-line{display:block;margin-top:7px;color:#7586a0;font-size:11px}.cw-service-group{margin-top:15px}.cw-service-group>h3{display:flex;align-items:baseline;gap:8px;margin:18px 0 0;font-size:17px}.cw-service-group>h3 small{font:600 10px var(--font-body);color:#76849d}.assembly-view{display:grid;gap:15px}.assembly-intro{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;padding:20px;border:1px solid #f0e6df;border-radius:12px;background:#fff8f1}.assembly-intro h2{margin:3px 0;font:700 28px var(--font-body),sans-serif;color:#15294a}.assembly-intro p{margin:0;color:#667895;font-size:12px}.assembly-intro select{height:39px;border:1px solid #dbe1eb;border-radius:8px;background:#fff;padding:0 11px;color:#1a2c4a;font:700 11px var(--font-body)}.assembly-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.assembly-groups{display:flex;gap:8px;overflow:auto}.assembly-groups button{flex:none;border:1px solid #dce2eb;border-radius:8px;background:#fff;padding:9px 12px;color:#536783;font:800 11px var(--font-body);cursor:pointer}.assembly-groups button.selected{border-color:#ff5938;background:#fff1eb;color:#d94f32}.assembly-groups small{display:block;margin-top:2px;color:#8693a8;font-size:9px}.assembly-panel{padding:17px;border:1px solid #e1e5eb;border-radius:11px;background:#fff}.assembly-panel>header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:13px}.assembly-panel h3{margin:2px 0 0;font-size:19px}.assembly-panel>header a{border:1px solid #dce2eb;border-radius:7px;padding:8px 10px;color:#075dd3;text-decoration:none;font-size:10px;font-weight:900;display:flex;align-items:center;gap:4px}.assembly-panel>header button{height:37px;display:flex;align-items:center;gap:5px}.assembly-team{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.assembly-team article{display:flex;gap:9px;align-items:flex-start;padding:12px;border:1px solid #e3e7ed;border-radius:9px;background:#fffdfa}.assembly-team article>div{display:grid;gap:4px;min-width:0}.assembly-team b{font-size:11px}.assembly-team small{color:#71809a;font-size:10px}.assembly-team .cw-status{font-size:9px;padding:3px 6px}.assembly-activity-list{display:grid;gap:8px}.assembly-activity-list article{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid #e3e7ed;border-radius:8px}.assembly-activity-list article>div{display:grid;gap:4px;min-width:0}.assembly-activity-list b{font-size:12px;color:#1b2d4b}.assembly-activity-list small{color:#71809a;font-size:10px}.assembly-activity-list select{height:32px;border:1px solid #dbe1eb;border-radius:7px;background:#fff;padding:0 8px;color:#1a2c4a;font:700 10px var(--font-body)}.assembly-notes{display:grid;gap:8px}.assembly-notes article{padding:12px;border-left:3px solid #ff5938;border-radius:7px;background:#fff8f1}.assembly-notes p{margin:0;color:#425673;font-size:12px;line-height:1.55;white-space:pre-wrap}.assembly-notes small{display:block;margin-top:8px;color:#78869e;font-size:9px}.assembly-note-form{display:flex;gap:9px;margin-top:12px}.assembly-note-form textarea{flex:1;min-height:67px;border:1px solid #dce2eb;border-radius:8px;padding:10px;font:12px var(--font-body);resize:vertical}.assembly-note-form button{align-self:flex-end;height:38px}.assembly-empty{display:grid;place-items:center;gap:8px;min-height:220px;border:1px dashed #d8e0ea;border-radius:11px;color:#74829a;text-align:center}.assembly-empty svg{font-size:30px;color:#ff5938}.assembly-empty h2{margin:0;color:#1b2d4b;font:700 20px var(--font-body),sans-serif}.assembly-empty p{margin:0;font-size:12px}.cw-save-message{margin:0;padding:10px;border-radius:7px;background:#effbf4;color:#07844f;font-size:11px}@media(max-width:900px){.assembly-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.assembly-team{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:650px){.cw-primary-tabs button{padding:11px 13px}.assembly-intro{align-items:stretch;flex-direction:column}.assembly-intro select{width:100%}.assembly-metrics,.assembly-team{grid-template-columns:1fr}.assembly-panel>header{align-items:flex-start;flex-direction:column}.assembly-activity-list article{align-items:flex-start;flex-direction:column}.assembly-activity-list select{width:100%}.assembly-note-form{align-items:stretch;flex-direction:column}.assembly-note-form button{width:100%}}`;
+const assemblyStyles = `.cw-context-line{display:block;margin-top:7px;color:#7586a0;font-size:11px}.cw-service-group{margin-top:15px}.cw-service-group>h3{display:flex;align-items:baseline;gap:8px;margin:18px 0 0;font-size:17px}.cw-service-group>h3 small{font:600 10px var(--font-body);color:#76849d}.assembly-view{display:grid;gap:15px}.assembly-intro{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;padding:20px;border:1px solid #f0e6df;border-radius:12px;background:#fff8f1}.assembly-intro h2{margin:3px 0;font:700 28px var(--font-body),sans-serif;color:#15294a}.assembly-intro p{margin:0;color:#667895;font-size:12px}.assembly-intro select{height:39px;border:1px solid #dbe1eb;border-radius:8px;background:#fff;padding:0 11px;color:#1a2c4a;font:700 11px var(--font-body)}.assembly-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.assembly-groups{display:flex;gap:8px;overflow:auto}.assembly-groups button{flex:none;border:1px solid #dce2eb;border-radius:8px;background:#fff;padding:9px 12px;color:#536783;font:800 11px var(--font-body);cursor:pointer}.assembly-groups button.selected{border-color:#ff5938;background:#fff1eb;color:#d94f32}.assembly-groups small{display:block;margin-top:2px;color:#8693a8;font-size:9px}.assembly-panel{padding:17px;border:1px solid #e1e5eb;border-radius:11px;background:#fff}.assembly-panel>header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:13px}.assembly-panel h3{margin:2px 0 0;font-size:19px}.assembly-panel>header a{border:1px solid #dce2eb;border-radius:7px;padding:8px 10px;color:#075dd3;text-decoration:none;font-size:10px;font-weight:900;display:flex;align-items:center;gap:4px}.assembly-panel>header button{height:37px;display:flex;align-items:center;gap:5px}.assembly-team{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.assembly-team article{display:flex;gap:9px;align-items:flex-start;padding:12px;border:1px solid #e3e7ed;border-radius:9px;background:#fffdfa}.assembly-team article>div{display:grid;gap:4px;min-width:0}.assembly-team b{font-size:11px}.assembly-team small{color:#71809a;font-size:10px}.assembly-team .cw-status{font-size:9px;padding:3px 6px}.assembly-activity-list{display:grid;gap:8px}.assembly-activity-list article{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid #e3e7ed;border-radius:8px}.assembly-activity-list article>div{display:grid;gap:4px;min-width:0}.assembly-activity-list b{font-size:12px;color:#1b2d4b}.assembly-activity-list small{color:#71809a;font-size:10px}.assembly-activity-list select{height:32px;border:1px solid #dbe1eb;border-radius:7px;background:#fff;padding:0 8px;color:#1a2c4a;font:700 10px var(--font-body)}.assembly-notes{display:grid;gap:8px}.assembly-notes article{padding:12px;border-left:3px solid #ff5938;border-radius:7px;background:#fff8f1}.assembly-notes p{margin:0;color:#425673;font-size:12px;line-height:1.55;white-space:pre-wrap}.assembly-notes small{display:block;margin-top:8px;color:#78869e;font-size:9px}.assembly-note-form{display:flex;gap:9px;margin-top:12px}.assembly-note-form textarea{flex:1;min-height:67px;border:1px solid #dce2eb;border-radius:8px;padding:10px;font:12px var(--font-body);resize:vertical}.assembly-note-form button{align-self:flex-end;height:38px}.assembly-empty{display:grid;place-items:center;gap:8px;min-height:220px;border:1px dashed #d8e0ea;border-radius:11px;color:#74829a;text-align:center}.assembly-empty svg{font-size:30px;color:#ff5938}.assembly-empty h2{margin:0;color:#1b2d4b;font:700 20px var(--font-body),sans-serif}.assembly-empty p{margin:0;font-size:12px}.cw-save-message{margin:0;padding:10px;border-radius:7px;background:#effbf4;color:#07844f;font-size:11px}@media(max-width:900px){.assembly-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.assembly-team{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:650px){.cw-primary-tabs button{padding:11px 13px}.assembly-intro{align-items:stretch;flex-direction:column}.assembly-intro select{width:100%}.assembly-metrics,.assembly-team{grid-template-columns:1fr}.assembly-panel>header{align-items:flex-start;flex-direction:column}.assembly-activity-list article{align-items:flex-start;flex-direction:column}.assembly-activity-list select{width:100%}.assembly-note-form{align-items:stretch;flex-direction:column}.assembly-note-form button{width:100%}}`;
 
 const mobileDetailStyles = `
   .attendance-cards{display:none}.weekly-reviews{padding:18px 0}.weekly-reviews>header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:14px}.weekly-reviews h2{margin:4px 0;font-size:23px}.weekly-reviews p{margin:0;color:#697a95;font-size:12px}.weekly-reviews>header label{display:grid;gap:5px;color:#62718a;font-size:10px;font-weight:800}.weekly-reviews input,.review-form select,.review-form textarea{border:1px solid #dce2eb;border-radius:8px;background:#fff;padding:10px;color:#203451;font:12px var(--font-body)}.review-form{padding:15px;border:1px solid #e1e5eb;border-radius:10px;background:#fffdfa}.review-form-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;color:#243653;font-size:12px}.review-form-heading select{min-width:220px}.review-fields{display:grid;grid-template-columns:1fr 1fr;gap:11px}.review-fields label{display:grid;gap:6px;color:#40516d;font-size:11px;font-weight:800}.review-fields textarea{min-height:96px;resize:vertical}.review-form .primary{height:39px;margin-top:12px}.review-form .primary:disabled{cursor:not-allowed;opacity:.48}.review-list{display:grid;gap:10px;margin-top:14px}.review-list article{padding:14px;border:1px solid #e2e5ea;border-radius:9px;background:#fff}.review-list article header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.review-list article header div{display:grid;gap:4px}.review-list article header b{font-size:12px}.review-list article header small{color:#71809b;font-size:10px}.review-list article header svg{color:#ff5938}.review-list article p{display:grid;gap:4px;margin:12px 0 0;white-space:pre-wrap;color:#586a85;line-height:1.5}.review-list article strong{color:#203451;font-size:11px}.teacher-cards article>a{display:block;line-height:0}.teacher-cards article>div>a{color:#172a48;text-decoration:none}.teacher-cards article>div>a:hover{text-decoration:underline}

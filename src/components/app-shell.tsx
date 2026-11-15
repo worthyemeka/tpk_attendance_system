@@ -10,12 +10,13 @@ import { useEffect,useState } from "react";
 import { readTeacherSession } from "@/lib/session";
 import { DashboardAppearance } from "./dashboard-appearance";
 import { VolunteerNavigation } from "./event-volunteer-dashboard";
+import { FriendshipWelcome } from "./friendship-welcome";
 
 function AccountShell({children}:{children:React.ReactNode}){
   const[volunteer,setVolunteer]=useState<boolean|null>(null);
   useEffect(()=>setVolunteer(readTeacherSession()?.accessLevel==="EVENT_VOLUNTEER"),[]);
   if(volunteer===null)return <main className="route-loading"/>;
-  return <><DashboardAppearance/>{volunteer?<main className="volunteer-shell"><VolunteerNavigation/>{children}</main>:<SundayContextProvider><Sidebar/><main className="content"><AdminTopbar/>{children}</main></SundayContextProvider>}</>;
+  return <><DashboardAppearance/>{volunteer?<main className="volunteer-shell"><VolunteerNavigation/>{children}</main>:<SundayContextProvider><Sidebar/><FriendshipWelcome/><main className="content"><AdminTopbar/>{children}</main></SundayContextProvider>}</>;
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {

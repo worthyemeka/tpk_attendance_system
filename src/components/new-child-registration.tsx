@@ -72,6 +72,7 @@ export function NewChildRegistration() {
     <Progress step={step} />
     <section className="new-reg-card">
       {error && <p className="new-reg-error" role="alert">{error}</p>}
+      {step<4&&<p><a href="/families/add-child">Already registered with TPK? Add a sibling to your existing family →</a></p>}
       {step === 0 && <ChildStep children={children} updateChild={updateChild} addChild={addChild} removeChild={removeChild} next={goNext} />}
       {step === 1 && <GuardianStep guardian={guardian} setGuardian={setGuardian} back={goBack} next={goNext} childSummary={childSummary} />}
       {step === 2 && <PickupStep pickupMode={pickupMode} setPickupMode={setPickupMode} picker={picker} setPicker={setPicker} service={service} services={services} setService={chooseService} back={goBack} next={goNext} />}

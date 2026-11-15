@@ -13,6 +13,7 @@ import {
   FiChevronRight,
   FiClock,
   FiHome,
+  FiGift,
   FiLogOut,
   FiMenu,
   FiSettings,
@@ -51,6 +52,7 @@ const superPeople: readonly Item[] = [
   ["Team", "/account/team", FiUsers],
 ];
 const superMinistry: readonly Item[] = [
+  ["Friendship Sunday", "/account/friendship", FiGift],
   ["Events & Conferences", "/account/events", FiCalendar],
   ["Teacher Check-In", "/account/teacher-check-in", FiCheckSquare],
   ["Team & Roster", "/account/roster", FiClock],
@@ -72,6 +74,7 @@ const serviceLeadPeople: readonly Item[] = [
   ["Team", "/account/team", FiUsers],
 ];
 const adminMinistry: readonly Item[] = [
+  ["Friendship Sunday", "/account/friendship", FiGift],
   ["Events & Conferences", "/account/events", FiCalendar],
   ["Teacher Check-In", "/account/teacher-check-in", FiCheckSquare],
   ["My Roster", "/account/roster", FiClock],
@@ -79,6 +82,7 @@ const adminMinistry: readonly Item[] = [
   ["Classes & Curriculum", "/account/classes", FiBookOpen],
 ];
 const followUpLeadMinistry: readonly Item[] = [
+  ["Friendship Sunday", "/account/friendship", FiGift],
   ["Events & Conferences", "/account/events", FiCalendar],
   ["Teacher Check-In", "/account/teacher-check-in", FiCheckSquare],
   ["My Roster", "/account/roster", FiClock],

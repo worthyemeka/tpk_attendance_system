@@ -9,6 +9,7 @@ import { apiBase, authHeaders, readTeacherSession, type TeacherSession } from "@
 import { classForBirthDate } from "@/lib/automatic-class";
 import { campusToday, registrationEligibility, underThreeMessage } from "@/lib/registration-eligibility";
 import "./admin-child-registration.css";
+import {SiblingRegistration} from "./sibling-registration";
 
 type Child = { key:number;firstName:string;lastName:string;dateOfBirth:string;gender:string;classId:string;careInformation:string };
 type Guardian = { firstName:string;lastName:string;phone:string;secondaryPhone:string;email:string;relationship:string;address:string };
@@ -18,6 +19,11 @@ const blankChild = (key:number):Child => ({key,firstName:"",lastName:"",dateOfBi
 const blankGuardian:Guardian = {firstName:"",lastName:"",phone:"",secondaryPhone:"",email:"",relationship:"",address:""};
 
 export function AdminChildRegistration() {
+  const[existing,setExisting]=useState(false);const[allowed,setAllowed]=useState(false);
+  useEffect(()=>setAllowed(readTeacherSession()?.accessLevel==="TPK_SUPER_ADMIN"),[]);
+  return <>{allowed&&<nav className="registration-kind-tabs" aria-label="Registration type"><button type="button" aria-pressed={!existing} onClick={()=>setExisting(false)}>New family</button><button type="button" aria-pressed={existing} onClick={()=>setExisting(true)}>Add sibling to existing family</button></nav>}{existing&&allowed?<SiblingRegistration staff/>:<NewFamilyRegistration/>}</>;
+}
+function NewFamilyRegistration() {
   const [session,setSession] = useState<TeacherSession|null>(null);
   const [sessionReady,setSessionReady] = useState(false);
   const isSuper = session?.accessLevel === "TPK_SUPER_ADMIN";

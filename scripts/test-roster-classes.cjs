@@ -14,6 +14,8 @@ const classes = [
   { id: 1, name: 'TribePetra Teens', ageLabel: 'Ages 12–19', minAge: 12, maxAge: 19 },
 ];
 const columns = sundayRosterColumns(classes);
+assert(!sundayRosterColumns(classes,true).some(item=>item.code==='FIRST_SERVICE_TEAM'),'single service does not require a first service team');
+assert.equal(sundayRosterColumns(classes,true,true).find(item=>item.code==='FIRST_SERVICE_TEAM').label,'Service support','retained assignments stay visible as a role');
 assert.deepEqual(columns.filter(item => item.code === 'CLASS_TEACHER').map(item => item.classId), [2, 3, 4, 1]);
 const teens = columns.find(item => item.classId === 1);
 assert.equal(teens.label, 'TribePetra Teens');

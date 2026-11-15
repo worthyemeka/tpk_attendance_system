@@ -13,9 +13,9 @@ export type SundayRosterColumn = {
 
 // Use the same configured classes as registration and classrooms. A fixed
 // Tribe A/B/C list silently dropped Teens (and any newly configured class).
-export function sundayRosterColumns(classes: readonly RosterClass[]): SundayRosterColumn[] {
+export function sundayRosterColumns(classes: readonly RosterClass[],rolesOnly=false,hasSavedSupport=false): SundayRosterColumn[] {
   return [
-    { label: "First Service", sub: "Team", code: "FIRST_SERVICE_TEAM" },
+    ...(!rolesOnly?[{ label: "First Service", sub: "Team", code: "FIRST_SERVICE_TEAM" }]:hasSavedSupport?[{label:"Service support",sub:"Saved team assignments",code:"FIRST_SERVICE_TEAM"}]:[]),
     ...classes.map((classroom) => ({
       label: classroom.name,
       sub: classroom.ageLabel || undefined,

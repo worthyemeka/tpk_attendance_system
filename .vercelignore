@@ -1,0 +1,7 @@
+.deployment
+backend
+docs
+.env
+sources
+output
+tsconfig.tsbuildinfo

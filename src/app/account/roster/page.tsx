@@ -145,13 +145,15 @@ export default function RosterPage() {
       new Date(Date.UTC(new Date().getFullYear(), new Date().getMonth(), 1)),
   );
   const [data, setData] = useState<Management | null>(null);
-  const sundayColumns = useMemo(() => sundayRosterColumns(data?.classes || []), [data?.classes]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [tab, setTab] = useState<"SUNDAY" | "NON_TEACHING">("SUNDAY");
   const [query, setQuery] = useState("");
   const [sundayFilter, setSundayFilter] = useState("");
+  const rosterDate=sundayFilter||sundayContext.selectedSundayDate||data?.sundays.at(-1)||"";
+  const rolesOnly=Boolean(data?.sessions.filter(service=>service.serviceDate===rosterDate).length===1);
+  const sundayColumns=useMemo(()=>sundayRosterColumns(data?.classes||[],rolesOnly,Boolean(data?.assignments.some(item=>item.dutyCode==="FIRST_SERVICE_TEAM"))),[data?.classes,data?.assignments,rolesOnly]);
   const [dutyFilter, setDutyFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [display, setDisplay] = useState<DataView>("GRID");
@@ -187,7 +189,8 @@ export default function RosterPage() {
         throw new Error(
           result.error?.message || "We could not load this monthly roster.",
         );
-      setData(result.data);
+      const next=result.data as Management;
+      setData({...next,teachers:next.teachers.map(item=>({...item,id:Number(item.id)})),duties:next.duties.map(item=>({...item,id:Number(item.id),requiresClass:item.requiresClass===true||String(item.requiresClass)==="1"})),classes:next.classes.map(item=>({...item,id:Number(item.id)})),sessions:next.sessions.map(item=>({...item,id:Number(item.id)})),assignments:next.assignments.map(item=>({...item,id:Number(item.id),userId:Number(item.userId),classId:item.classId==null?null:Number(item.classId),serviceSessionId:item.serviceSessionId==null?null:Number(item.serviceSessionId)}))});
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -262,9 +265,12 @@ export default function RosterPage() {
     visibleAssignments.filter(
       (item) => item.assignmentDate === date && item.dutyCode === code,
     );
-  const selectedDuty = data?.duties.find(
+  const rawSelectedDuty = data?.duties.find(
     (item) => item.id === Number(modal?.dutyId),
   );
+  const selectedDuty = rawSelectedDuty?.code === "FIRST_SERVICE_TEAM" &&
+    data?.sessions.filter(item => item.serviceDate === modal?.date).length === 1
+    ? { ...rawSelectedDuty, name: "Service support" } : rawSelectedDuty;
   const selectedTeachers =
     data?.teachers.filter((item) => modal?.teacherIds.includes(item.id)) || [];
   const replacingAssignment = modal?.replaceAssignmentId
@@ -644,7 +650,7 @@ export default function RosterPage() {
               )
               .map((item) => (
                 <option key={item.id} value={item.code}>
-                  {item.name}
+                  {rolesOnly&&item.code==="FIRST_SERVICE_TEAM"?"Service support":item.name}
                 </option>
               ))}
           </AppSelect>
@@ -1313,7 +1319,7 @@ function AssignModal({
   onSave: (event: FormEvent) => void;
 }) {
   const serviceOptions=services.filter(item=>item.serviceDate===modal.date);
-  const availableDuties = duties.filter((item) =>
+  const availableDuties = duties.map(item=>serviceOptions.length===1&&item.code==="FIRST_SERVICE_TEAM"?{...item,name:"Service support"}:item).filter((item) =>
     modal.type === "SUNDAY"
       ? item.category !== "NON_TEACHING"
       : item.category === "NON_TEACHING",

@@ -6,6 +6,7 @@ export const SITE_URL = new URL(process.env.SITE_URL || "https://tpk-checkin.ver
 const brandKeywords = ["TribePetra Kids", "TPK", "Petra Church", "Mabushi Regional Campus", "children's ministry", "Abuja"];
 type PageSeo = { title: string; description: string; keywords: string[]; public?: boolean };
 export const PAGE_SEO: Record<string, PageSeo> = {
+  "/account/friendship": { title: "Friendship Sunday", description: "Spin to reveal your private Friendship Sunday gift recipient and celebrate the TPK teaching team.", keywords: ["Friendship Sunday", "teacher gift exchange", "Denim and Friends"] },
   "/account/children/register": { title: "Register Children", description: "Register children and their guardian details without recording a service check-in or generating a pickup ticket.", keywords: ["child registration", "guardian details", "age-based classes"] },
   "/account/classes": { title: "Classes & Curriculum", description: "Browse lesson notes, videos and games by class, year, month and week, with authorised teaching resource management.", keywords: ["curriculum resources", "lesson notes", "class materials"] },
   "/account/teacher-check-in": { title: "Teacher Check-In", description: "Review teacher attendance for Sunday and MDWK services, verify service-day sign-ins and manage authorised welfare follow-up.", keywords: ["teacher attendance", "MDWK services", "teacher welfare"] },

@@ -13,7 +13,7 @@ import { apiBase,authHeaders,mediaUrl } from "@/lib/session";
 import { downloadTablePdf,loadEventReportBranding } from "@/lib/table-pdf";
 import { campusToday,registrationEligibility } from "@/lib/registration-eligibility";
 import { eventCountdown,eventDate,type MinistryEvent,type EventSummary,type EventSession } from "@/lib/events";
-import { EventCurriculum, EventDays, EventImports, EventVolunteerRegistration, eventRequest, type HistoryData, type Campus } from "./event-history-panels";
+import { EventCurriculum, EventDays, EventImports, EventVolunteerRegistration, eventRequest, type HistoryData, type Campus, type EventDay } from "./event-history-panels";
 import { eventLifecycle } from "@/lib/events";
 import "./events-workspace.css";
 import "./events-calendar-filter.css";
@@ -67,13 +67,125 @@ const children=(data?.children||[]).filter(c=>!query||[c.name,c.guardianName,c.h
  {tab==="Overview"&&data.canManage&&<EventAppearanceEditor id={id} data={data} event={data.event} reload={load}/>}
 {tab==="Reports"&&<><section className="event-panel"><h2>Historical attendance</h2><p>Source checkboxes are preserved separately. “Pickup recorded” is not a live pending-pickup count. Unknown facts remain unknown.</p><div className="event-table"><table><thead><tr><th>Day</th><th>Recorded</th><th>Present</th><th>Unchecked drop-off</th><th>Pickup recorded</th><th>Pickup unknown</th></tr></thead><tbody>{data.historicalReport.map(d=><tr key={d.dayId}><td>{d.label}<small>{eventDate(d.date)}</small></td><td>{d.recorded}</td><td>{d.present||0}</td><td>{d.absent||0}</td><td>{d.pickedUp||0}</td><td>{d.pickupUnknown||0}</td></tr>)}</tbody></table></div>{data.reportedStatistics.length>0&&<><h3>Source-reported statistics</h3><div className="event-detail-grid">{data.reportedStatistics.map((s,i)=><div key={i}><small>{data.days.find(d=>Number(d.id)===Number(s.dayId))?.label} · {s.metric}</small><b>{s.value}</b><small>{s.source} · page {s.page}</small></div>)}</div></>}{data.programme.length>0&&<button className="records-view-action" onClick={()=>setTab("Volunteers")}>View daily programme & volunteer roster →</button>}</section><section className="event-panel"><header><h2>Programme report</h2><button className="outline-button" disabled={!data.sessions.length&&!data.historicalReport.some(d=>Number(d.recorded)>0)} onClick={()=>void exportReport()}><FiDownload/>Export PDF</button></header>{!data.historicalReport.some(d=>Number(d.recorded)>0)&&<div className="event-table"><table><thead><tr><th>Session</th><th>Expected</th><th>Checked in</th><th>Awaiting pickup</th></tr></thead><tbody>{data.sessions.map(s=><tr key={s.id}><td><b>{s.name}</b><small>{eventDate(s.startsAt)}</small></td><td>{Number(s.expected||0)}</td><td>{Number(s.attended||0)}</td><td>{Number(s.awaitingPickup||0)}</td></tr>)}</tbody></table></div>}<EventCampusReport eventName={data.event.name} eventType={data.event.type} children={data.children} sessions={data.sessions} days={data.days} arrivals={data.attendance} historical={data.historicalAttendance}/>{data.canOperate&&Number(data.summary.careNotes||0)>0&&<p>{Number(data.summary.careNotes)} children have care information for the event team to review.</p>}</section>{data.canManage&&<EventImports id={id} data={data} reload={load}/>}</>}
  </>}
- {modal&&<Dialog title={modal==="register"?(data?.teenProgramme?"Register for the Boys Programme":"Register children for this event"):modal==="create"?"Create event":modal==="edit"?"Edit event":`Add ${modal==="duplicate"?"a new edition":modal}`} onClose={()=>setModal(null)}>{modal==="create"||modal==="edit"?<Editor event={modal==="edit"?data?.event:undefined} onSaved={next=>{setModal(null);if(next===id)void load();else open(next);}}/>:data&&modal==="register"&&data.teenProgramme?<TeenProgrammeForm form={data.teenProgramme} startDate={data.event.startDate} onSubmit={async registration=>{const b=await request(`/${id}/registrations`,"POST",registration);setMessage(`Registration saved. Reference: ${b.referenceCode}`);setModal(null);await load();}}/>:data&&modal==="register"?<EventRegistrationForm sessions={data.sessions} startDate={data.event.startDate} eventId={id} campuses={data.campuses} onSubmit={async registration=>{const b=await request(`/${id}/registrations`,"POST",registration);setMessage(`Registration saved. Reference: ${b.referenceCode}`);setModal(null);await load();}}/>:data&&modal==="volunteers"?<VolunteerEditor data={data} assignment={assignment} onSaved={async()=>{setModal(null);setAssignment(null);await load();}}/>:data&&<Setup kind={modal as "sessions"|"groups"|"duplicate"} data={data} onSaved={async next=>{setModal(null);if(next)open(next);else await load();}}/>}</Dialog>}
+ {modal&&<Dialog title={modal==="register"?(data?.teenProgramme?"Register for the Boys Programme":"Register children for this event"):modal==="create"?"Create event":modal==="edit"?"Edit event":`Add ${modal==="duplicate"?"a new edition":modal}`} onClose={()=>setModal(null)}>{modal==="create"||modal==="edit"?<Editor event={modal==="edit"?data?.event:undefined} days={data?.days} sessions={data?.sessions} onSaved={next=>{setModal(null);if(next===id)void load();else open(next);}}/>:data&&modal==="register"&&data.teenProgramme?<TeenProgrammeForm form={data.teenProgramme} startDate={data.event.startDate} onSubmit={async registration=>{const b=await request(`/${id}/registrations`,"POST",registration);setMessage(`Registration saved. Reference: ${b.referenceCode}`);setModal(null);await load();}}/>:data&&modal==="register"?<EventRegistrationForm sessions={data.sessions} startDate={data.event.startDate} eventId={id} campuses={data.campuses} onSubmit={async registration=>{const b=await request(`/${id}/registrations`,"POST",registration);setMessage(`Registration saved. Reference: ${b.referenceCode}`);setModal(null);await load();}}/>:data&&modal==="volunteers"?<VolunteerEditor data={data} assignment={assignment} onSaved={async()=>{setModal(null);setAssignment(null);await load();}}/>:data&&<Setup kind={modal as "sessions"|"groups"|"duplicate"} data={data} onSaved={async next=>{setModal(null);if(next)open(next);else await load();}}/>}</Dialog>}
  {pickup&&data&&<Dialog title="Verify event pickup" onClose={()=>setPickup(null)}><Pickup child={data.children.find(c=>Number(c.id)===Number(pickup.childId))!} busy={busy} onSave={(code,collector)=>void act("pickup",{pickupCode:code,collectorName:collector,guardianVerified:true})}/>{error&&<p role="alert" className="event-error">{error}</p>}</Dialog>}
  </section>;
 }
 function Search({value,set,placeholder="Search child, guardian or campus…"}:{value:string;set:(s:string)=>void;placeholder?:string}){return <label className="event-search"><FiSearch/><input aria-label="Search event records" value={value} onChange={e=>set(e.target.value)} placeholder={placeholder}/></label>;}
 function Dialog({title,onClose,children}:{title:string;onClose:()=>void;children:React.ReactNode}){const ref=useRef<HTMLElement>(null);const close=useRef(onClose);close.current=onClose;useEffect(()=>{const previous=document.activeElement as HTMLElement;const overflow=document.body.style.overflow;document.body.style.overflow="hidden";ref.current?.focus();const keys=(e:KeyboardEvent)=>{if(e.key==="Escape")close.current();if(e.key!=="Tab")return;const nodes=Array.from(ref.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),textarea:not(:disabled),[tabindex="0"],select:not(:disabled),a[href]')||[]).filter(n=>n.getClientRects().length);if(!nodes.length)return;if(e.shiftKey&&(document.activeElement===nodes[0]||document.activeElement===ref.current)){e.preventDefault();nodes[nodes.length-1].focus();}else if(!e.shiftKey&&document.activeElement===nodes[nodes.length-1]){e.preventDefault();nodes[0].focus();}};document.addEventListener("keydown",keys);return()=>{document.body.style.overflow=overflow;document.removeEventListener("keydown",keys);previous?.focus();};},[]);return <div className="event-modal"><section ref={ref} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}><header><div><p className="eyebrow">TribePetra Kids</p><h2>{title}</h2></div><button aria-label="Close dialog" className="outline-button" onClick={onClose}><FiX/></button></header>{children}</section></div>;}
-function Editor({event,onSaved}:{event?:MinistryEvent;onSaved:(id:number)=>void}){const[form,setForm]=useState({name:event?.name||"",type:event?.type||"CONFERENCE",startDate:event?.startDate||"",endDate:event?.endDate||"",registrationOpens:event?.registrationOpens||campusToday(),registrationCloses:event?.registrationCloses||"",themeName:event?.themeName||"",themeSongUrl:event?.themeSongUrl||"",timezone:event?.timezone||"Africa/Lagos",status:event?.status||"DRAFT",description:event?.description||"",countdown:event?Boolean(event.countdown):true,publicRegistration:event?.publicRegistration||false});const[busy,setBusy]=useState(false);const[error,setError]=useState("");async function save(e:FormEvent){e.preventDefault();setBusy(true);setError("");try{const b=await request(event?`/${event.id}`:"",event?"PATCH":"POST",form);onSaved(Number(b.id));}catch(e){setError(e instanceof Error?e.message:"Could not save event.");}finally{setBusy(false);}}return <form className="event-form" onSubmit={save}><p>Drafts are visible only to Super Admins. Add sessions, groups and volunteers, then publish when ready. Past events remain fully accessible as historical records.</p><div className="event-form-grid"><label>Event name<input required maxLength={180} value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="e.g. Rain Conference 2027"/></label><label>Event theme<input maxLength={180} value={form.themeName} onChange={e=>setForm({...form,themeName:e.target.value})}/></label><label>Theme song URL<input type="url" value={form.themeSongUrl} onChange={e=>setForm({...form,themeSongUrl:e.target.value})}/></label><label>Event timezone (IANA)<input required value={form.timezone} onChange={e=>setForm({...form,timezone:e.target.value})} placeholder="Africa/Lagos"/></label><label>Programme type<AppSelect value={form.type} onChange={e=>setForm({...form,type:e.target.value})}>{["CONFERENCE","VBS","CAMP","SPECIAL_SERVICE","OTHER"].map(x=><option key={x} value={x}>{x.replaceAll("_"," ")}</option>)}</AppSelect></label>{(["startDate","endDate","registrationOpens","registrationCloses"]as const).map((key,i)=><label key={key}>{["Start date","End date","Registration opens","Registration closes"][i]}<input type="date" required value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value,...(key==="startDate"&&(!event||form.registrationOpens>e.target.value)?{registrationOpens:e.target.value}:{}),...(key==="endDate"&&!form.registrationCloses?{registrationCloses:e.target.value}:{})})}/>{key==="startDate"&&form.startDate&&form.startDate<campusToday()&&<small className="event-past-hint">This event has already taken place. You can still publish it for record and archive purposes.</small>}</label>)}<label>Status<AppSelect value={form.status} onChange={e=>setForm({...form,status:e.target.value})}><option value="DRAFT">Draft · Super Admin only</option><option value="PUBLISHED">Published · upcoming, current or completed by date</option><option value="ARCHIVED">Archived · historical record</option><option value="CANCELLED">Cancelled</option></AppSelect></label><label className="full">About the programme<textarea maxLength={4000} rows={3} value={form.description} onChange={e=>setForm({...form,description:e.target.value})}/></label></div><label className="event-checkbox"><input type="checkbox" checked={form.countdown} onChange={e=>setForm({...form,countdown:e.target.checked})}/>Show dashboard countdown</label><label className="event-checkbox"><input type="checkbox" checked={form.publicRegistration} onChange={e=>setForm({...form,publicRegistration:e.target.checked})}/>Enable public registration during the registration window</label>{error&&<p className="event-error" role="alert">{error}</p>}<button className="solid-button" disabled={busy}>{busy?"Saving…":form.status==="PUBLISHED"?"Save & publish":form.status==="DRAFT"?"Save draft":"Save event"}</button></form>;}
+function Editor({event,days=[],sessions=[],onSaved}:{
+  event?:MinistryEvent;
+  days?:EventDay[];
+  sessions?:EventSession[];
+  onSaved:(id:number)=>void;
+}){
+  const [form,setForm]=useState({
+    name:event?.name||"",type:event?.type||"CONFERENCE",
+    startDate:event?.startDate||"",endDate:event?.endDate||"",
+    registrationOpens:event?.registrationOpens||campusToday(),
+    registrationCloses:event?.registrationCloses||"",
+    themeName:event?.themeName||"",themeSongUrl:event?.themeSongUrl||"",
+    timezone:event?.timezone||"Africa/Lagos",status:event?.status||"DRAFT",
+    description:event?.description||"",countdown:event?Boolean(event.countdown):true,
+    publicRegistration:event?.publicRegistration||false,
+  });
+  const [moveSchedule,setMoveSchedule]=useState(false);
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState("");
+  const scheduleDates=[...new Set([
+    ...days.map(day=>day.date),
+    ...sessions.flatMap(session=>[session.startsAt.slice(0,10),session.endsAt.slice(0,10)]),
+  ])].sort();
+  const shift=event&&form.startDate?Date.parse(form.startDate)-Date.parse(event.startDate):0;
+  const showMoveOption=Boolean(shift&&scheduleDates.length);
+  const preview=showMoveOption?scheduleDates.map(date=>({
+    date,
+    moved:new Date(Date.parse(date)+shift).toISOString().slice(0,10),
+  })):[];
+  const firstDate=moveSchedule&&showMoveOption?preview[0]?.moved:scheduleDates[0];
+  const lastDate=moveSchedule&&showMoveOption?preview.at(-1)?.moved:scheduleDates.at(-1);
+  const scheduleOutside=Boolean(event&&form.startDate&&form.endDate&&firstDate&&lastDate&&
+    (firstDate<form.startDate||lastDate>form.endDate));
+
+  async function save(e:FormEvent){
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try{
+      const payload=event&&showMoveOption&&moveSchedule?{
+        ...form,moveSchedule:true,originalStartDate:event.startDate,originalEndDate:event.endDate,
+      }:form;
+      const result=await request(event?`/${event.id}`:"",event?"PATCH":"POST",payload);
+      onSaved(Number(result.id));
+    }catch(error){
+      setError(error instanceof Error?error.message:"Could not save event.");
+    }finally{
+      setBusy(false);
+    }
+  }
+
+  return <form className="event-form" onSubmit={save}>
+    <p>Drafts are visible only to Super Admins. Add sessions, groups and volunteers, then publish when ready. Past events remain fully accessible as historical records.</p>
+    <div className="event-form-grid">
+      <label>Event name<input required maxLength={180} value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="e.g. Rain Conference 2027"/></label>
+      <label>Event theme<input maxLength={180} value={form.themeName} onChange={e=>setForm({...form,themeName:e.target.value})}/></label>
+      <label>Theme song URL<input type="url" value={form.themeSongUrl} onChange={e=>setForm({...form,themeSongUrl:e.target.value})}/></label>
+      <label>Event timezone (IANA)<input required value={form.timezone} onChange={e=>setForm({...form,timezone:e.target.value})} placeholder="Africa/Lagos"/></label>
+      <label>Programme type<AppSelect value={form.type} onChange={e=>setForm({...form,type:e.target.value})}>
+        {["CONFERENCE","VBS","CAMP","SPECIAL_SERVICE","OTHER"].map(type=><option key={type} value={type}>{type.replaceAll("_"," ")}</option>)}
+      </AppSelect></label>
+      {(["startDate","endDate","registrationOpens","registrationCloses"] as const).map((key,index)=>
+        <label key={key}>
+          {["Start date","End date","Registration opens","Registration closes"][index]}
+          <input type="date" required value={form[key]} onChange={e=>{
+            const date=e.target.value;
+            if(key==="startDate")setMoveSchedule(false);
+            setForm({
+              ...form,[key]:date,
+              ...(key==="startDate"&&(!event||form.registrationOpens>date)?{registrationOpens:date}:{}),
+              ...(key==="endDate"&&!form.registrationCloses?{registrationCloses:date}:{}),
+            });
+          }}/>
+          {key==="startDate"&&form.endDate&&form.endDate<campusToday()&&
+            <small className="event-past-hint">This event has already taken place. You can still publish it for record and archive purposes.</small>}
+        </label>
+      )}
+      <label>Status<AppSelect value={form.status} onChange={e=>setForm({...form,status:e.target.value})}>
+        <option value="DRAFT">Draft · Super Admin only</option>
+        <option value="PUBLISHED">Published · upcoming, current or completed by date</option>
+        <option value="ARCHIVED">Archived · historical record</option>
+        <option value="CANCELLED">Cancelled</option>
+      </AppSelect></label>
+      {showMoveOption&&<div className="full event-reschedule">
+        <label className="event-checkbox">
+          <input type="checkbox" checked={moveSchedule} onChange={e=>setMoveSchedule(e.target.checked)}/>
+          Move programme days and sessions
+        </label>
+        {moveSchedule&&<>
+          <p>Session times and links to registrations and curriculum stay in place.</p>
+          <ul aria-label="Proposed programme dates">
+            {preview.map(({date,moved})=><li key={date}>{eventDate(date)} → {eventDate(moved)}</li>)}
+          </ul>
+        </>}
+      </div>}
+      {scheduleOutside&&<p className="full event-error" role="status">
+        {moveSchedule&&showMoveOption
+          ? "Extend the end date to include the last moved programme day or session."
+          : showMoveOption
+            ? "This range excludes saved programme days or sessions. Select Move programme days and sessions or adjust the date range."
+            : "This range excludes saved programme days or sessions. Include the existing schedule in the date range."}
+      </p>}
+      <label className="full">About the programme
+        <textarea maxLength={4000} rows={3} value={form.description} onChange={e=>setForm({...form,description:e.target.value})}/>
+        {showMoveOption&&form.description&&<small>Review any dates mentioned here before saving.</small>}
+      </label>
+    </div>
+    <label className="event-checkbox"><input type="checkbox" checked={form.countdown} onChange={e=>setForm({...form,countdown:e.target.checked})}/>Show dashboard countdown</label>
+    <label className="event-checkbox"><input type="checkbox" checked={form.publicRegistration} onChange={e=>setForm({...form,publicRegistration:e.target.checked})}/>Enable public registration during the registration window</label>
+    {error&&<p className="event-error" role="alert">{error}</p>}
+    <button className="solid-button" disabled={busy||scheduleOutside}>{busy?"Saving…":form.status==="PUBLISHED"?"Save & publish":form.status==="DRAFT"?"Save draft":"Save event"}</button>
+  </form>;
+}
 function Setup({kind,data,onSaved}:{kind:"sessions"|"groups"|"duplicate";data:Workspace;onSaved:(id?:number)=>Promise<void>}){const[form,setForm]=useState({name:"",startsAt:data.event.startDate+"T09:00",endsAt:data.event.startDate+"T12:00",minAge:"3",maxAge:"5",userId:"",duty:"TEACHER",startDate:""});const[busy,setBusy]=useState(false);const[error,setError]=useState("");async function save(e:FormEvent){e.preventDefault();setBusy(true);setError("");try{const b=await request(`/${data.event.id}/${kind}`,"POST",{...form,userId:Number(form.userId),minAge:Number(form.minAge),maxAge:Number(form.maxAge)});await onSaved(kind==="duplicate"?Number(b.id):undefined);}catch(e){setError(e instanceof Error?e.message:"Could not save.");}finally{setBusy(false);}}return <form className="event-form" onSubmit={save}><div className="event-form-grid">{<label className="full">{kind==="duplicate"?"New event name":"Name"}<input required value={form.name} maxLength={120} onChange={e=>setForm({...form,name:e.target.value})}/></label>}{kind==="sessions"&&(["startsAt","endsAt"]as const).map(key=><label key={key}>{key==="startsAt"?"Starts (Lagos time)":"Ends (Lagos time)"}<input required type="datetime-local" value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})}/></label>)}{kind==="groups"&&(["minAge","maxAge"]as const).map(key=><label key={key}>{key==="minAge"?"Minimum age":"Maximum age"}<input type="number" min={0} max={19} required value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})}/></label>)}{kind==="duplicate"&&<><label>New start date<input required type="date" value={form.startDate} onChange={e=>setForm({...form,startDate:e.target.value})}/></label><p className="full">Copies sessions and groups only. Registrations, attendance and volunteers are not copied.</p></>}</div>{error&&<p className="event-error" role="alert">{error}</p>}<button className="solid-button" disabled={busy}>{busy?"Saving…":"Save"}</button></form>;}
 function Pickup({child,busy,onSave}:{child:Child;busy:boolean;onSave:(code:string,collector:string)=>void}){const[code,setCode]=useState("");const[verified,setVerified]=useState(false);return <form className="event-form" onSubmit={e=>{e.preventDefault();onSave(code,child.guardianName||"");}}><h3>{child.name}</h3><p>Registered guardian: <b>{child.guardianName}</b></p><p>Contact: {child.guardianPhone} · Emergency: {child.emergencyPhone}</p><label>Guardian’s pickup code<input autoComplete="off" required value={code} maxLength={12} onChange={e=>setCode(e.target.value.toUpperCase())}/></label><label className="event-checkbox"><input type="checkbox" required checked={verified} onChange={e=>setVerified(e.target.checked)}/>I verified the registered guardian’s identity in person.</label><p>For a different collector, contact the event lead. Do not release the child through this form.</p><button className="solid-button" disabled={busy||!verified}>{busy?"Recording…":"Confirm safe pickup"}</button></form>;}
 const emptyRegistration=():Registration=>({guardianName:"",guardianPhone:"",emergencyPhone:"",homeCampus:"",children:[{name:"",dateOfBirth:"",careNotes:"",selected:true}],sessionIds:[]});

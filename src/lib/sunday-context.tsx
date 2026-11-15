@@ -3,8 +3,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { apiBase, authHeaders, readTeacherSession } from "@/lib/session";
 import { clearActiveService, setActiveService, type ActiveService } from "@/lib/active-service";
+import { campusToday as currentLagosDate } from "@/lib/registration-eligibility";
 
-const TIME_ZONE = "Africa/Lagos";
 const STORAGE_KEY = "tpk:sunday-context";
 
 export type ServiceSessionContext = {
@@ -21,7 +21,8 @@ export type ServiceSessionContext = {
 export type SundayOption = { date: string; week: number; label: string };
 export type MonthOption = { key: string; label: string; year: number; month: number };
 
-type SavedContext = { selectedSundayDate?: string; selectedServiceSessionId?: number };
+type SavedContext = { selectedSundayDate?: string; selectedServiceSessionId?: number; week?: string };
+type PickerHistory = { path: string; date: string; serviceId?: number; week: string };
 type SundayContextValue = {
   loading: boolean;
   error: string;
@@ -40,10 +41,6 @@ type SundayContextValue = {
 };
 
 const Context = createContext<SundayContextValue | null>(null);
-
-function currentLagosDate() {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-}
 
 function dateKey(year: number, month: number, day: number) {
   return `${year.toString().padStart(4, "0")}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
@@ -86,7 +83,17 @@ export function serviceDisplayLabel(service: Pick<ServiceSessionContext, "name" 
 
 function loadSaved(): SavedContext {
   if (typeof window === "undefined") return {};
-  try { return JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "{}"); } catch { return {}; }
+  try { return JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "{}") ?? {}; } catch { return {}; }
+}
+
+function updatePickerUrl(date: string, serviceId: number | undefined, week: string) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("date", date);
+  if (serviceId) url.searchParams.set("serviceSessionId", String(serviceId));
+  else url.searchParams.delete("serviceSessionId");
+  // History state distinguishes a picker selection from a link to a service.
+  const tpkSundayPicker: PickerHistory = { path: url.pathname, date, serviceId, week };
+  window.history.replaceState({ tpkSundayPicker }, "", url);
 }
 
 function monthOptions(items: ServiceSessionContext[], selectedDate?: string | null): MonthOption[] {
@@ -114,7 +121,22 @@ export function SundayContextProvider({ children }: { children: React.ReactNode 
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [currentWeek, setCurrentWeek] = useState(() => mostRecentSunday(currentLagosDate()));
   const retry = useCallback(() => setReloadKey((value) => value + 1), []);
+
+  useEffect(() => {
+    const checkWeek = () => setCurrentWeek(mostRecentSunday(currentLagosDate()));
+    const interval = window.setInterval(checkWeek, 30_000);
+    window.addEventListener("focus", checkWeek);
+    window.addEventListener("pageshow", checkWeek);
+    document.addEventListener("visibilitychange", checkWeek);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", checkWeek);
+      window.removeEventListener("pageshow", checkWeek);
+      document.removeEventListener("visibilitychange", checkWeek);
+    };
+  }, []);
 
   useEffect(() => {
     const session = readTeacherSession();
@@ -143,20 +165,27 @@ export function SundayContextProvider({ children }: { children: React.ReactNode 
         const query = new URLSearchParams(window.location.search);
         const queryId = Number(query.get("serviceSessionId")) || undefined;
         const queryDate = query.get("date") || undefined;
-        const requested = nextItems.find((item) => item.id === queryId);
+        const picker = window.history.state?.tpkSundayPicker as PickerHistory | undefined;
+        const isPickerUrl = picker?.path === window.location.pathname && picker.date === queryDate && picker.serviceId === queryId;
+        const isLegacyPickerUrl = !picker && !saved.week && Boolean(queryDate) &&
+          queryDate === saved.selectedSundayDate && queryId === saved.selectedServiceSessionId;
+        const expiredPicker = isPickerUrl ? picker.week !== currentWeek : isLegacyPickerUrl;
+        const requested = expiredPicker ? undefined : nextItems.find((item) => item.id === queryId);
         const savedService = nextItems.find((item) => item.id === saved.selectedServiceSessionId);
-        const today = currentLagosDate();
-        const fallbackDate = requested?.serviceDate || queryDate || savedService?.serviceDate || saved.selectedSundayDate || (new Intl.DateTimeFormat("en-US", { timeZone: TIME_ZONE, weekday: "short" }).format(new Date()) === "Sun" ? today : mostRecentSunday(today));
+        const sameWeek = saved.week === currentWeek;
+        const fallbackDate = requested?.serviceDate || (!expiredPicker && queryDate) ||
+          (sameWeek && (savedService?.serviceDate || saved.selectedSundayDate)) || currentWeek;
         const [year, month] = monthKey(fallbackDate).split("-").map(Number);
         const options = sundayOptions(year, month);
         const date = options.some((option) => option.date === fallbackDate) ? fallbackDate : options[0]?.date || fallbackDate;
         const service = pickService(nextItems, date, requested?.id || savedService?.id, savedService?.serviceType);
+        if (expiredPicker) updatePickerUrl(date, service?.id, currentWeek);
         setItems(nextItems); setSelectedDate(date); setSelectedServiceId(service?.id || null); setLoading(false);
       })
       .catch((reason) => { if (!cancelled) { setLoading(false); setError(reason instanceof Error ? reason.message : "We could not load the Sunday service context."); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [reloadKey]);
+  }, [currentWeek, reloadKey]);
 
   const selectedService = useMemo(() => items.find((item) => item.id === selectedServiceId) || null, [items, selectedServiceId]);
   const selectedYear = selectedDate ? Number(selectedDate.slice(0, 4)) : null;
@@ -167,11 +196,10 @@ export function SundayContextProvider({ children }: { children: React.ReactNode 
 
   const publish = useCallback((date: string, service: ServiceSessionContext | null) => {
     setSelectedDate(date); setSelectedServiceId(service?.id || null);
-    const saved = { selectedSundayDate: date, selectedServiceSessionId: service?.id || undefined };
+    const week = mostRecentSunday(currentLagosDate());
+    const saved: SavedContext = { selectedSundayDate: date, selectedServiceSessionId: service?.id, week };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
-    const params = new URLSearchParams(window.location.search); params.set("date", date);
-    if (service?.id) params.set("serviceSessionId", String(service.id)); else params.delete("serviceSessionId");
-    window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
+    updatePickerUrl(date, service?.id, week);
     if (service) {
       const active: ActiveService = { id: service.id, label: serviceDisplayLabel(service), serviceType: service.serviceType, serviceDate: service.serviceDate };
       setActiveService(active);
@@ -181,11 +209,12 @@ export function SundayContextProvider({ children }: { children: React.ReactNode 
   const selectMonth = useCallback((key: string) => {
     const [year, month] = key.split("-").map(Number);
     const options = sundayOptions(year, month);
-    const preferred = options.find((option) => items.some((item) => item.serviceDate === option.date)) || options[0];
+    const preferred = options.find((option) => option.date === currentWeek) ||
+      options.find((option) => items.some((item) => item.serviceDate === option.date)) || options[0];
     if (!preferred) return;
     const currentType = selectedService?.serviceType;
     publish(preferred.date, pickService(items, preferred.date, undefined, currentType));
-  }, [items, publish, selectedService?.serviceType]);
+  }, [currentWeek, items, publish, selectedService?.serviceType]);
   const selectSunday = useCallback((date: string) => publish(date, pickService(items, date, undefined, selectedService?.serviceType)), [items, publish, selectedService?.serviceType]);
   const selectService = useCallback((id: number) => { const service = items.find((item) => item.id === id && item.serviceDate === selectedDate) || null; if (service && selectedDate) publish(selectedDate, service); }, [items, publish, selectedDate]);
 

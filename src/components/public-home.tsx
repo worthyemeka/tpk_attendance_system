@@ -32,6 +32,7 @@ export function PublicHome() {
           <Link className="public-action returning" href="/check-in/parent"><span className="public-action-icon"><FiUsers /></span><span><strong>We’ve been here before</strong><b>Quick Check-In</b><small>Check in your child or children in a few seconds.</small></span><FiChevronRight className="public-arrow" /></Link>
           <Link className="public-action new" href="/check-in/parent?flow=new"><span className="public-action-icon"><FiFilePlus /></span><span><strong>This is our first time</strong><b>Register &amp; Check In</b><small>Add your child’s details and check them in.</small></span><FiChevronRight className="public-arrow" /></Link>
         </div>
+        <p><Link href="/families/add-child">Add a sibling to your registered family →</Link></p>
         <div className="public-help"><FiHelpCircle /><span><b>Need help?</b><small>See a TribePetra Kids volunteer at the check-in area.</small></span></div>
         <p className="public-signoff">Safe Children<br />Stronger Tomorrow</p>
       </section>

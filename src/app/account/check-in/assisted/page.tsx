@@ -1,7 +1,7 @@
 "use client";
 
 import { classForBirthDate } from "@/lib/automatic-class";
-import { registrationEligibility } from "@/lib/registration-eligibility";
+import { campusToday,registrationEligibility } from "@/lib/registration-eligibility";
 import { AppSelect } from "@/components/app-dropdown";
 import Link from "next/link";
 import { RelationshipField, validRelationship } from "@/components/relationship-field";
@@ -21,7 +21,7 @@ const blankChild = (): Child => ({ firstName: "", lastName: "", dateOfBirth: "",
 
 export default function AssistedCheckInPage() {
   const session = useMemo(() => readTeacherSession(), []);
-  const [entryMode,setEntryMode]=useState<"RETURNING"|"NEW"|null>(null);
+  const [entryMode,setEntryMode]=useState<"RETURNING"|"NEW"|null>("RETURNING");
   const [services, setServices] = useState<Service[]>([]);
   const [classes, setClasses] = useState<ClassOption[]>([]);
   const [activeService, setActiveService] = useState<ActiveService | null | undefined>();
@@ -109,7 +109,7 @@ export default function AssistedCheckInPage() {
         const items = result.data || [];
         setServices(items);
         const selected = readActiveService();
-        const matching = selected?.id ? items.find((service: Service) => service.id === selected.id) : undefined;
+        const matching = selected?.id ? items.find((service: Service) => Number(service.id) === Number(selected.id)) : undefined;
         if (matching) {
           setServiceId(String(matching.id));
           return;
@@ -140,12 +140,12 @@ export default function AssistedCheckInPage() {
 
   useEffect(() => {
     if (!activeService?.id) return;
-    const matching = services.find((service) => service.id === activeService.id);
+    const matching = services.find((service) => Number(service.id) === Number(activeService.id));
     if (matching) setServiceId(String(matching.id));
   }, [activeService, services]);
 
   const serviceOptions = useMemo(() => {
-    if (!activeService?.id || services.some((service) => service.id === activeService.id)) return services;
+    if (!activeService?.id || services.some((service) => Number(service.id) === Number(activeService.id))) return services;
     const fallbackType = activeService.serviceType === "FIRST_SERVICE" ? "FIRST_SERVICE" : "SECOND_SERVICE";
     return [{
       id: activeService.id,
@@ -169,9 +169,11 @@ export default function AssistedCheckInPage() {
   }, [serviceId, session]);
 
   const updateChild = (index: number, key: keyof Child, value: string) => setChildren((current) => current.map((child, childIndex) => childIndex === index ? { ...child, [key]: value } : child));
-  const phoneIsValid = (phone: string) => phone.replace(/\D/g, "").length >= 10;
+  const phoneIsValid = (phone: string) => /^(0\d{10}|234\d{10})$/.test(phone.replace(/\D/g,""));
+  const selectedService=serviceOptions.find(item=>Number(item.id)===Number(serviceId));
+  const isArrivalDay=Boolean(selectedService?.serviceDate===campusToday()&&new Date(`${campusToday()}T12:00:00+01:00`).getUTCDay()===0);
   const ready = Boolean(
-    serviceId && canOperate && !registeredBusy && entryMode && (registeredFamily ? selectedChildIds.length > 0 && registeredGuardianId : entryMode==="NEW" && guardian.firstName.trim() && guardian.lastName.trim() && phoneIsValid(guardian.phone) && validRelationship(guardian.relationship) && guardian.address.trim() &&
+    serviceId && isArrivalDay && canOperate && !registeredBusy && entryMode && (registeredFamily ? selectedChildIds.length > 0 && registeredGuardianId : entryMode==="NEW" && guardian.firstName.trim() && guardian.lastName.trim() && phoneIsValid(guardian.phone) && validRelationship(guardian.relationship) && guardian.address.trim() &&
     children.every((child) => child.firstName.trim() && child.lastName.trim() && registrationEligibility(child.dateOfBirth)==="ELIGIBLE" && child.gender && classForBirthDate(classes,child.dateOfBirth))) &&
     (pickup.mode === "SELF" || (pickup.fullName.trim() && validRelationship(pickup.relationship) && phoneIsValid(pickup.phone)))
   );
@@ -186,7 +188,7 @@ export default function AssistedCheckInPage() {
         body: JSON.stringify(registeredFamily ? { serviceSessionId:Number(serviceId), registeredFamilyId:registeredFamily.id, registeredGuardianId, children:selectedChildIds.map(id=>({id})), pickup } : { serviceSessionId: Number(serviceId), guardian, children, pickup })
       });
       const result = await response.json();
-      if (!response.ok || !result.success) throw new Error(result.error?.message || "We could not save this desk check-in.");
+      if (!response.ok || !result.success) {if(result.error?.code==="REGISTERED_FAMILY_FOUND"){setEntryMode("RETURNING");setRegisteredPhone(guardian.phone);}throw new Error(result.error?.message || "We could not save this desk check-in.");}
       setReceipt(result.data);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "We could not save this desk check-in.");
@@ -200,6 +202,7 @@ export default function AssistedCheckInPage() {
   return <section className="assisted-page">
     <header><Link href="/account/check-in"><FiArrowLeft /> Back to check-in</Link><p className="eyebrow">TPK staff tool</p><h1>Desk check-in</h1>{session?.accessLevel==="TPK_SUPER_ADMIN"&&<Link href="/account/children/register">Register children without check-in <FiPlus /></Link>}<p className="intro">Find a registered family or welcome a new one, select the children arriving, and prepare their pickup ticket.</p></header>
     <form className="panel assisted-form" onSubmit={submit}>
+      {serviceId&&!isArrivalDay&&<aside className="readonly-notice">Desk check-in is for arrivals on the selected service Sunday, not registration-only work. Choose today’s Sunday service to check in. To add a child or sibling without attendance, {session?.accessLevel==="TPK_SUPER_ADMIN"?<Link href="/account/children/register">open child registration</Link>:"ask a Super Admin to use child registration"}.</aside>}
       {error && <p className="error">{error}</p>}
       <label>Service<AppSelect required value={serviceId} onChange={(event) => { setCanOperate(false); setPermissionLoaded(false); setServiceId(event.target.value); }}><option value="">Choose service</option>{serviceOptions.map((service) => <option key={service.id} value={service.id}>{service.name}{service.serviceDate ? ` · ${service.serviceDate}` : ""}{service.isOpen ? " · Open" : " · Closed"}</option>)}</AppSelect></label>
       {serviceId && !canOperate && <p className="readonly-notice">Only the Super Admin or the Head/Assistant assigned to this service can save a desk check-in.</p>}
