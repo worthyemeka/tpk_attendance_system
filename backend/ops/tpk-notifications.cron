@@ -1,0 +1,4 @@
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
+*/5 * * * * apache /usr/bin/flock -n /var/lib/tpk-notifications/schedule.lock /usr/bin/php /var/www/tpk_attendance_system/backend/scripts/schedule_teacher_notifications.php --enqueue >> /var/log/tpk-notifications/schedule.log 2>&1
+* * * * * apache /usr/bin/flock -n /var/lib/tpk-notifications/delivery.lock /usr/bin/php /var/www/tpk_attendance_system/backend/scripts/process_notification_deliveries.php --deliver >> /var/log/tpk-notifications/delivery.log 2>&1

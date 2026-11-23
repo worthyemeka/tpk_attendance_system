@@ -13,6 +13,7 @@ require_once __DIR__ . '/assembly-media.php';
 require_once __DIR__ . '/sunday-schedule.php';
 require_once __DIR__ . '/admin-registration.php';
 require_once __DIR__ . '/curriculum.php';
+require_once __DIR__ . '/notification-delivery.php';
 require_once __DIR__ . '/teacher-attendance.php';
 require_once __DIR__ . '/events.php';
 require_once __DIR__ . '/people-privacy.php';
@@ -448,14 +449,13 @@ function api_create_roster_publication_notifications(PDO $db,array $actor,string
     $assignments->execute([(int)$actor['campus_id'],$date,$date]);
     $monthLabel=(new DateTimeImmutable($date))->format('F Y');
     $href='/account/roster?month='.rawurlencode($month);
-    $insert=$db->prepare("INSERT INTO notifications(campus_id,staff_user_id,type,title,body,target_path,dedupe_key) VALUES(?,?, 'ROSTER_PUBLISHED',?,?,?,?) ON DUPLICATE KEY UPDATE title=VALUES(title),body=VALUES(body),target_path=VALUES(target_path)");
     $created=0;
     foreach($assignments->fetchAll() as $teacher){
         $roles=trim((string)$teacher['assignmentSummary'])===''?0:count(explode(';',(string)$teacher['assignmentSummary']));
         $summary=trim((string)$teacher['assignmentSummary']);if(strlen($summary)>260)$summary=substr($summary,0,257).'...';
         $body=$roles ? "You have been assigned: {$summary}. Click here to view more." : 'Open your board to see your role and team.';
-        $insert->execute([(int)$actor['campus_id'],(int)$teacher['userId'],"Your {$monthLabel} roster is published",$body,$href,'ROSTER_PUBLISHED:'.(int)$actor['campus_id'].':'.(int)$teacher['userId'].':'.$month]);
-        $created++;
+        $saved=tpk_create_notification_safe($db,['campusId'=>(int)$actor['campus_id'],'staffUserId'=>(int)$teacher['userId'],'type'=>'ROSTER_PUBLISHED','title'=>"Your {$monthLabel} roster is published",'body'=>$body,'targetPath'=>$href,'dedupeKey'=>'ROSTER_PUBLISHED:'.(int)$actor['campus_id'].':'.(int)$teacher['userId'].':'.$month,'payload'=>['monthLabel'=>$monthLabel,'role'=>$summary?:'TPK team','service'=>'Monthly roster']]);
+        if($saved['created']??false)$created++;
     }
     return $created;
 }
@@ -518,13 +518,13 @@ function api_notifications(PDO $db): never {
     $allowed=api_permitted_class_ids($db,$actor); $items=[];
     if($reminder=api_teacher_wednesday_reminder())$items[]=$reminder;
     try{
-        $saved=$db->prepare("SELECT id,type,title,body,target_path AS href FROM notifications WHERE campus_id=? AND staff_user_id=? AND type IN ('ROSTER_PUBLISHED','ROSTER_REMINDER') ORDER BY created_at DESC LIMIT 20");
+        $saved=$db->prepare("SELECT id,type,title,body,target_path AS href FROM notifications WHERE campus_id=? AND staff_user_id=? ORDER BY created_at DESC LIMIT 50");
         $saved->execute([$campus,(int)$actor['id']]);
         foreach($saved->fetchAll() as $notice){
             $detail=(string)$notice['body'];
             // Older publications stored every assignment in the preview. Keep the bell readable.
             if($notice['type']==='ROSTER_PUBLISHED'&&strlen($detail)>180)$detail='Open your board to see your month’s roles and responsibilities.';
-            $items[]=['id'=>'stored-'.(int)$notice['id'],'kind'=>'ROSTER','severity'=>'MEDIUM','title'=>$notice['title'],'detail'=>$detail,'href'=>$notice['href']];
+            $items[]=['id'=>'stored-'.(int)$notice['id'],'kind'=>str_contains($notice['type'],'BIRTHDAY')?'TEAM':(str_contains($notice['type'],'FOLLOWUP')||str_contains($notice['type'],'FOLLOW_UP')?'FOLLOW_UP':(str_contains($notice['type'],'SUNDAY')?'SERVICE':'ROSTER')),'severity'=>'MEDIUM','title'=>$notice['title'],'detail'=>$detail,'href'=>$notice['href']];
         }
     }catch(Throwable){}
     $requestedSessionId=(int)($_GET['serviceSessionId']??0);$sessionId=$requestedSessionId;
@@ -884,7 +884,7 @@ function api_followup_assignees(PDO $db): never {
 function api_assign_followup(PDO $db,int $id): never {
     $actor=api_actor($db);if(!api_is_followup_lead($actor))api_error('FORBIDDEN','Only Follow-Up Leads can assign family calls.',403);$case=api_followup_case_allowed($db,$actor,$id);$v=api_input();$staffId=(int)($v['staffUserId']??0);if(!$staffId)api_error('VALIDATION_ERROR','Choose a teacher to assign this follow-up to.',422);
     $teacher=$db->prepare("SELECT s.id,COALESCE(NULLIF(TRIM(CONCAT(COALESCE(p.title,''),' ',COALESCE(p.first_name,''),' ',COALESCE(p.last_name,''))),''),s.name) AS name FROM staff_users s LEFT JOIN teacher_profiles p ON p.staff_user_id=s.id WHERE s.id=? AND s.campus_id=? AND s.access_level IN ('TPK_ADMIN','TPK_FOLLOW_UP_ADMIN') AND s.is_active=1 AND s.account_status='VERIFIED' AND s.team_status<>'INACTIVE'");$teacher->execute([$staffId,$actor['campus_id']]);$person=$teacher->fetch();if(!$person)api_error('TEACHER_NOT_AVAILABLE','Choose an active TPK teacher or Follow-Up Lead.',422);
-    $db->beginTransaction();try{$db->prepare('UPDATE follow_up_cases SET owner_staff_user_id=?,status=CASE WHEN status=\'RESOLVED\' THEN \'NEEDS_FOLLOW_UP\' ELSE status END WHERE id=?')->execute([$staffId,$id]);$db->prepare('UPDATE follow_up_tasks t JOIN follow_up_case_children cc ON cc.source_task_id=t.id SET t.assigned_to_staff_user_id=?,t.status=CASE WHEN t.status=\'OPEN\' THEN \'IN_PROGRESS\' ELSE t.status END WHERE cc.follow_up_case_id=?')->execute([$staffId,$id]);$note='Assigned to '.$person['name'].' by '.$actor['name'].'.';$db->prepare("INSERT INTO follow_up_case_events(follow_up_case_id,staff_user_id,event_type,notes) VALUES(?,?,'ASSIGNED',?)")->execute([$id,$actor['id'],$note]);api_audit($db,$actor,'FOLLOW_UP_ASSIGNED','FollowUpCase',$id,['assignedTo'=>$staffId]);$db->commit();}catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}api_ok(['id'=>$id,'assignedToStaffUserId'=>$staffId,'assignedToName'=>$person['name']]);
+    $db->beginTransaction();try{$db->prepare('UPDATE follow_up_cases SET owner_staff_user_id=?,status=CASE WHEN status=\'RESOLVED\' THEN \'NEEDS_FOLLOW_UP\' ELSE status END WHERE id=?')->execute([$staffId,$id]);$db->prepare('UPDATE follow_up_tasks t JOIN follow_up_case_children cc ON cc.source_task_id=t.id SET t.assigned_to_staff_user_id=?,t.status=CASE WHEN t.status=\'OPEN\' THEN \'IN_PROGRESS\' ELSE t.status END WHERE cc.follow_up_case_id=?')->execute([$staffId,$id]);$note='Assigned to '.$person['name'].' by '.$actor['name'].'.';$db->prepare("INSERT INTO follow_up_case_events(follow_up_case_id,staff_user_id,event_type,notes) VALUES(?,?,'ASSIGNED',?)")->execute([$id,$actor['id'],$note]);api_audit($db,$actor,'FOLLOW_UP_ASSIGNED','FollowUpCase',$id,['assignedTo'=>$staffId]);$db->commit();}catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}if((int)($case['ownerId']??0)!==$staffId)tpk_create_notification_safe($db,['campusId'=>(int)$actor['campus_id'],'staffUserId'=>$staffId,'type'=>'FOLLOW_UP_ASSIGNED','title'=>'A child or family follow-up was assigned to you','body'=>'Please sign in to see your follow-up assignment and record your update.','targetPath'=>'/account/relations?caseId='.$id,'dedupeKey'=>'FAMILY_FOLLOWUP:'.$id.':'.$staffId.':'.bin2hex(random_bytes(6)),'payload'=>['followupKind'=>'child or family']]);api_ok(['id'=>$id,'assignedToStaffUserId'=>$staffId,'assignedToName'=>$person['name']]);
 }
 function api_followup_escalate(PDO $db,int $id): never {$actor=api_actor($db);$case=api_followup_case_allowed($db,$actor,$id);$v=api_input();$ids=array_values(array_unique(array_filter(array_map('intval',$v['recipientIds']??[]))));if(!$ids)api_error('VALIDATION_ERROR','Choose at least one leadership recipient.',422);$note=trim((string)($v['note']??''));$marks=implode(',',array_fill(0,count($ids),'?'));$valid=$db->prepare("SELECT id,name FROM staff_users WHERE campus_id=? AND access_level='TPK_SUPER_ADMIN' AND is_active=1 AND id IN ($marks)");$valid->execute(array_merge([$actor['campus_id']],$ids));$people=$valid->fetchAll();if(count($people)!==count($ids))api_error('VALIDATION_ERROR','Choose active TPK Super Admin recipients.',422);$childLines=$db->prepare("SELECT CONCAT(c.first_name,' ',c.last_name) AS name,cl.name AS className FROM follow_up_case_children cc JOIN children c ON c.id=cc.child_id LEFT JOIN classes cl ON cl.id=c.class_id WHERE cc.follow_up_case_id=?");$childLines->execute([$id]);$children=$childLines->fetchAll();$message="TPK Children Relations Follow-Up\n\nFamily: {$case['familyName']} Family\nChildren: ".implode('; ',array_map(fn($child)=>$child['name'].' — '.($child['className']?:'Class pending'),$children))."\nUpdate: ".($case['notes']?:'Follow-up requires leadership awareness.')."\nFollowed up by: {$actor['name']}";$db->beginTransaction();try{foreach($people as $person)$db->prepare("INSERT INTO follow_up_case_escalations(follow_up_case_id,recipient_staff_user_id,note,status,sent_by_staff_user_id,sent_at) VALUES(?,?,?,'SENT',?,NOW()) ON DUPLICATE KEY UPDATE note=VALUES(note),status='SENT',sent_by_staff_user_id=VALUES(sent_by_staff_user_id),sent_at=NOW()")->execute([$id,$person['id'],$note?:null,$actor['id']]);$db->prepare("UPDATE follow_up_cases SET leadership_status='SENT' WHERE id=?")->execute([$id]);$db->prepare("INSERT INTO follow_up_case_events(follow_up_case_id,staff_user_id,event_type,notes) VALUES(?,?,'ESCALATED',?)")->execute([$id,$actor['id'],$note?:null]);api_audit($db,$actor,'FOLLOW_UP_ESCALATED','FollowUpCase',$id,['recipients'=>$ids]);$db->commit();}catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}$phones=array_values(array_filter(array_map(fn($p)=>tpk_normalize_nigerian_phone($p['phone']??null),$people)));api_ok(['id'=>$id,'leadershipStatus'=>'SENT','message'=>$message,'whatsappUrl'=>$phones?'https://wa.me/'.ltrim($phones[0],'+').'?text='.rawurlencode($message):null]);}
 function api_team(PDO $db): never {
@@ -1115,6 +1115,10 @@ try { $db=api_db();$path=api_path();$method=api_method();
     if($method==='POST'&&$path==='/api/v1/public/check-in/lookup')api_public_lookup($db);
     if($method==='GET'&&$path==='/api/v1/system/status')api_system_status($db);
     if($method==='GET'&&$path==='/api/v1/me/people-access')api_people_permissions($db);
+    if(in_array($method,['GET','POST'],true)&&$path==='/api/v1/webhooks/meta/whatsapp')tpk_notification_webhook($db);
+    if(in_array($method,['GET','PATCH'],true)&&$path==='/api/v1/me/notification-preferences')api_notification_preferences($db);
+    if($method==='GET'&&$path==='/api/v1/admin/notification-deliveries')api_notification_deliveries($db);
+    if($method==='POST'&&preg_match('#^/api/v1/admin/notification-deliveries/(\d+)/retry$#',$path,$m))api_notification_retry($db,(int)$m[1]);
     if($method==='GET'&&$path==='/api/v1/notifications')api_notifications($db);
     if($method==='GET'&&$path==='/api/v1/service-sessions/current')api_current_session($db);
     if($path==='/api/v1/service-sessions/sunday-schedule')api_sunday_schedule($db);

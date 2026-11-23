@@ -1,0 +1,9 @@
+/var/log/tpk-notifications/*.log {
+    weekly
+    rotate 4
+    compress
+    missingok
+    notifempty
+    create 0640 apache apache
+    su apache apache
+}

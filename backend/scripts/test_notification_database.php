@@ -1,0 +1,62 @@
+<?php
+declare(strict_types=1);
+if(PHP_SAPI!=='cli')exit(1);
+require dirname(__DIR__).'/config.php';
+require dirname(__DIR__).'/public/notification-delivery.php';
+require dirname(__DIR__).'/public/notification-schedule.php';
+$db=db();$checks=0;
+function verify(bool $ok,string $label):void{global $checks;if(!$ok)throw new RuntimeException('FAIL: '.$label);$checks++;}
+// All fixtures live in connection-local temporary tables. No production rows are read or modified.
+$ddl=$db->query('SHOW CREATE TABLE notifications')->fetch(PDO::FETCH_NUM)[1];
+$ddl=preg_replace('/,?\n\s*CONSTRAINT[^\n]+/','',$ddl);
+$db->exec(str_replace('CREATE TABLE','CREATE TEMPORARY TABLE',$ddl));
+$db->exec("ALTER TABLE notifications MODIFY type VARCHAR(64) NOT NULL");
+$cols=array_column($db->query('SHOW COLUMNS FROM notifications')->fetchAll(),'Field');
+if(!in_array('category',$cols,true))$db->exec("ALTER TABLE notifications ADD category VARCHAR(40) NOT NULL DEFAULT 'SYSTEM'");
+if(!in_array('importance',$cols,true))$db->exec("ALTER TABLE notifications ADD importance VARCHAR(16) NOT NULL DEFAULT 'OPTIONAL'");
+$db->exec('CREATE TEMPORARY TABLE staff_users(id INT PRIMARY KEY,campus_id INT,name VARCHAR(100),email VARCHAR(100),is_active INT,team_status VARCHAR(30),account_status VARCHAR(30),access_level VARCHAR(30))');
+$db->exec('CREATE TEMPORARY TABLE teacher_profiles(staff_user_id INT PRIMARY KEY,title VARCHAR(10),first_name VARCHAR(100),last_name VARCHAR(100),birth_date DATE,whatsapp_number_normalized VARCHAR(30))');
+$db->exec('CREATE TEMPORARY TABLE campuses(id INT,timezone VARCHAR(64))');
+$db->exec('CREATE TEMPORARY TABLE service_sessions(id INT,campus_id INT,service_date DATE,is_scheduled INT,ends_at DATETIME)');
+$db->exec('CREATE TEMPORARY TABLE teacher_services(id INT,campus_id INT,kind VARCHAR(20),starts_at DATETIME)');
+$db->exec('CREATE TEMPORARY TABLE teacher_service_attendance(service_id INT,staff_user_id INT,checked_in_at DATETIME)');
+$source=file_get_contents(__DIR__.'/migrate_whatsapp_notifications.php');
+preg_match_all('/\$db->exec\("(CREATE TABLE IF NOT EXISTS .*?)"\);/s',$source,$matches);
+foreach($matches[1] as $sql){$sql=str_replace('CREATE TABLE IF NOT EXISTS','CREATE TEMPORARY TABLE',$sql);$sql=preg_replace('/,?\n\s*FOREIGN KEY[^\n]+/','',$sql);$db->exec($sql);}
+$db->exec("INSERT INTO staff_users VALUES (1,1,'Test Teacher','teacher@example.invalid',1,'ACTIVE','VERIFIED','TPK_ADMIN'),(2,1,'Birthday Teacher','birthday@example.invalid',1,'ACTIVE','VERIFIED','TPK_ADMIN'),(3,2,'Other Campus','other@example.invalid',1,'ACTIVE','VERIFIED','TPK_ADMIN')");
+$db->exec("INSERT INTO teacher_profiles VALUES(1,'Auntie','Test','Teacher','2000-01-01','+2348000000001'),(2,'Uncle','Birthday','Teacher','2000-11-29','+2348000000002'),(3,'Uncle','Other','Campus','2000-01-01','+2348000000003')");
+$db->exec("INSERT INTO campuses VALUES(1,'Africa/Lagos'),(2,'Africa/Lagos')");
+foreach(['WHATSAPP_ENABLED=true','WHATSAPP_TEST_MODE=false','META_WHATSAPP_ACCESS_TOKEN=dummy','META_WHATSAPP_PHONE_NUMBER_ID=123','TPK_FRONTEND_URL=https://example.invalid','TPK_EMAIL_NOTIFICATIONS_ENABLED=false','TPK_PUSH_NOTIFICATIONS_ENABLED=false'] as $value)putenv($value);
+$notice=['campusId'=>1,'staffUserId'=>1,'type'=>'ROSTER_PUBLISHED','title'=>'Fixture','body'=>'Fixture','targetPath'=>'/account/roster','dedupeKey'=>'fixture-1','payload'=>['monthLabel'=>'November','role'=>'Class teacher','service'=>'Sunday']];
+$a=tpk_create_notification($db,$notice);$b=tpk_create_notification($db,$notice);
+verify($a['created']&&!$b['created']&&$a['id']===$b['id'],'dedupe preserves single notification');
+function delivery(PDO $db,int $id):array{$q=$db->prepare("SELECT * FROM notification_deliveries WHERE notification_id=? AND channel='WHATSAPP'");$q->execute([$id]);return $q->fetch();}
+verify(delivery($db,$a['id'])['failure_reason']==='CONSENT_REQUIRED','no consent skips WhatsApp');
+$db->exec("INSERT INTO staff_notification_preferences(staff_user_id,whatsapp_enabled,whatsapp_consent) VALUES(1,1,1),(2,1,1)");
+verify(tpk_notification_channel_allowed($db,1,'ROSTER_UPDATES','WHATSAPP','ESSENTIAL'),'essential opted-in category defaults');
+verify(!tpk_notification_channel_allowed($db,1,'BIRTHDAYS','WHATSAPP','OPTIONAL'),'birthday requires category opt-in');
+$db->exec("INSERT INTO staff_notification_category_preferences(staff_user_id,category,whatsapp_enabled) VALUES(1,'ROSTER_UPDATES',0)");
+verify(!tpk_notification_channel_allowed($db,1,'ROSTER_UPDATES','WHATSAPP','ESSENTIAL'),'category disable honored');
+verify(tpk_notification_channel_allowed($db,1,'ROSTER_UPDATES','IN_APP','ESSENTIAL'),'in-app cannot be disabled');
+$db->exec("UPDATE staff_notification_category_preferences SET whatsapp_enabled=1");
+$notice['dedupeKey']='fixture-2';$a=tpk_create_notification($db,$notice);verify(delivery($db,$a['id'])['status']==='PENDING','enabled consented notice queued');
+$GLOBALS['TPK_WHATSAPP_HTTP_TRANSPORT']=fn()=>['status'=>200,'body'=>'{"messages":[{"id":"wamid.test-success"}]}'];
+$result=tpk_notification_process_batch($db);verify($result['sent']===1,'outbox sends with mock Meta');
+verify(delivery($db,$a['id'])['provider_message_id']==='wamid.test-success','Meta ID recorded');
+verify(tpk_apply_meta_status($db,'wamid.test-success','READ',time()),'read webhook handled');
+tpk_apply_meta_status($db,'wamid.test-success','DELIVERED',time()-5);tpk_apply_meta_status($db,'wamid.test-success','FAILED',time());
+verify(delivery($db,$a['id'])['status']==='READ','out-of-order webhooks do not regress read');
+verify(!tpk_apply_meta_status($db,'wamid.not-yet-recorded','SENT',time()),'early webhook requests retry');
+$db->exec("UPDATE teacher_profiles SET whatsapp_number_normalized='bad' WHERE staff_user_id=1");$notice['dedupeKey']='fixture-3';$a=tpk_create_notification($db,$notice);verify(delivery($db,$a['id'])['failure_reason']==='WHATSAPP_NUMBER_INVALID','invalid number skipped');
+$db->exec("UPDATE teacher_profiles SET whatsapp_number_normalized='+2348000000001' WHERE staff_user_id=1");$db->exec('UPDATE staff_users SET is_active=0 WHERE id=1');$notice['dedupeKey']='fixture-4';$a=tpk_create_notification($db,$notice);verify(delivery($db,$a['id'])['failure_reason']==='RECIPIENT_INACTIVE','inactive teacher skipped');$db->exec('UPDATE staff_users SET is_active=1 WHERE id=1');
+$notice['dedupeKey']='fixture-5';$a=tpk_create_notification($db,$notice);$db->exec('UPDATE staff_notification_preferences SET whatsapp_consent=0 WHERE staff_user_id=1');$result=tpk_notification_process_batch($db);verify($result['skipped']===1,'consent rechecked before delivery');$db->exec('UPDATE staff_notification_preferences SET whatsapp_consent=1 WHERE staff_user_id=1');
+$notice['dedupeKey']='fixture-6';$a=tpk_create_notification($db,$notice);$GLOBALS['TPK_WHATSAPP_HTTP_TRANSPORT']=fn()=>['status'=>503,'body'=>'private error'];$result=tpk_notification_process_batch($db);verify($result['retried']===1&&delivery($db,$a['id'])['attempts']==1,'transient Meta failure scheduled for retry');
+$db->exec("UPDATE notification_deliveries SET status='SKIPPED' WHERE status='PENDING'");
+$db->exec("INSERT INTO service_sessions VALUES(10,1,'2026-11-29',1,'2026-11-29 11:30:00')");$clock=new DateTimeImmutable('2026-11-29 09:00:00',new DateTimeZone('Africa/Lagos'));
+$result=tpk_schedule_notifications($db,$clock,true);verify($result['eligible']===4&&$result['created']===0,'Sunday plus birthday preview is campus scoped');
+$result=tpk_schedule_notifications($db,$clock,false);verify($result['created']===4,'scheduled notices created');$result=tpk_schedule_notifications($db,$clock,false);verify($result['created']===0,'scheduler repeat deduped');
+verify((int)$db->query("SELECT COUNT(*) FROM notifications WHERE type='BIRTHDAY_GREETING'")->fetchColumn()===1,'birthday teacher gets one greeting');
+verify((int)$db->query("SELECT COUNT(*) FROM notifications WHERE type='TEACHER_BIRTHDAY'")->fetchColumn()===1,'other campus and self excluded from team birthday announcement');
+$db->exec("INSERT INTO teacher_services VALUES(10,1,'SUNDAY','2026-11-29 09:00:00')");$db->exec("INSERT INTO teacher_service_attendance VALUES(10,1,'2026-11-29 09:00:00')");$result=tpk_schedule_notifications($db,$clock,true);verify($result['eligible']===3,'signed-in teacher omitted');
+verify(!tpk_notification_due('SUNDAY',new DateTimeImmutable('2026-11-30 09:00:00')),'no Monday sign-in reminders');
+echo "$checks MySQL notification checks passed; temporary fixtures only; no external messages.\n";
