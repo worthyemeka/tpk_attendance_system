@@ -218,7 +218,7 @@ export function FollowupWorkspace() {
       .then((body) => { if (body.success) setAssignees(body.data || []); })
       .catch(() => undefined);
   }, [canManage, session]);
-  const open = async (id: number) => {
+  const open = useCallback(async (id: number) => {
     if (!session) return;
     const r = await fetch(`${apiBase}/api/v1/follow-ups/${id}`, {
         headers: authHeaders(session),
@@ -232,7 +232,13 @@ export function FollowupWorkspace() {
       setNotes(b.data.notes || "");
       setExpectedBack(b.data.expectedBack || "");
     } else setError(b.error?.message || "We could not open this follow-up.");
-  };
+  }, [session]);
+  useEffect(() => {
+    const id = Number(new URLSearchParams(window.location.search).get("caseId"));
+    if (session && Number.isSafeInteger(id) && id > 0) {
+      void open(id).catch(() => setError("We could not open this follow-up. Please try again."));
+    }
+  }, [open, session]);
   const save = async () => {
     if (!detail || !session) return;
     const r = await fetch(`${apiBase}/api/v1/follow-ups/${detail.id}`, {

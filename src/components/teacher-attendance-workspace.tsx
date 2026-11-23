@@ -26,6 +26,20 @@ function TeacherDialog({title,onClose,children}:{title:string;onClose:()=>void;c
 export function TeacherAttendanceWorkspace(){
  const[month,setMonth]=useState(campusToday().slice(0,7));const kind="SUNDAY";const[serviceId,setServiceId]=useState(0);const[data,setData]=useState<Workspace>(empty);const[tab,setTab]=useState("attendance");const[error,setError]=useState("");const[busy,setBusy]=useState(false);const[loaded,setLoaded]=useState(false);const[selected,setSelected]=useState<WelfareCase|null>(null);const[member,setMember]=useState<WelfareMember|null>(null);const[assigned,setAssigned]=useState("");const[outcome,setOutcome]=useState("CONTACTED");const[note,setNote]=useState("");const[caseStatus,setCaseStatus]=useState("OPEN");
  const sequence=useRef(0);
+ const linkedCase=useRef(0);
+ useEffect(()=>{
+   const params=new URLSearchParams(window.location.search);
+   const requestedMonth=params.get("month")||"";
+   if(/^\d{4}-(0[1-9]|1[0-2])$/.test(requestedMonth))setMonth(requestedMonth);
+   if(params.get("tab")==="welfare")setTab("welfare");
+   const id=Number(params.get("caseId"));
+   if(Number.isSafeInteger(id)&&id>0)linkedCase.current=id;
+ },[]);
+ useEffect(()=>{
+   const item=data.cases.find(c=>Number(c.id)===linkedCase.current);
+   if(!item)return;
+   linkedCase.current=0;setTab("welfare");setSelected(item);setAssigned(String(item.assignedTo||""));setNote(item.note||"");setOutcome(item.status==="ATTEMPTED"?"ATTEMPTED":"CONTACTED");
+ },[data.cases]);
  const load=useCallback(async()=>{const current=++sequence.current;try{const b:Workspace=await teacherAttendanceRequest(`?month=${month}${serviceId?`&serviceId=${serviceId}`:""}`);if(current!==sequence.current)return;setData(b);setError("");const available=b.services.filter(s=>s.kind===kind);if(!available.some(s=>Number(s.id)===serviceId)){const chosen=available.find(s=>s.startsAt<=b.serverTime&&s.endsAt>b.serverTime)||available.find(s=>s.startsAt>b.serverTime)||available[available.length-1];setServiceId(Number(chosen?.id||0));}}catch(e){if(current===sequence.current)setError(e instanceof Error?e.message:"Could not load teacher attendance.");}finally{if(current===sequence.current)setLoaded(true);}},[month,serviceId,kind]);
  useEffect(()=>{const generation=sequence;void load();const timer=window.setInterval(()=>void load(),10_000);return()=>{generation.current++;window.clearInterval(timer);};},[load]);
  const closeCase=useCallback(()=>setSelected(null),[]);const closeMember=useCallback(()=>setMember(null),[]);
