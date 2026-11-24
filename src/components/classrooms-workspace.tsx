@@ -209,14 +209,15 @@ function Status({ value }: { value: string }) {
   );
 }
 
-export function ClassroomsOverview() {
+export function ClassroomsOverview({ view = "classrooms" }: { view?: MinistryTab }) {
   const session = useMemo(() => readTeacherSession(), []);
   const context = useSundayContext();
   const isSuperAdmin = session?.accessLevel === "TPK_SUPER_ADMIN";
   const [data, setData] = useState<Overview>(emptyOverview);
   const [classOptions, setClassOptions] = useState<{ id: number; name: string }[]>([]);
   const [assembly, setAssembly] = useState<{ groups: AssemblyGroup[] }>({ groups: [] });
-  const [activeTab, setActiveTab] = useState<MinistryTab>("classrooms");
+  const activeTab = view;
+  const viewTitle = view === "classrooms" ? "Classrooms" : view === "assembly" ? "Assembly discussions" : view === "HEAD_OF_SERVICE" ? "Head of Service discussions" : "Door & Attendance discussions";
   const [localScope, setLocalScope] = useState("THIS");
   const [query, setQuery] = useState("");
   const [classId, setClassId] = useState("");
@@ -301,42 +302,12 @@ export function ClassroomsOverview() {
       <header className="cw-heading">
         <div>
           <p className="eyebrow">Petra Mabushi (Regional)</p>
-          <h1>Classrooms</h1>
-          <p>See attendance, children and teachers across TPK classrooms.</p>
+          <h1>{viewTitle}</h1>
+          <p>{view === "classrooms" ? "See attendance, children and teachers across TPK classrooms." : "Share how service went, celebrate wins and help the team prepare for next Sunday."}</p>
           {serviceDate && selectedService && <small className="cw-context-line">Viewing Sunday, {formatDate(serviceDate)} · {selectedService.name}</small>}
         </div>
       </header>
-      <div className="cw-tab-frame">
-        <nav className="cw-primary-tabs" role="tablist" aria-label="Classroom ministry views">
-          {ministryTabs.map(({ id: view, label, Icon }, index) => (
-            <button
-              key={view}
-              id={`cw-tab-${view}`}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === view}
-              aria-controls={`cw-panel-${view}`}
-              tabIndex={activeTab === view ? 0 : -1}
-              className={activeTab === view ? "selected" : ""}
-              onClick={() => setActiveTab(view)}
-              onKeyDown={(event) => {
-                if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-                event.preventDefault();
-                const offset = event.key === "ArrowLeft" ? -1 : 1;
-                const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? ministryTabs.length - 1 :
-                  (index + offset + ministryTabs.length) % ministryTabs.length;
-                const next = ministryTabs[nextIndex].id;
-                setActiveTab(next);
-                document.getElementById(`cw-tab-${next}`)?.focus();
-              }}
-            >
-              <Icon aria-hidden="true" />
-              <span>{label}</span>
-            </button>
-          ))}
-        </nav>
-      </div>
-      <div id={`cw-panel-${activeTab}`} role="tabpanel" aria-labelledby={`cw-tab-${activeTab}`}>
+      <div>
       {activeTab === "classrooms" ? <>
       <section className="cw-metrics">
         <Metric
@@ -823,7 +794,7 @@ function classroomReviewOptions(data: Detail): ReviewService[] {
   return [...unique.values()].sort((left, right) => left.serviceDate.localeCompare(right.serviceDate));
 }
 
-export function ClassroomDetail({ classId }: { classId: number }) {
+export function ClassroomDetail({ classId, discussionOnly = false }: { classId: number; discussionOnly?: boolean }) {
   const session = useMemo(() => readTeacherSession(), []);
   const searchParams = useSearchParams();
   const context = useSundayContext();
@@ -940,6 +911,25 @@ export function ClassroomDetail({ classId }: { classId: number }) {
         .includes(query.toLowerCase()) &&
       (!attendanceFilter || child.todayStatus === attendanceFilter),
   );
+  if (discussionOnly) return <section className="cw-page class-detail" aria-label={`${data.class.name} discussions`}>
+
+        <WeeklyReviews
+          data={data}
+          month={month}
+          setMonth={setMonth}
+          reviewSessionId={reviewSessionId}
+          setReviewSessionId={setReviewSessionId}
+          workedWell={workedWell}
+          setWorkedWell={setWorkedWell}
+          needsImprovement={needsImprovement}
+          setNeedsImprovement={setNeedsImprovement}
+          discussionMessage={discussionMessage}
+          onSave={addWeeklyReview}
+          authorId={session?.staffUserId}
+          onChanged={load}
+        />
+
+<style jsx>{styles}</style><style>{mobileDetailStyles}</style></section>;
   return (
     <section className="cw-page class-detail">
       <Link
@@ -1028,7 +1018,6 @@ export function ClassroomDetail({ classId }: { classId: number }) {
         {[
           ["children", `Children (${data.children.length})`],
           ["attendance", "Attendance"],
-          ["notes", "Weekly Discussion"],
           ["details", "Class Details"],
         ].map(([id, title]) => (
           <button
@@ -1070,23 +1059,7 @@ export function ClassroomDetail({ classId }: { classId: number }) {
       {tab === "attendance" && (
         <Attendance data={data} month={month} setMonth={setMonth} />
       )}{" "}
-      {tab === "notes" && (
-        <WeeklyReviews
-          data={data}
-          month={month}
-          setMonth={setMonth}
-          reviewSessionId={reviewSessionId}
-          setReviewSessionId={setReviewSessionId}
-          workedWell={workedWell}
-          setWorkedWell={setWorkedWell}
-          needsImprovement={needsImprovement}
-          setNeedsImprovement={setNeedsImprovement}
-          discussionMessage={discussionMessage}
-          onSave={addWeeklyReview}
-          authorId={session?.staffUserId}
-          onChanged={load}
-        />
-      )}
+      <Link className="cw-back" href={`/account/discussions/classrooms?classId=${classId}`}>Open class discussions <FiChevronRight /></Link>
       {selectedChildId!==null&&<ChildProfileDialog key={selectedChildId} childId={selectedChildId} close={()=>setSelectedChildId(null)} onUpdated={()=>void load()} initialMonth={data.serviceSession?.serviceDate.slice(0,7)}/>}
       {tab === "details" && (
         <section className="class-details-panel">

@@ -16,6 +16,7 @@ import {
   FiGift,
   FiLogOut,
   FiMenu,
+  FiMessageCircle,
   FiSettings,
   FiUser,
   FiUserCheck,
@@ -35,6 +36,7 @@ import { subscribeToActiveService, type ActiveService } from "@/lib/active-servi
 import { NotificationBell } from "@/components/notification-bell";
 import { useProfileDialog } from "@/components/use-profile-dialog";
 import "./sidebar-refinement.css";
+import { LuDoorOpen, LuPresentation, LuSchool, LuShieldCheck } from "react-icons/lu";
 
 const campusFont = localFont({ src: "../../public/fonts/dm-serif-display.ttf", weight: "400", display: "swap", variable: "--font-campus" });
 
@@ -88,6 +90,12 @@ const followUpLeadMinistry: readonly Item[] = [
   ["My Roster", "/account/roster", FiClock],
   ["Relations & Follow-Up", "/account/relations", FiUserCheck],
   ["Classes & Curriculum", "/account/classes", FiBookOpen],
+];
+const discussionPages: readonly Item[] = [
+  ["Classrooms", "/account/discussions/classrooms", LuSchool],
+  ["Assembly", "/account/discussions/assembly", LuPresentation],
+  ["Head of Service", "/account/discussions/head-of-service", LuShieldCheck],
+  ["Door & Attendance", "/account/discussions/attendance", LuDoorOpen],
 ];
 function initials(session: TeacherSession) {
   return (
@@ -300,6 +308,10 @@ export function Sidebar() {
                 />
               </>
             )}
+            {peopleDirectoryVisible && <>
+              <Group title="Messages" items={[["Family chats", "/account/messages", FiMessageCircle]]} onNavigate={closeMobileNav} />
+              <Group title="Discussions" items={discussionPages} onNavigate={closeMobileNav} />
+            </>}
             <section className="side-group settings-link">
               <Link href="/account/settings" onClick={closeMobileNav}>
                 <i className="side-icon">

@@ -14,6 +14,7 @@ require_once __DIR__ . '/sunday-schedule.php';
 require_once __DIR__ . '/admin-registration.php';
 require_once __DIR__ . '/curriculum.php';
 require_once __DIR__ . '/notification-delivery.php';
+require_once __DIR__ . '/family-chat.php';
 require_once __DIR__ . '/teacher-attendance.php';
 require_once __DIR__ . '/events.php';
 require_once __DIR__ . '/people-privacy.php';
@@ -524,7 +525,7 @@ function api_notifications(PDO $db): never {
             $detail=(string)$notice['body'];
             // Older publications stored every assignment in the preview. Keep the bell readable.
             if($notice['type']==='ROSTER_PUBLISHED'&&strlen($detail)>180)$detail='Open your board to see your month’s roles and responsibilities.';
-            $items[]=['id'=>'stored-'.(int)$notice['id'],'kind'=>str_contains($notice['type'],'BIRTHDAY')?'TEAM':(str_contains($notice['type'],'FOLLOWUP')||str_contains($notice['type'],'FOLLOW_UP')?'FOLLOW_UP':(str_contains($notice['type'],'SUNDAY')?'SERVICE':'ROSTER')),'severity'=>'MEDIUM','title'=>$notice['title'],'detail'=>$detail,'href'=>$notice['href']];
+            $items[]=['id'=>'stored-'.(int)$notice['id'],'kind'=>$notice['type']==='FAMILY_CHAT_MESSAGE'?'MESSAGE':(str_contains($notice['type'],'BIRTHDAY')?'TEAM':(str_contains($notice['type'],'FOLLOWUP')||str_contains($notice['type'],'FOLLOW_UP')?'FOLLOW_UP':(str_contains($notice['type'],'SUNDAY')?'SERVICE':'ROSTER'))),'severity'=>'MEDIUM','title'=>$notice['title'],'detail'=>$detail,'href'=>$notice['href']];
         }
     }catch(Throwable){}
     $requestedSessionId=(int)($_GET['serviceSessionId']??0);$sessionId=$requestedSessionId;
@@ -1119,6 +1120,11 @@ try { $db=api_db();$path=api_path();$method=api_method();
     if(in_array($method,['GET','PATCH'],true)&&$path==='/api/v1/me/notification-preferences')api_notification_preferences($db);
     if($method==='GET'&&$path==='/api/v1/admin/notification-deliveries')api_notification_deliveries($db);
     if($method==='POST'&&preg_match('#^/api/v1/admin/notification-deliveries/(\d+)/retry$#',$path,$m))api_notification_retry($db,(int)$m[1]);
+    if($method==='GET'&&$path==='/api/v1/family-chats')api_family_chat($db,'list');
+    if($method==='GET'&&$path==='/api/v1/family-chats/staff')api_family_chat($db,'staff');
+    if($method==='GET'&&preg_match('#^/api/v1/family-chats/(\d+)$#',$path,$m))api_family_chat($db,'history',(int)$m[1]);
+    if($method==='POST'&&preg_match('#^/api/v1/family-chats/(\d+)/messages$#',$path,$m))api_family_chat($db,'send',(int)$m[1]);
+    if($method==='POST'&&preg_match('#^/api/v1/family-chats/(\d+)/read$#',$path,$m))api_family_chat($db,'read',(int)$m[1]);
     if($method==='GET'&&$path==='/api/v1/notifications')api_notifications($db);
     if($method==='GET'&&$path==='/api/v1/service-sessions/current')api_current_session($db);
     if($path==='/api/v1/service-sessions/sunday-schedule')api_sunday_schedule($db);
