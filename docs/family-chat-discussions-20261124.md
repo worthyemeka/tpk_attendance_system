@@ -1,3 +1,5 @@
+> Superseded later on 24 November 2026: the user requested removal of general family chat. Its UI, API routes and service were removed. Old /account/messages links redirect to the existing follow-up workspace, now grouped under Follow-up. Chat notifications are excluded from the inbox; stored data was not destructively erased. The discussion pages remain, and classroom selection now uses accessible responsive tabs for all configured classes.
+
 # Family chat and discussion pages — 24 November 2026
 
 ## Experience

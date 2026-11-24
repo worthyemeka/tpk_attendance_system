@@ -1,2 +1,2 @@
-import { FamilyChat } from "@/components/family-chat";
-export default function Page() { return <FamilyChat />; }
+import { redirect } from "next/navigation";
+export default function Page() { redirect("/account/relations"); }

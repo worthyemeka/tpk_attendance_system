@@ -16,7 +16,6 @@ import {
   FiGift,
   FiLogOut,
   FiMenu,
-  FiMessageCircle,
   FiSettings,
   FiUser,
   FiUserCheck,
@@ -58,7 +57,6 @@ const superMinistry: readonly Item[] = [
   ["Events & Conferences", "/account/events", FiCalendar],
   ["Teacher Check-In", "/account/teacher-check-in", FiCheckSquare],
   ["Team & Roster", "/account/roster", FiClock],
-  ["Relations & Follow-Up", "/account/relations", FiUserCheck],
   ["Classes & Curriculum", "/account/classes", FiBookOpen],
   ["Reports", "/account/reports", FiBarChart2],
 ];
@@ -80,7 +78,6 @@ const adminMinistry: readonly Item[] = [
   ["Events & Conferences", "/account/events", FiCalendar],
   ["Teacher Check-In", "/account/teacher-check-in", FiCheckSquare],
   ["My Roster", "/account/roster", FiClock],
-  ["My Follow-Ups", "/account/relations", FiUserCheck],
   ["Classes & Curriculum", "/account/classes", FiBookOpen],
 ];
 const followUpLeadMinistry: readonly Item[] = [
@@ -88,7 +85,6 @@ const followUpLeadMinistry: readonly Item[] = [
   ["Events & Conferences", "/account/events", FiCalendar],
   ["Teacher Check-In", "/account/teacher-check-in", FiCheckSquare],
   ["My Roster", "/account/roster", FiClock],
-  ["Relations & Follow-Up", "/account/relations", FiUserCheck],
   ["Classes & Curriculum", "/account/classes", FiBookOpen],
 ];
 const discussionPages: readonly Item[] = [
@@ -309,7 +305,7 @@ export function Sidebar() {
               </>
             )}
             {peopleDirectoryVisible && <>
-              <Group title="Messages" items={[["Family chats", "/account/messages", FiMessageCircle]]} onNavigate={closeMobileNav} />
+              <Group title="Follow-up" items={[[superAdmin || followUpLead ? "Relations & Follow-Up" : "My Follow-Ups", "/account/relations", FiUserCheck]]} onNavigate={closeMobileNav} />
               <Group title="Discussions" items={discussionPages} onNavigate={closeMobileNav} />
             </>}
             <section className="side-group settings-link">

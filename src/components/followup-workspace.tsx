@@ -1,7 +1,6 @@
 "use client";
 /* The dynamic status labels mirror the API vocabulary exactly. */
 /* eslint-disable react/no-unescaped-entities */
-import Link from "next/link";
 import { AppSelect } from "@/components/app-dropdown";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -552,7 +551,6 @@ function Drawer({
             : `${detail.familyName} Family`}
         </h2>
         <Badge status={detail.status} />
-        <p><Link href={`/account/messages?familyId=${detail.familyId}`}>Open family chat <FiChevronRight /></Link></p>
         <p>
           {detail.childrenCount} {Number(detail.childrenCount) === 1 ? "child" : "children"} · {detail.missedSundays || 1} {(detail.missedSundays || 1) === 1 ? "Sunday" : "Sundays"}
           {" "}missed
