@@ -1,8 +1,9 @@
 "use client";
 
 import { ParentPhotoSlider } from "@/components/parent-photo-slider";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FiArrowLeft, FiArrowRight, FiCheck, FiCheckCircle, FiHome, FiInfo, FiPlus, FiTrash2, FiUser, FiUsers } from "react-icons/fi";
+import { loadPublicServices, validRegistrationReceipt } from "@/lib/public-registration";
 import { apiBase } from "@/lib/session";
 import { RelationshipField, validRelationship } from "@/components/relationship-field";
 import { registrationEligibility, underThreeMessage } from "@/lib/registration-eligibility";
@@ -26,44 +27,60 @@ export function NewChildRegistration() {
   const [services,setServices] = useState<AvailableService[]>([]);
   const chooseService = (type:Service) => { const item=services.find(item=>item.serviceType===type); if(item){setService(type);setServiceSessionId(Number(item.id));} };
   const [serviceSessionId, setServiceSessionId] = useState<number | null>(null);
+  const [availability, setAvailability] = useState<"loading"|"open"|"closed"|"error">("loading");
+  const submission = useRef<{ body: string; key: string } | null>(null);
+  const registrationOnly = availability === "closed";
+  const refreshServices = useCallback(async () => {
+    try {
+      const available = await loadPublicServices();
+      setServices(available); setAvailability(available.length ? "open" : "closed");
+      setServiceSessionId(current => available.some(item=>item.id===current) ? current : available[0]?.id ?? null);
+      setService(current => available.some(item=>item.serviceType===current) ? current : available[0]?.serviceType ?? "");
+      return available;
+    } catch (reason) { setAvailability("error"); throw reason; }
+  }, []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [receipt, setReceipt] = useState<{ requestToken?: string; pickupCode?: string; pickupTicketUrl?: string; checkedIn: number; pending: number } | null>(null);
+  const [receipt, setReceipt] = useState<{ status?: string; requestToken?: string; pickupCode?: string; pickupTicketUrl?: string; checkedIn: number; pending: number } | null>(null);
   const [currentTime, setCurrentTime] = useState("");
 
   useEffect(() => {
     const updateTime = () => setCurrentTime(new Intl.DateTimeFormat("en-NG", { weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: "Africa/Lagos" }).format(new Date()));
     updateTime();
     const time = window.setInterval(updateTime, 30_000);
-    fetch(`${apiBase}/api/v1/public/service-session/current`).then((response) => response.json()).then((result) => {
-      if (result.success && result.data?.id) {setServiceSessionId(Number(result.data.id));setService(result.data.serviceType);setServices(result.data.services||[]);}
-    }).catch(() => setError("We could not connect to check-in right now. Please ask a TPK team member for help."));
-    return () => window.clearInterval(time);
-  }, []);
+    void refreshServices().catch(reason => setError(reason.message));
+    const retryOnFocus = () => { void refreshServices().catch(reason => setError(reason.message)); };
+    window.addEventListener("focus", retryOnFocus);
+    return () => { window.clearInterval(time); window.removeEventListener("focus", retryOnFocus); };
+  }, [refreshServices]);
 
-  const validChildren = children.every((child) => child.firstName && child.lastName && child.dateOfBirth && child.gender);
-  const validGuardian = Boolean(guardian.firstName && guardian.lastName && guardian.primaryPhone && validRelationship(guardian.relationship) && guardian.address);
-  const validPicker = pickupMode === "SELF" || Boolean(picker.fullName && validRelationship(picker.relationship) && picker.phone);
-  const childSummary = useMemo(() => children.map((child) => `${child.firstName || "New"} ${child.lastName || "child"}`).join(", "), [children]);
+  const childSummary = children.map(child=>`${child.firstName || "New"} ${child.lastName || "child"}`).join(", ");
   const updateChild = (id: number, field: keyof ChildDraft, value: string) => setChildren((items) => items.map((child) => child.id === id ? { ...child, [field]: value } : child));
   const addChild = () => setChildren((items) => [...items, blankChild()]);
   const removeChild = (id: number) => setChildren((items) => items.length > 1 ? items.filter((child) => child.id !== id) : items);
-  const goNext = () => setStep((current) => Math.min(4, current + 1));
-  const goBack = () => step === 0 ? window.location.assign("/") : setStep((current) => current - 1);
+  const goNext = () => setStep((current) => current === 1 && registrationOnly ? 3 : Math.min(4, current + 1));
+  const goBack = () => step === 0 ? window.location.assign("/") : setStep((current) => current === 3 && registrationOnly ? 1 : current - 1);
 
   const submit = async () => {
     const blocked = children.find((child) => registrationEligibility(child.dateOfBirth) !== "ELIGIBLE");
     if (blocked) { setError(registrationEligibility(blocked.dateOfBirth) === "UNDER_THREE" ? underThreeMessage : "Please enter a valid date of birth that is not in the future."); return; }
-    if (!serviceSessionId) { setError("Check-in is not open right now. Please ask a TPK team member for help."); return; }
+    if (saving) return;
+    if (availability === "loading" || availability === "error") { setError("Please retry the service check before submitting. Your details are still here."); return; }
     setSaving(true); setError("");
     try {
-      const response = await fetch(`${apiBase}/api/v1/public/registrations`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ guardian, children, pickup: pickupMode === "OTHER" ? { mode: "OTHER", ...picker } : { mode: "SELF" }, serviceStay: service, serviceSessionId }) });
+      const body = JSON.stringify({ guardian, children, registrationOnly, pickup: pickupMode === "OTHER" ? { mode: "OTHER", ...picker } : { mode: "SELF" }, serviceStay: service, serviceSessionId });
+      if (!submission.current || submission.current.body !== body) submission.current = { body, key: crypto.randomUUID().replaceAll("-", "") };
+      const response = await fetch(`${apiBase}/api/v1/public/registrations`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...JSON.parse(body), submissionKey: submission.current.key }) });
       const result = await response.json();
-      if (!response.ok || !result.success) throw new Error(result.error?.message || "We could not complete registration.");
-      const saved = result.data.children || [];
-      setReceipt({ requestToken: result.data.requestToken, checkedIn: 0, pending: saved.filter((child: { classAssignmentRequired: boolean }) => child.classAssignmentRequired).length });
+      if (!response.ok || !result.success) {
+        if (result.error?.code === "SERVICE_SESSION_NOT_OPEN") await refreshServices();
+        throw new Error(result.error?.message || "We could not complete registration. Please retry; your details are still here.");
+      }
+      if (!validRegistrationReceipt(result.data, children.length)) throw new Error("We could not confirm that registration was saved. Please retry this submission; it will not create a duplicate.");
+      const saved = result.data.children;
+      setReceipt({ status: result.data.status, requestToken: result.data.requestToken, checkedIn: 0, pending: saved.filter((child: { classAssignmentRequired: boolean }) => child.classAssignmentRequired).length });
       setStep(4);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "We could not complete registration."); }
+    } catch (reason) { setError(reason instanceof TypeError || reason instanceof SyntaxError ? "We could not confirm the save. Please try again; repeating this submission will not create a duplicate." : reason instanceof Error ? reason.message : "We could not complete registration."); }
     finally { setSaving(false); }
   };
 
@@ -71,12 +88,13 @@ export function NewChildRegistration() {
     <header className="new-reg-top"><button onClick={goBack} type="button"><FiArrowLeft /> Back</button><time>{currentTime}</time></header>
     <Progress step={step} />
     <section className="new-reg-card">
-      {error && <p className="new-reg-error" role="alert">{error}</p>}
+      {error && <p className="new-reg-error" role="alert" tabIndex={-1} ref={element=>element?.scrollIntoView({block:"center",behavior:"smooth"})}>{error}</p>}
+      {step<4 && <div className="new-info" role="status"><FiInfo/><span>{availability==="loading" ? "Checking service availability…" : registrationOnly ? "Check-in is closed. You can still register your children now. On Sunday, choose Returning family to check them in." : availability==="error" ? "Service availability could not be checked." : "Registration will save your children’s details and send today’s check-in request for approval."} <button type="button" onClick={()=>{setError("");void refreshServices().catch(reason=>setError(reason.message));}}>Check again</button></span></div>}
       {step<4&&<p><a href="/families/add-child">Already registered with TPK? Add a sibling to your existing family →</a></p>}
       {step === 0 && <ChildStep children={children} updateChild={updateChild} addChild={addChild} removeChild={removeChild} next={goNext} />}
       {step === 1 && <GuardianStep guardian={guardian} setGuardian={setGuardian} back={goBack} next={goNext} childSummary={childSummary} />}
       {step === 2 && <PickupStep pickupMode={pickupMode} setPickupMode={setPickupMode} picker={picker} setPicker={setPicker} service={service} services={services} setService={chooseService} back={goBack} next={goNext} />}
-      {step === 3 && <ReviewStep children={children} guardian={guardian} pickupMode={pickupMode} picker={picker} service={services.find(item=>Number(item.id)===serviceSessionId)?.name||"Service"} back={goBack} editChildren={() => { setError(""); setStep(0); }} submit={submit} saving={saving} />}
+      {step === 3 && <ReviewStep registrationOnly={registrationOnly} unavailable={availability==="loading"||availability==="error"} children={children} guardian={guardian} pickupMode={pickupMode} picker={picker} service={services.find(item=>Number(item.id)===serviceSessionId)?.name||"Service"} back={goBack} editChildren={() => { setError(""); setStep(0); }} submit={submit} saving={saving} />}
       {step === 4 && <CompleteStep receipt={receipt} onApproved={(approved) => setReceipt((current) => current ? { ...current, pickupCode: approved.pickupCode, pickupTicketUrl: approved.pickupTicketUrl, checkedIn: approved.children?.length || children.length } : current)} restart={() => { setChildren([blankChild()]); setGuardian(blankGuardian); setPicker({ fullName: "", relationship: "", phone: "" }); setPickupMode("SELF"); setService(services[0]?.serviceType||""); setServiceSessionId(services[0]?Number(services[0].id):null); setReceipt(null); setStep(0); }} />}
     </section>
   </main><style jsx global>{`
@@ -92,16 +110,16 @@ function ChildStep({ children, updateChild, addChild, removeChild, next }: { chi
 }
 function GuardianStep({ guardian, setGuardian, back, next, childSummary }: { guardian: Guardian; setGuardian: (guardian: Guardian) => void; back: () => void; next: () => void; childSummary: string }) { const update=(key:keyof Guardian,value:string)=>setGuardian({...guardian,[key]:value}); const valid=guardian.firstName&&guardian.lastName&&guardian.primaryPhone&&validRelationship(guardian.relationship)&&guardian.address; return <><div className="new-info"><FiUsers /><span>Registering <b>{childSummary}</b></span></div><h1>Tell us about you</h1><p>We’ll use these details for check-in, pickup and important communication about your child.</p><div className="new-form-grid"><label>First Name *<input onChange={(event)=>update("firstName",event.target.value)} value={guardian.firstName}/></label><label>Last Name *<input onChange={(event)=>update("lastName",event.target.value)} value={guardian.lastName}/></label><label>Primary Phone Number *<input inputMode="tel" onChange={(event)=>update("primaryPhone",event.target.value)} placeholder="0803 123 4567" value={guardian.primaryPhone}/></label><RelationshipField value={guardian.relationship} onChange={value=>update("relationship",value)} /><label>Secondary Phone (optional)<input inputMode="tel" onChange={(event)=>update("secondaryPhone",event.target.value)} placeholder="0805 123 4567" value={guardian.secondaryPhone}/></label><label>Email Address (optional)<input onChange={(event)=>update("email",event.target.value)} type="email" value={guardian.email}/></label><label className="new-full">Home Address *<textarea onChange={(event)=>update("address",event.target.value)} placeholder="e.g. 12 Crescent Road, Wuse 2, Abuja" rows={3} value={guardian.address}/></label></div><div className="new-actions"><button className="new-back" onClick={back}>Back</button><button className="new-next" disabled={!valid} onClick={next}>Continue <FiArrowRight /></button></div></>; }
 function PickupStep({ pickupMode,setPickupMode,picker,setPicker,service,services,setService,back,next }: { pickupMode:"SELF"|"OTHER";setPickupMode:(value:"SELF"|"OTHER")=>void;picker:Picker;setPicker:(value:Picker)=>void;service:Service;services:AvailableService[];setService:(value:Service)=>void;back:()=>void;next:()=>void }) { const valid=pickupMode==="SELF"||Boolean(picker.fullName&&validRelationship(picker.relationship)&&picker.phone); return <><h1>Pickup and service</h1><p>Let us know who to expect and which service your child(ren) will stay for.</p><div className="new-pickup"><button className={pickupMode==="SELF"?"selected":""} onClick={()=>setPickupMode("SELF")} type="button"><FiUser/><b>I will be picking up</b><small>I’ll collect my child(ren) after service.</small></button><button className={pickupMode==="OTHER"?"selected":""} onClick={()=>setPickupMode("OTHER")} type="button"><FiUsers/><b>Someone else will pick up</b><small>Another authorised person will collect my child(ren).</small></button></div>{pickupMode==="OTHER"&&<section className="new-picker"><h3>Picker’s details</h3><p>Please enter the authorised person’s information.</p><div className="new-form-grid"><label>Full Name *<input onChange={(event)=>setPicker({...picker,fullName:event.target.value})} value={picker.fullName}/></label><RelationshipField value={picker.relationship} onChange={value=>setPicker({...picker,relationship:value})} /><label className="new-full">Phone Number *<input inputMode="tel" onChange={(event)=>setPicker({...picker,phone:event.target.value})} placeholder="0805 123 4567" value={picker.phone}/></label></div></section>}<fieldset className="new-services"><legend>Which service will your child(ren) be staying for?</legend><div className="new-service-options">{services.map(item=><button className={service===item.serviceType?"selected":""} onClick={()=>setService(item.serviceType)} type="button" key={item.id}>{item.name}</button>)}</div></fieldset><div className="new-actions"><button className="new-back" onClick={back}>Back</button><button className="new-next" disabled={!valid} onClick={next}>Continue <FiArrowRight /></button></div></>; }
-export function ReviewStep({ children,guardian,pickupMode,picker,service,back,editChildren,submit,saving }: { children:ChildDraft[];guardian:Guardian;pickupMode:"SELF"|"OTHER";picker:Picker;service:Service;back:()=>void;editChildren:()=>void;submit:()=>void;saving:boolean }) {
+export function ReviewStep({ registrationOnly=false,unavailable=false,children,guardian,pickupMode,picker,service,back,editChildren,submit,saving }: { registrationOnly?:boolean;unavailable?:boolean;children:ChildDraft[];guardian:Guardian;pickupMode:"SELF"|"OTHER";picker:Picker;service:Service;back:()=>void;editChildren:()=>void;submit:()=>void;saving:boolean }) {
   const underThree = children.filter((child) => registrationEligibility(child.dateOfBirth) === "UNDER_THREE");
   const invalidBirth = children.some((child) => registrationEligibility(child.dateOfBirth) === "INVALID_DATE");
   const blocked = underThree.length > 0 || invalidBirth;
-  return <><h1>Just one last check</h1><p>Please make sure everything looks right before we send your check-in request to today’s Head of Service.</p>
+  return <><h1>Just one last check</h1><p>{registrationOnly ? "Check these details before saving your children’s registration. This does not check them in for a service." : "Please make sure everything looks right before we send your check-in request to today’s Head of Service."}</p>
     {blocked && <section className="registration-age-notice" role="alert" aria-labelledby="registration-age-title"><FiInfo aria-hidden="true" /><div><h2 id="registration-age-title">{underThree.length ? "A little too young for TPK" : "Please check the date of birth"}</h2><p>{underThree.length ? underThreeMessage : "Please enter a valid date of birth that is not in the future."}</p>{underThree.length > 0 && <ul>{underThree.map((child) => <li key={child.id}>{child.firstName} {child.lastName}</li>)}</ul>}<p className="registration-age-help">No registration or check-in request has been saved. You can correct a date of birth or remove a younger child to continue with their siblings.</p><button type="button" onClick={editChildren}>Review children’s details <FiArrowRight aria-hidden="true" /></button></div></section>}
-    <div className="new-review"><Review icon={<FiUsers/>} title={`Children (${children.length})`} text={children.map((child)=>`${child.firstName} ${child.lastName}`).join(" · ")}/><Review icon={<FiUser/>} title="Parent/Guardian" text={`${guardian.firstName} ${guardian.lastName} · ${guardian.relationship} · ${guardian.primaryPhone}`}/><Review icon={<FiCheckCircle/>} title="Pickup" text={pickupMode==="SELF"?"I will be picking up":`${picker.fullName} (${picker.relationship}) · ${picker.phone}`}/><Review icon={<FiHome/>} title="Home Address" text={guardian.address}/><Review icon={<FiInfo/>} title="Service" text={service}/></div><div className="new-actions"><button className="new-back" type="button" onClick={back}>Back</button><button className="new-next" type="button" disabled={saving || blocked} onClick={submit}>{saving?"Sending…":"Send Check-In Request"} <FiArrowRight /></button></div></>;
+    <div className="new-review"><Review icon={<FiUsers/>} title={`Children (${children.length})`} text={children.map((child)=>`${child.firstName} ${child.lastName}`).join(" · ")}/><Review icon={<FiUser/>} title="Parent/Guardian" text={`${guardian.firstName} ${guardian.lastName} · ${guardian.relationship} · ${guardian.primaryPhone}`}/>{!registrationOnly && <Review icon={<FiCheckCircle/>} title="Pickup" text={pickupMode==="SELF"?"I will be picking up":`${picker.fullName} (${picker.relationship}) · ${picker.phone}`}/>}<Review icon={<FiHome/>} title="Home Address" text={guardian.address}/><Review icon={<FiInfo/>} title="Service" text={registrationOnly?"Registration only — check in on Sunday":service}/></div><div className="new-actions"><button className="new-back" type="button" onClick={back}>Back</button><button className="new-next" type="button" disabled={saving || blocked || unavailable} onClick={submit}>{saving?"Saving…":registrationOnly?"Save registration":"Register & send check-in request"} <FiArrowRight /></button></div></>;
 }
 function Review({ icon,title,text }: { icon:React.ReactNode;title:string;text:string }) { return <article className="new-review-item">{icon}<span><b>{title}</b><small>{text}</small></span></article>; }
-function CompleteStep({ receipt,onApproved,restart }: { receipt:{requestToken?:string;pickupCode?:string;pickupTicketUrl?:string;checkedIn:number;pending:number}|null;onApproved:(value:{pickupCode:string;pickupTicketUrl?:string;children?:unknown[]})=>void;restart:()=>void }) {
+function CompleteStep({ receipt,onApproved,restart }: { receipt:{status?:string;requestToken?:string;pickupCode?:string;pickupTicketUrl?:string;checkedIn:number;pending:number}|null;onApproved:(value:{pickupCode:string;pickupTicketUrl?:string;children?:unknown[]})=>void;restart:()=>void }) {
   const [message,setMessage] = useState("Your request is with today’s Head of Service.");
   const [checking,setChecking] = useState(false);
   useEffect(() => {
@@ -122,6 +140,7 @@ function CompleteStep({ receipt,onApproved,restart }: { receipt:{requestToken?:s
     check(); const timer = window.setInterval(check, 4_000);
     return () => { active = false; window.clearInterval(timer); };
   }, [receipt?.pickupCode, receipt?.requestToken, onApproved]);
+  if (receipt?.status === "REGISTERED") return <><div className="new-success"><FiCheck/></div><h1>Registration saved</h1><p>Your children are now registered with TribePetra Kids. They have not been checked in today.</p><p>On Sunday, choose “We’ve been here before” and enter your registered phone number to check them in.</p><div className="new-actions"><button type="button" className="new-next" onClick={()=>window.location.assign("/")}>Back to home</button></div></>;
   if (!receipt?.pickupCode) return <><div className="new-success"><FiInfo/></div><h1>Registration received</h1><p>Your child’s details have been saved. Please wait while today’s Head of Service confirms check-in.</p><div className="new-code"><small>AWAITING APPROVAL</small><b>{checking ? "Checking…" : "Please wait"}</b><span>{message}</span></div><p>We will generate the pickup code and QR ticket immediately after approval.</p></>;
   return <><div className="new-success"><FiCheck/></div><h1>Welcome to TribePetra!</h1><p>Your check-in has been approved.</p>{receipt.pending ? <p>One or more children need a team member to confirm their class before check-in. Their record is safely saved.</p> : null}<div className="new-code"><small>PICKUP CODE</small><b>{receipt.pickupCode}</b><span>Show this code at the pickup station.</span></div>{receipt.pickupTicketUrl&&<a className="new-back" href={receipt.pickupTicketUrl}>Open QR pickup ticket / save PDF</a>}<div className="new-info"><FiCheckCircle/>{receipt.checkedIn} child{receipt.checkedIn === 1 ? "" : "ren"} checked in.</div><div className="new-actions"><button className="new-back" onClick={restart}>Check In Another Child</button><button className="new-next" onClick={()=>window.location.assign("/")}>Done</button></div></>;
 }

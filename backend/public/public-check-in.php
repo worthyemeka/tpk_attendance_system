@@ -33,8 +33,16 @@ try {
     $guardian=checkin_guardian($db,$phone);if(!$guardian)checkin_error('REGISTRATION_NOT_FOUND','We could not find a registration for that phone number.',404);
     $marks=implode(',',array_fill(0,count($childIds),'?'));
     $children=$db->prepare("SELECT c.id,c.class_id,c.first_name,c.last_name FROM children c JOIN child_guardians cg ON cg.child_id=c.id WHERE cg.guardian_id=? AND c.id IN ($marks) AND c.is_active=1");$children->execute(array_merge([(int)$guardian['id']],$childIds));$rows=$children->fetchAll();if(count($rows)!==count($childIds))checkin_error('CHILD_NOT_AUTHORISED','One or more selected children are not linked to this registration.',403);
+    // Accept the object used by registration and the old split pickup/picker payload.
+    $pickup=$payload['pickup']??['mode'=>'SELF'];
+    if (is_string($pickup)) $pickup=array_merge(is_array($payload['picker']??null)?$payload['picker']:[],['mode'=>$pickup]);
+    if (!is_array($pickup)||!in_array($pickup['mode']??'', ['SELF','OTHER'],true)) checkin_error('INVALID_PICKUP','Please choose who will collect your children.',422);
+    if ($pickup['mode']==='OTHER') {
+        $pickup=['mode'=>'OTHER','fullName'=>trim((string)($pickup['fullName']??'')),'relationship'=>trim((string)($pickup['relationship']??'')),'phone'=>checkin_phone($pickup['phone']??null)];
+        if (!$pickup['fullName']||!$pickup['relationship']||!$pickup['phone']) checkin_error('INVALID_PICKUP','Enter the pickup person’s name, relationship and valid phone number.',422);
+    } else $pickup=['mode'=>'SELF'];
     $db->beginTransaction();
-    $request=tpk_create_checkin_request($db,(int)$session['campus_id'],(int)$session['id'],(int)$guardian['family_id'],(int)$guardian['id'],$childIds,['pickup'=>$payload['pickup']??['mode'=>'SELF'],'serviceStay'=>$payload['serviceStay']??null]);
+    $request=tpk_create_checkin_request($db,(int)$session['campus_id'],(int)$session['id'],(int)$guardian['family_id'],(int)$guardian['id'],$childIds,['pickup'=>$pickup,'serviceStay'=>$payload['serviceStay']??null]);
     audit($db,(int)$session['campus_id'],'PUBLIC_CHECKIN_REQUESTED','CheckInRequest',(int)$request['id'],['guardianId'=>(int)$guardian['id'],'childIds'=>$childIds]);
     $db->commit();
     checkin_response(['serviceSessionId'=>(int)$session['id'],'status'=>'PENDING','requestToken'=>$request['requestToken'],'childrenRequested'=>array_map(static fn(array $child): array => ['id'=>(int)$child['id'],'firstName'=>$child['first_name'],'lastName'=>$child['last_name']],$rows)],202);

@@ -122,17 +122,27 @@ function public_registration(PDO $db): never {
     if (!$phone) public_error('INVALID_PHONE', 'Enter a valid Nigerian primary phone number.', 422);
     $secondaryPhone = empty($guardian['secondaryPhone']) ? null : public_phone($guardian['secondaryPhone']);
     if (!empty($guardian['secondaryPhone']) && !$secondaryPhone) public_error('INVALID_PHONE', 'Enter a valid Nigerian secondary phone number.', 422);
+    $registrationOnly = ($payload['registrationOnly'] ?? false) === true;
+    $submissionKey = (string)($payload['submissionKey'] ?? '');
+    if ($submissionKey !== '' && !preg_match('/^[a-f0-9]{32,64}$/', $submissionKey)) public_error('INVALID_SUBMISSION', 'Please reload the form and try again.', 422);
+    $requestHash = hash('sha256', json_encode($payload));
     $sessionId = isset($payload['serviceSessionId']) ? (int)$payload['serviceSessionId'] : 0;
-    $session = public_session_for_request($db, (int)$campus['id'], $sessionId, (string)($payload['serviceStay'] ?? ''));
-    if (!$session) public_error('SERVICE_SESSION_NOT_OPEN', 'Check-in is not open right now. Please ask a TPK team member for help.', 409);
+    $session = $registrationOnly ? null : public_session_for_request($db, (int)$campus['id'], $sessionId, (string)($payload['serviceStay'] ?? ''));
     $db->beginTransaction();
     try {
+        // The receipt is committed with the children. Repeating the same request
+        // after a dropped connection returns its saved result without duplicating it.
+        if ($submissionKey !== '') {
+            $db->prepare('INSERT INTO public_registration_submissions(submission_key,request_hash) VALUES(?,?) ON DUPLICATE KEY UPDATE submission_key=submission_key')->execute([$submissionKey,$requestHash]);
+            $receiptQuery=$db->prepare('SELECT request_hash,response_json FROM public_registration_submissions WHERE submission_key=? FOR UPDATE');
+            $receiptQuery->execute([$submissionKey]); $receipt=$receiptQuery->fetch();
+            if (!hash_equals($receipt['request_hash'],$requestHash)) public_error('SUBMISSION_CHANGED','This submission has changed. Please review the details and try again.',409);
+            if ($receipt['response_json']) { $db->commit(); public_reply(json_decode($receipt['response_json'],true),202); }
+        }
+        if (!$registrationOnly && !$session) public_error('SERVICE_SESSION_NOT_OPEN','Check-in is closed. Your registration has not been saved yet. Choose registration only to save your child’s details.',409);
         $existing = public_find_guardian($db, $phone);
         if ($existing) {
-            $guardianId = (int)$existing['id'];
-            $familyId = (int)$existing['family_id'];
-            $db->prepare('UPDATE guardians SET first_name=?,last_name=?,phone=?,secondary_phone=?,email=?,relationship=?,is_primary=1,is_authorized=1 WHERE id=?')->execute([public_name($guardian['firstName']),public_name($guardian['lastName']),$phone,$secondaryPhone,trim((string)($guardian['email'] ?? '')) ?: null,public_name($guardian['relationship']),$guardianId]);
-            if (isset($guardian['address'])) $db->prepare('UPDATE families SET home_address=? WHERE id=?')->execute([trim((string)$guardian['address']) ?: null,$familyId]);
+            public_error('REGISTERED_FAMILY_FOUND','This guardian is already registered. Use Add a sibling to your registered family for a new child, or Returning family for check-in. Your saved profiles have not been changed.',409);
         } else {
             $surname = public_name((string)$guardian['lastName']);
             $db->prepare('INSERT INTO families(campus_id,family_code,surname,phone,email,home_address) VALUES(?,?,?,?,?,?)')->execute([(int)$campus['id'],public_family_code($db),$surname,$phone,trim((string)($guardian['email'] ?? '')) ?: null,trim((string)($guardian['address'] ?? '')) ?: null]);
@@ -157,17 +167,20 @@ function public_registration(PDO $db): never {
             if ($care !== '') $db->prepare('INSERT INTO child_care_profiles(child_id,other_relevant_care_information) VALUES(?,?)')->execute([$childId,$care]);
             $registered[] = ['id'=>$childId,'firstName'=>$first,'lastName'=>$last,'classId'=>$classId,'classAssignmentRequired'=>!$classId,'checkedIn'=>false];
         }
-        $picker = $payload['pickup'] ?? ['mode' => 'SELF'];
+        $picker = $registrationOnly ? ['mode'=>'SELF'] : ($payload['pickup'] ?? ['mode'=>'SELF']);
+        if (!is_array($picker) || !in_array($picker['mode'] ?? '', ['SELF','OTHER'],true)) public_error('INVALID_PICKUP','Please choose who will collect your children.',422);
         if (($picker['mode'] ?? 'SELF') === 'OTHER') {
             $pickerPhone = public_phone($picker['phone'] ?? null); $pickerName = public_name((string)($picker['fullName'] ?? '')); $relationship = public_name((string)($picker['relationship'] ?? ''));
             if (!$pickerPhone || !$pickerName || !$relationship) public_error('VALIDATION_ERROR', 'Enter the authorised pickup person’s name, relationship and phone number.', 422);
             [$pickupFirst,$pickupLast] = public_split_name($pickerName);
             $db->prepare('INSERT INTO authorized_pickups(family_id,first_name,last_name,phone,relationship,is_active) VALUES(?,?,?,?,?,1)')->execute([$familyId,$pickupFirst,$pickupLast,$pickerPhone,$relationship]);
         }
-        $request=tpk_create_checkin_request($db,(int)$campus['id'],(int)$session['id'],$familyId,$guardianId,array_column($registered,'id'),['pickup'=>$picker,'serviceStay'=>$payload['serviceStay']??null]);
-        audit($db, (int)$campus['id'], 'PUBLIC_CHILDREN_REGISTERED', 'Family', $familyId, ['guardianId'=>$guardianId,'childIds'=>array_column($registered,'id'),'serviceSessionId'=>(int)$session['id'],'checkInRequestId'=>(int)$request['id']]);
+        $request = $session ? tpk_create_checkin_request($db,(int)$campus['id'],(int)$session['id'],$familyId,$guardianId,array_column($registered,'id'),['pickup'=>$picker,'serviceStay'=>$payload['serviceStay']??null]) : null;
+        $result=['familyId'=>$familyId,'guardianId'=>$guardianId,'serviceSessionId'=>$session ? (int)$session['id'] : null,'status'=>$request ? 'PENDING' : 'REGISTERED','requestToken'=>$request['requestToken']??null,'children'=>$registered];
+        audit($db, (int)$campus['id'], 'PUBLIC_CHILDREN_REGISTERED', 'Family', $familyId, ['guardianId'=>$guardianId,'childIds'=>array_column($registered,'id'),'serviceSessionId'=>$result['serviceSessionId'],'checkInRequestId'=>$request ? (int)$request['id'] : null]);
+        if ($submissionKey !== '') $db->prepare('UPDATE public_registration_submissions SET response_json=? WHERE submission_key=?')->execute([json_encode($result),$submissionKey]);
         $db->commit();
-        public_reply(['familyId'=>$familyId,'guardianId'=>$guardianId,'serviceSessionId'=>(int)$session['id'],'status'=>'PENDING','requestToken'=>$request['requestToken'],'children'=>$registered],202);
+        public_reply($result,202);
     } catch (Throwable $exception) {
         if ($db->inTransaction()) $db->rollBack();
         throw $exception;
