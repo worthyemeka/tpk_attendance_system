@@ -81,7 +81,7 @@ type Summary = {
   canManage?: boolean;
 };
 type ClassOption = { id: number; name: string };
-type Assignee = { id: number; name: string; profileImageUrl?: string | null };
+type Assignee = { id: number; name: string; roleLabel?: string; accessLevel?: string; profileImageUrl?: string | null };
 type FollowupRecipient = { id: number; name: string; phone: string };
 const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const date = (v?: string) =>
@@ -370,7 +370,7 @@ export function FollowupWorkspace() {
           </span>
           <span className="app-dropdown-host"><AppSelect aria-label="Filter by month" onChange={(e) => { setMonth(e.target.value); setPage(1); }} value={month}><option value="">All months</option>{months.map((label, index) => <option key={label} value={String(index + 1)}>Filter by {label}</option>)}</AppSelect></span>
           <span className="app-dropdown-host"><AppSelect aria-label="Filter by year" onChange={(e) => { setYear(e.target.value); setPage(1); }} value={year}><option value="">All years</option>{years.map((value) => <option key={value} value={value}>Filter by {value}</option>)}</AppSelect></span>
-          {canManage && <span className="app-dropdown-host"><AppSelect aria-label="Filter by assigned teacher" value={ownerId} onChange={event => { setOwnerId(event.target.value); setPage(1); }}><option value="">All assignments</option><option value="unassigned">Not assigned</option>{assignees.map(person => <option key={person.id} value={person.id}>{person.name}</option>)}</AppSelect></span>}
+          {canManage && <span className="app-dropdown-host"><AppSelect aria-label="Filter by assigned teacher" value={ownerId} onChange={event => { setOwnerId(event.target.value); setPage(1); }}><option value="">All assignments</option><option value="unassigned">Not assigned</option>{assignees.map(person => <option key={person.id} value={person.id} data-badge={person.roleLabel === "Teacher" ? undefined : person.roleLabel}>{person.name}</option>)}</AppSelect></span>}
           {tab === "needs" && <span className="app-dropdown-host"><AppSelect aria-label="Filter by progress" value={status} onChange={event => { setStatus(event.target.value); setPage(1); }}><option value="">All pending progress</option><option value="NEEDS_FOLLOW_UP">Needs follow-up</option><option value="COULDNT_REACH">Couldn’t reach</option></AppSelect></span>}
         </section>
         <div className="followup-results-heading"><div><h2>{loading ? "Loading families…" : `${total} ${total === 1 ? "family" : "families"}${hasFilters ? " matching your filters" : tab === "needs" ? " need follow-up" : " in this view"}`}</h2><p>{loading ? "Getting the latest follow-up records." : `${childrenTotal} ${childrenTotal === 1 ? "child" : "children"} across these families. Open a family to assign a call or record an update.`}</p></div><div>{hasFilters && <button type="button" className="followup-clear" onClick={clearFilters}>Clear filters</button>}<DataViewToggle value={display} onChange={setFollowupDisplay} gridLabel="Follow-up cards" listLabel="Follow-up table" /></div></div>
@@ -596,7 +596,7 @@ function Drawer({
               <span className="assignment-kicker">Follow-up lead</span>
               <h3>{assignedId ? "Assigned follow-up teacher" : "Assign this family call"}</h3>
               <p>Only the selected teacher will receive and see this task in My Follow-Ups.</p>
-              <div><AppSelect aria-label="Assigned follow-up teacher" value={assignee} onChange={(event) => setAssignee(event.target.value)}><option value="">Choose a teacher or Follow-Up Lead</option>{assignedId && !assignees.some(person => String(person.id) === assignedId) && <option value={assignedId}>{detail.ownerName || "Assigned teacher"}</option>}{assignees.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</AppSelect><button type="button" disabled={!assignee || assignee === assignedId} onClick={() => assign(Number(assignee))}>{assignedId ? "Update teacher" : "Assign call"}</button></div>
+              <div><AppSelect aria-label="Assigned follow-up teacher" value={assignee} onChange={(event) => setAssignee(event.target.value)}><option value="">Choose a teacher, lead or leader</option>{assignedId && !assignees.some(person => String(person.id) === assignedId) && <option value={assignedId}>{detail.ownerName || "Assigned teacher"}</option>}{assignees.map((person) => <option key={person.id} value={person.id} data-badge={person.roleLabel === "Teacher" ? undefined : person.roleLabel}>{person.name}</option>)}</AppSelect><button type="button" disabled={!assignee || assignee === assignedId} onClick={() => assign(Number(assignee))}>{assignedId ? "Update teacher" : "Assign call"}</button></div>
             </div>}
             <div className="contact">
               <h3>Primary Contact</h3>

@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { FiCheck, FiChevronDown } from "react-icons/fi";
 import "./app-dropdown.css";
 
-type Choice = { label: string; value: string; disabled: boolean };
+type Choice = { label: string; value: string; disabled: boolean; badge?: string };
 
 /** Native select remains the form/validation authority. Explicit mounting is safe
  * in streamed pages and drawers, without inserting portals into React's DOM. */
@@ -28,7 +28,7 @@ export const AppSelect = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTML
   useLayoutEffect(() => {
     const field = select.current;
     if (!field) return;
-    const next = Array.from(field.options).map(option => ({ label: option.text, value: option.value, disabled: option.disabled || (option.parentElement instanceof HTMLOptGroupElement && option.parentElement.disabled) }));
+    const next = Array.from(field.options).map(option => ({ label: option.text, value: option.value, badge: option.dataset.badge, disabled: option.disabled || (option.parentElement instanceof HTMLOptGroupElement && option.parentElement.disabled) }));
     setChoices(current => JSON.stringify(current) === JSON.stringify(next) ? current : next);
     setValue(field.value);
     setLabel(props["aria-label"] || Array.from(field.labels || []).map(item => {
@@ -97,7 +97,7 @@ export const AppSelect = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTML
     <button ref={trigger} type="button" role="combobox" className="app-dropdown-trigger" style={fieldStyle} aria-label={label} aria-labelledby={props["aria-labelledby"]} aria-describedby={props["aria-describedby"]} aria-expanded={open} aria-controls={`${id}-options`} aria-haspopup="listbox" aria-required={props.required} disabled={props.disabled}
       onClick={() => open ? setOpen(false) : reveal()}
       onKeyDown={event => { if (["ArrowDown", "ArrowUp", "Enter", " "].includes(event.key)) { event.preventDefault(); reveal(); } }}
-    ><span>{selected}</span><FiChevronDown aria-hidden="true" /></button>
+    ><span>{selected}</span>{choices.find(choice=>choice.value===value)?.badge && <small className="app-option-badge">{choices.find(choice=>choice.value===value)?.badge}</small>}<FiChevronDown aria-hidden="true" /></button>
     {open && createPortal(<div ref={menu} id={`${id}-options`} className="app-dropdown-menu" role="listbox" aria-label={label} style={position}
       onKeyDown={event => {
         if (event.key !== "Tab") event.stopPropagation();
@@ -107,7 +107,7 @@ export const AppSelect = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTML
         else if (event.key === "Tab") { setOpen(false); trigger.current?.focus(); }
         else if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && event.key !== " ") { const now = Date.now(); typeahead.current = { text: (now - typeahead.current.at < 700 ? typeahead.current.text : "") + event.key.toLowerCase(), at: now }; const next = choices.findIndex(choice => !choice.disabled && choice.label.toLowerCase().startsWith(typeahead.current.text)); if (next >= 0) setActive(next); }
       }}
-    >{choices.map((choice, index) => <button ref={node => { optionRefs.current[index] = node; }} key={`${choice.value}-${index}`} type="button" role="option" aria-selected={choice.value === value} disabled={choice.disabled} tabIndex={index === active ? 0 : -1} className={choice.value === value ? "selected" : ""} onClick={() => choose(index)}><span>{choice.label}</span>{choice.value === value && <FiCheck aria-hidden="true" />}</button>)}</div>, document.body)}
+    >{choices.map((choice, index) => <button ref={node => { optionRefs.current[index] = node; }} key={`${choice.value}-${index}`} type="button" role="option" aria-selected={choice.value === value} disabled={choice.disabled} tabIndex={index === active ? 0 : -1} className={choice.value === value ? "selected" : ""} onClick={() => choose(index)}><span>{choice.label}</span>{choice.badge && <small className="app-option-badge">{choice.badge}</small>}{choice.value === value && <FiCheck aria-hidden="true" />}</button>)}</div>, document.body)}
   </span>;
 });
 

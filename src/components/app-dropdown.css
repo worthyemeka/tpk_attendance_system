@@ -10,3 +10,5 @@
 .teacher-phone-control>.app-select{width:102px;flex:none}.relationship-field>.app-select>select{height:48px;padding:10px 13px;font:500 14px var(--font-body)}
 .team-page .toolbar>.app-select{flex:none;width:210px}.team-pagination .app-select{width:65px}.team-pagination .app-dropdown-trigger{min-height:32px}.app-dropdown-host>.app-select{height:100%}
 @media(max-width:650px){.team-page .toolbar>.app-select{width:calc(50% - 5px);flex:1}.app-dropdown-menu>button{min-height:44px}}
+
+.app-option-badge{display:inline-flex;flex:none;margin-left:8px;padding:3px 7px;border:1px solid currentColor;border-radius:999px;font-size:10px;font-weight:700;line-height:1.3;color:inherit;background:transparent}

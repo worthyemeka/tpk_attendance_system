@@ -1,5 +1,6 @@
 "use client";
 
+import { FirstTimersReport } from "./first-timers-report";
 import { DataViewToggle, type DataView } from "./data-view-toggle";
 import { DirectoryPagination } from "./directory-pagination";
 import "./records-system.css";
@@ -100,7 +101,7 @@ const typeLabel = (value: string) =>
 export function ReportsWorkspace() {
   const session = useMemo(() => readTeacherSession(), []);
   const now = useMemo(() => new Date(), []);
-  const [tab, setTab] = useState<"reports" | "archive">("reports");
+  const [tab, setTab] = useState<"reports" | "archive" | "first-timers">("reports");
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [report, setReport] = useState<Report | null>(null);
@@ -325,6 +326,7 @@ export function ReportsWorkspace() {
         >
           Reports
         </button>
+        <button className={tab === "first-timers" ? "selected" : ""} onClick={()=>setTab("first-timers")}>First-timers</button>
         <button
           className={tab === "archive" ? "selected" : ""}
           onClick={() => setTab("archive")}
@@ -345,7 +347,7 @@ export function ReportsWorkspace() {
           downloadCsv={downloadCsv}
           downloadPdf={downloadPdf}
         />
-      ) : (
+      ) : tab === "first-timers" ? <FirstTimersReport year={year} month={month} onMonthChange={setSelectedMonth}/> : (
         <ArchiveView
           loading={archiveLoading}
           display={archiveDisplay} setDisplay={value=>{setArchiveDisplay(value);setArchivePage(1);}} page={archivePage} pageSize={archivePageSize} setPage={setArchivePage}
